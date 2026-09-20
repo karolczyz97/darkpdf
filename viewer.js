@@ -898,7 +898,8 @@ function setCalcOpen(open) {
 }
 
 function updateCalcWidth(w) {
-  calcWidth = Math.max(320, Math.min(window.innerWidth - 100, Math.round(w)));
+  const maxW = Math.max(320, window.innerWidth - 120);
+  calcWidth = Math.max(320, Math.min(maxW, Math.round(w)));
   document.documentElement.style.setProperty('--calc-w', calcWidth + 'px');
   localStorage.setItem('calcWidth', String(calcWidth));
 }
@@ -1218,8 +1219,8 @@ function fitNow() {
 
 let resizeTimer;
 window.addEventListener('resize', () => {
-  if (calcOpen && calcWidth > window.innerWidth - 100) {
-    updateCalcWidth(window.innerWidth - 100);
+  if (calcOpen && calcWidth > window.innerWidth - 120) {
+    updateCalcWidth(window.innerWidth - 120);
   }
   if (!pdf) return;
   fitNow();
