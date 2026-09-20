@@ -41,6 +41,49 @@ html.dark #stage canvas {
 }
 #hint[hidden] { display: none; }
 
+/* Wskaźnik OCR w rogu ekranu */
+#ocr-status {
+  position: fixed;
+  right: 14px;
+  bottom: 14px;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 14px;
+  background: rgba(24, 24, 24, .92);
+  border: 1px solid rgba(255, 255, 255, .12);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, .45);
+  color: #e6e6e6;
+  font: 12px/1.2 system-ui, sans-serif;
+  white-space: nowrap;
+  pointer-events: none;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+#ocr-status .text {
+  white-space: nowrap;
+}
+#ocr-status[hidden] { display: none; }
+#ocr-status .spinner {
+  width: 11px;
+  height: 11px;
+  border: 2px solid rgba(255, 255, 255, .25);
+  border-top-color: #8ab4f8;
+  border-radius: 50%;
+  animation: ocr-spin .75s linear infinite;
+  flex-shrink: 0;
+}
+#ocr-status .spinner[hidden] { display: none; }
+@keyframes ocr-spin { to { transform: rotate(360deg); } }
+html.gemini #ocr-status {
+  background: #282a2c;
+  border-color: #444746;
+  color: #e3e3e3;
+  font-family: "Google Sans Flex", "Google Sans", system-ui, sans-serif;
+}
+
 /* Tekst stron: niewidoczny na ekranie, ale obecny w DOM i drzewie dostępności */
 .sr-only {
   position: absolute;
@@ -57,9 +100,19 @@ html.dark #stage canvas {
   transform-origin: 0 0; caret-color: CanvasText; z-index: 0;
   -webkit-text-size-adjust: none; text-size-adjust: none; forced-color-adjust: none;
   user-select: text; -webkit-user-select: text;
+  font-family: sans-serif;
 }
-.textLayer :is(span, br) {
+.textLayer span {
   color: transparent; position: absolute; white-space: pre; cursor: text; transform-origin: 0% 0%;
+}
+.textLayer br {
+  display: inline; pointer-events: none;
+}
+.textLayer .ocr-block {
+  position: absolute; inset: 0; pointer-events: none;
+}
+.textLayer .ocr-block span {
+  pointer-events: auto;
 }
 .textLayer > :not(.markedContent), .textLayer .markedContent span:not(.markedContent) { z-index: 1; }
 .textLayer span.markedContent { top: 0; height: 0; }
@@ -87,23 +140,131 @@ html.gemini #hint { background: #282a2c; color: #e3e3e3; font-family: "Google Sa
 #menu {
   position: fixed; left: 50%; bottom: calc(18px + env(safe-area-inset-bottom, 0px));
   transform: translateX(-50%); z-index: 6;
-  display: flex; align-items: center; gap: 2px; padding: 5px;
-  max-width: calc(100vw - 24px); flex-wrap: wrap; justify-content: center;
-  border-radius: 12px; background: rgba(24, 24, 24, .94); border: 1px solid rgba(255, 255, 255, .08);
+  display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 5px 8px;
+  max-width: min(840px, calc(100vw - 24px));
+  border-radius: 20px; background: rgba(24, 24, 24, .94); border: 1px solid rgba(255, 255, 255, .10);
   box-shadow: 0 6px 24px rgba(0, 0, 0, .45);
+  backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
   font: 13px system-ui, sans-serif; color: #e6e6e6;
+  transition: border-radius .18s ease;
 }
 #menu[hidden] { display: none; }
+#menu.expanded {
+  border-radius: 14px;
+}
+
+/* Lista przycisków: domyślnie ukryta, pojawia się po najechaniu na 100ms */
+.menu-actions {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  flex-wrap: wrap;
+  width: 100%;
+  padding-bottom: 4px;
+  border-bottom: 1px solid rgba(255, 255, 255, .08);
+  box-sizing: border-box;
+}
+#menu.expanded .menu-actions {
+  display: flex;
+  animation: menuAppear .14s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes menuAppear {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Dymek ze stroną na dole */
+.menu-nav {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: 100%;
+}
+
+/* Kłódka wewnątrz dymka ze stroną */
+.menu-pin {
+  background: none; border: 0; color: #8a8a8a; cursor: pointer;
+  width: 24px; height: 24px; min-width: 24px; padding: 0 !important; border-radius: 6px;
+  display: inline-flex !important; align-items: center; justify-content: center;
+  transition: color .15s, background .15s;
+  margin-left: 2px;
+  flex-shrink: 0;
+}
+.menu-pin:hover { color: #fff !important; background: rgba(255, 255, 255, .12) !important; }
+.menu-pin.pinned { color: #8ab4f8 !important; background: rgba(138, 180, 248, .16) !important; }
+
+.menu-pin .icon-unlocked { display: block; }
+.menu-pin .icon-locked { display: none; }
+
+.menu-pin.pinned .icon-unlocked { display: none; }
+.menu-pin.pinned .icon-locked { display: block; }
+
 #menu button {
   background: none; border: 0; color: #d8d8d8; font: inherit; cursor: pointer;
-  padding: 7px 11px; border-radius: 8px; white-space: nowrap;
+  padding: 6px 11px; border-radius: 8px; white-space: nowrap;
 }
 #menu button:hover { background: rgba(255, 255, 255, .12); color: #fff; }
 #menu button[hidden] { display: none; }
 #menu .k { color: #8a8a8a; font-size: 12px; }
-#menu .pos { padding: 0 6px; color: #9a9a9a; font-variant-numeric: tabular-nums; white-space: nowrap; }
-#menu .sep { width: 1px; align-self: stretch; margin: 2px 6px; background: rgba(255, 255, 255, .12); }
+
+.menu-nav button {
+  padding: 4px 12px; font-size: 14px;
+}
+
+/* Pole wyboru/wpisywania strony */
+.page-select {
+  display: inline-flex; align-items: center; justify-content: center; gap: 5px;
+  min-width: 110px; color: #b0b0b0; font-variant-numeric: tabular-nums;
+  font-weight: 500; user-select: none;
+}
+.page-input {
+  background: rgba(255, 255, 255, .08); border: 1px solid rgba(255, 255, 255, .14);
+  border-radius: 6px; color: #fff; font: inherit; font-size: 13px;
+  font-variant-numeric: tabular-nums; font-weight: 500; text-align: center;
+  width: 58px; padding: 2px 4px; outline: none;
+  transition: border-color .15s, background .15s;
+}
+.page-input:focus {
+  background: rgba(0, 0, 0, .6); border-color: #8ab4f8;
+  box-shadow: 0 0 0 1px #8ab4f8; color: #fff;
+}
+.page-select .total {
+  color: #8a8a8a; font-size: 13px; white-space: nowrap;
+}
+
+/* Szybkie podpowiedzi po 100ms */
+#menu-tip {
+  position: fixed; z-index: 10;
+  padding: 5px 10px; border-radius: 6px;
+  background: rgba(20, 20, 20, .96); border: 1px solid rgba(255, 255, 255, .15);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, .5);
+  color: #fff; font: 12px/1.2 system-ui, sans-serif;
+  pointer-events: none; white-space: nowrap;
+  opacity: 0; transform: translate(-50%, 4px);
+  transition: opacity .12s ease, transform .12s ease;
+}
+#menu-tip[hidden] { display: none; }
+#menu-tip.show { opacity: 1; transform: translate(-50%, 0); }
+#menu-tip .tip-k {
+  display: inline-block; margin-left: 6px; padding: 1px 5px; border-radius: 4px;
+  background: rgba(255, 255, 255, .15); color: #8ab4f8;
+  font-family: ui-monospace, Consolas, monospace; font-size: 11px;
+}
+
 html.gemini #menu { background: #282a2c; border-color: #444746; color: #e3e3e3; font-family: "Google Sans Flex", "Google Sans", system-ui, sans-serif; }
+html.gemini .menu-nav { border-top-color: rgba(255, 255, 255, .08); }
+html.gemini .page-input:focus { border-color: #a8c7fa; box-shadow: 0 0 0 1px #a8c7fa; }
+html.gemini #menu-tip { background: #282a2c; border-color: #444746; color: #e3e3e3; font-family: "Google Sans Flex", "Google Sans", system-ui, sans-serif; }
+html.gemini #menu-tip .tip-k { color: #a8c7fa; }
 
 /* ---- ekran startowy ---- */
 #welcome { position: fixed; inset: 0; z-index: 4; display: none; align-items: center; justify-content: center; padding: 24px; }
@@ -122,14 +283,30 @@ html.empty #welcome { display: flex; }
 }
 #welcome .pick:hover { background: #fff; }
 #welcome .keys {
-  display: grid; grid-template-columns: auto 1fr; gap: 7px 14px; align-items: center;
-  margin-top: 24px; padding-top: 18px; border-top: 1px solid rgba(255, 255, 255, .08);
-  text-align: left; color: #9a9a9a; font-size: 13px;
+  display: grid;
+  grid-template-columns: auto auto;
+  justify-content: center;
+  gap: 8px 18px;
+  align-items: center;
+  margin-top: 24px;
+  padding-top: 20px;
+  border-top: 1px solid rgba(255, 255, 255, .08);
+  text-align: left;
+  color: #9a9a9a;
+  font-size: 13px;
 }
 #welcome kbd {
-  justify-self: start; font: 12px ui-monospace, "Cascadia Mono", Consolas, monospace; color: #ddd;
-  background: rgba(255, 255, 255, .08); border: 1px solid rgba(255, 255, 255, .08);
-  border-radius: 5px; padding: 2px 7px; white-space: nowrap;
+  justify-self: end;
+  min-width: 22px;
+  text-align: center;
+  box-sizing: border-box;
+  font: 12px ui-monospace, "Cascadia Mono", Consolas, monospace;
+  color: #ddd;
+  background: rgba(255, 255, 255, .08);
+  border: 1px solid rgba(255, 255, 255, .08);
+  border-radius: 5px;
+  padding: 2px 7px;
+  white-space: nowrap;
 }
 #welcome .foot { margin: 18px 0 0; font-size: 12px; color: #6f6f6f; }
 html.gemini #welcome .card { font-family: "Google Sans Flex", "Google Sans", system-ui, sans-serif; color: #e3e3e3; }

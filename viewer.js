@@ -16,6 +16,9 @@ const CACHE_MAX = 24;         // ile wyrenderowanych stron trzymać w pamięci
 const stage = document.getElementById('stage');
 const hint = document.getElementById('hint');
 const textLayer = document.getElementById('text');
+const ocrStatusEl = document.getElementById('ocr-status');
+const ocrSpinnerEl = ocrStatusEl?.querySelector('.spinner');
+const ocrTextEl = ocrStatusEl?.querySelector('.text');
 stage.style.gap = GAP + 'px';
 
 let dark = localStorage.getItem('dark') === '1';
@@ -32,6 +35,7 @@ const pending = new Map();     // klucz -> Promise<canvas>
 const textCache = new Map();   // nr strony -> tekst
 const tcCache = new Map();     // nr strony -> Promise<textContent>
 const tlCache = new Map();     // klucz -> gotowa warstwa tekstowa (zaznaczanie)
+const ocrCache = new Map();    // klucz -> zmapowane słowa OCR
 
 applyDark();
 document.documentElement.classList.add('empty');
@@ -129,7 +133,10 @@ function renderPage(n, scale, q = 1) {
     canvas.height = Math.max(1, Math.floor(vp.height));
     canvas.style.width = Math.floor(css.width) + 'px';
     canvas.style.height = Math.floor(css.height) + 'px';
-    task = page.render({ canvasContext: canvas.getContext('2d', { alpha: false }), viewport: vp });
+    const ctx = canvas.getContext('2d', { alpha: false });
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    task = page.render({ canvasContext: ctx, viewport: vp });
     await task.promise;
     cache.set(k, canvas);
     const max = q === 1 ? CACHE_MAX : 60;
@@ -178,6 +185,7 @@ async function show(s) {
       : [shown[0] || blank(L, scale), shown[1] || blank(R, scale)]));
     const range = a && b ? `${a}–${b}` : `${a || b}`;
     document.title = `${range} / ${numPages} – ${fileName}`;
+    if (!menu.hidden) updateMenu();
   };
 
   try {
@@ -211,6 +219,415 @@ function textContent(n) {
   return tcCache.get(n);
 }
 
+let ocrWorker = null, ocrWorkerPromise = null;
+let ocrQueue = Promise.resolve();
+let ocrTimer = null;
+let currentOcrPage = null;
+let ocrSessionToken = 0;
+let lastProgressPct = -1;
+
+function showOcrStatus(text, spinning = true, hideAfterMs = 0) {
+  if (!ocrStatusEl) return;
+  clearTimeout(ocrTimer);
+  if (ocrSpinnerEl) ocrSpinnerEl.hidden = !spinning;
+  if (ocrTextEl) ocrTextEl.textContent = text;
+  ocrStatusEl.hidden = false;
+  if (hideAfterMs > 0) {
+    ocrTimer = setTimeout(() => {
+      ocrStatusEl.hidden = true;
+    }, hideAfterMs);
+  }
+}
+
+function hideOcrStatus() {
+  if (!ocrStatusEl) return;
+  clearTimeout(ocrTimer);
+  ocrStatusEl.hidden = true;
+}
+
+function enqueueOcr(fn) {
+  const next = ocrQueue.then(fn, fn);
+  ocrQueue = next.catch(() => {});
+  return next;
+}
+
+async function getOcrWorker() {
+  if (ocrWorker) return ocrWorker;
+  if (ocrWorkerPromise) return ocrWorkerPromise;
+  ocrWorkerPromise = (async () => {
+    try {
+      showOcrStatus('Inicjalizacja silnika OCR…', true);
+      const T = window.Tesseract;
+      if (!T) throw new Error('Brak biblioteki Tesseract (sprawdź połączenie)');
+      const worker = await T.createWorker('pol+eng', 1, {
+        logger: m => {
+          const prefix = currentOcrPage ? `Strona ${currentOcrPage}: ` : '';
+          if (m.status === 'recognizing text') {
+            const pct = Math.round((m.progress || 0) * 100);
+            if (pct !== lastProgressPct) {
+              lastProgressPct = pct;
+              showOcrStatus(`${prefix}skanowanie tekstu… ${pct}%`, true);
+            }
+          } else if (m.status.includes('loading') || m.status.includes('downloading')) {
+            showOcrStatus(`${prefix}pobieranie modeli językowych…`, true);
+          }
+        }
+      });
+      ocrWorker = worker;
+      return worker;
+    } catch (err) {
+      console.error('Błąd OCR worker:', err);
+      showOcrStatus('Błąd OCR: ' + (err.message || err), false, 3500);
+      ocrWorkerPromise = null;
+      return null;
+    }
+  })();
+  return ocrWorkerPromise;
+}
+
+function applyOcrToDiv(blocks, scale, div) {
+  if (!div) return;
+  const end = div.querySelector('.endOfContent');
+  div.replaceChildren();
+
+  // Zgodność wsteczna: obsłuż zarówno tablicę bloków, jak i płaską listę linii
+  const normBlocks = (blocks && blocks.length && blocks[0].lines)
+    ? blocks
+    : [{ lines: blocks || [] }];
+
+  const allItems = [];
+
+  for (const block of normBlocks) {
+    const blockEl = document.createElement('div');
+    blockEl.className = 'ocr-block';
+
+    for (const line of block.lines) {
+      const txt = line.text?.trim();
+      if (!txt) continue;
+
+      const span = document.createElement('span');
+      span.textContent = txt;
+
+      span.style.left = `${(line.rx * 100).toFixed(4)}%`;
+      span.style.top = `${(line.ry * 100).toFixed(4)}%`;
+      span.style.transformOrigin = '0% 0%';
+      span.style.whiteSpace = 'pre';
+      span.style.color = 'transparent';
+      span.style.lineHeight = '1';
+
+      blockEl.appendChild(span);
+
+      const br = document.createElement('br');
+      blockEl.appendChild(br);
+
+      allItems.push({ span, rw: line.rw, rh: line.rh });
+    }
+
+    div.appendChild(blockEl);
+  }
+
+  if (end) div.appendChild(end);
+
+  // Dynamiczne rozciąganie scaleX, aby linia tekstu w 100% pokrywała skan od lewej do prawej
+  const applyScaling = () => {
+    if (!div.isConnected) {
+      requestAnimationFrame(applyScaling);
+      return;
+    }
+    const parent = div.parentElement || div;
+    const pageW = parent.clientWidth || (window.innerWidth / 2);
+    const pageH = parent.clientHeight || window.innerHeight;
+
+    for (const it of allItems) {
+      const hPx = Math.max(9, it.rh * pageH);
+      it.span.style.fontSize = `${hPx.toFixed(2)}px`;
+    }
+
+    const naturalWidths = allItems.map(it => it.span.getBoundingClientRect().width);
+
+    for (let i = 0; i < allItems.length; i++) {
+      const nw = naturalWidths[i];
+      const targetW = allItems[i].rw * pageW;
+      if (nw > 0 && targetW > 0) {
+        allItems[i].span.style.transform = `scaleX(${(targetW / nw).toFixed(4)})`;
+      }
+    }
+  };
+
+  requestAnimationFrame(applyScaling);
+}
+
+function getRawWords(data) {
+  let words = [];
+  if (data?.words && data.words.length) {
+    words = data.words;
+  } else if (data?.lines && data.lines.length) {
+    for (const l of data.lines) {
+      if (l.words && l.words.length) {
+        words.push(...l.words);
+      } else if (l.text && l.text.trim()) {
+        const t = l.text.trim();
+        const bbox = l.bbox || { x0: 0, y0: 0, x1: 100, y1: 20 };
+        words.push({ text: t, bbox });
+      }
+    }
+  }
+  return words
+    .filter(w => w && w.text && w.text.trim())
+    .map(w => {
+      const text = w.text.trim();
+      const x0 = w.bbox ? w.bbox.x0 : 0;
+      const x1 = w.bbox ? w.bbox.x1 : 0;
+      const y0 = w.bbox ? w.bbox.y0 : 0;
+      const y1 = w.bbox ? w.bbox.y1 : 0;
+      return {
+        text,
+        x0, x1, y0, y1,
+        w: Math.max(1, x1 - x0),
+        h: Math.max(1, y1 - y0)
+      };
+    });
+}
+
+function wordsToSegments(rawWords, cw, ch) {
+  if (!rawWords.length) return [];
+
+  // Sortuj słowa pionowo według Y, a przy zbliżonym Y według X
+  const sorted = [...rawWords].sort((a, b) => {
+    const dy = a.y0 - b.y0;
+    const minH = Math.min(a.h, b.h);
+    if (Math.abs(dy) > minH * 0.45) return dy;
+    return a.x0 - b.x0;
+  });
+
+  // Grupuj słowa leżące na tej samej wysokości w linie fizyczne
+  const lines = [];
+  let curLine = null;
+  for (const w of sorted) {
+    if (!curLine) {
+      curLine = { words: [w], y0: w.y0, y1: w.y1, h: w.h };
+      continue;
+    }
+    const dy = Math.abs(w.y0 - curLine.y0);
+    const minH = Math.min(w.h, curLine.h);
+    if (dy <= minH * 0.5) {
+      curLine.words.push(w);
+      curLine.y0 = Math.min(curLine.y0, w.y0);
+      curLine.y1 = Math.max(curLine.y1, w.y1);
+      curLine.h = curLine.y1 - curLine.y0;
+    } else {
+      lines.push(curLine);
+      curLine = { words: [w], y0: w.y0, y1: w.y1, h: w.h };
+    }
+  }
+  if (curLine) lines.push(curLine);
+
+  // W każdej linii wykryj odstępy kolumnowe / marginesy i podziel na niezależne segmenty
+  const segments = [];
+  for (const l of lines) {
+    const ws = l.words.sort((a, b) => a.x0 - b.x0);
+    const gapThresh = Math.max(18, Math.min(cw * 0.025, l.h * 1.8));
+    let seg = [ws[0]];
+
+    for (let i = 1; i < ws.length; i++) {
+      const prev = ws[i - 1];
+      const curW = ws[i];
+      if (curW.x0 - prev.x1 > gapThresh) {
+        segments.push(seg);
+        seg = [curW];
+      } else {
+        seg.push(curW);
+      }
+    }
+    if (seg.length) segments.push(seg);
+  }
+
+  return segments.map(seg => {
+    const x0 = seg[0].x0;
+    const x1 = seg[seg.length - 1].x1;
+    const y0 = Math.min(...seg.map(w => w.y0));
+    const y1 = Math.max(...seg.map(w => w.y1));
+    const text = seg.map(w => w.text).join(' ');
+    const h = Math.max(1, y1 - y0);
+    const w = Math.max(1, x1 - x0);
+    return {
+      text,
+      x0, x1, y0, y1,
+      w, h,
+      rx: x0 / cw,
+      ry: y0 / ch,
+      rw: w / cw,
+      rh: h / ch
+    };
+  });
+}
+
+function clusterSegmentsIntoBlocks(segments, cw) {
+  if (!segments.length) return [];
+
+  const sorted = [...segments].sort((a, b) => {
+    const dy = a.y0 - b.y0;
+    if (Math.abs(dy) > Math.min(a.h, b.h) * 0.4) return dy;
+    return a.x0 - b.x0;
+  });
+
+  const blocks = [];
+  const alignTol = Math.max(28, cw * 0.035);
+
+  for (const seg of sorted) {
+    let bestBlock = null;
+    let minScore = Infinity;
+
+    for (const b of blocks) {
+      const last = b.lines[b.lines.length - 1];
+      const gapY = seg.y0 - last.y1;
+      const maxGapY = Math.max(last.h, seg.h) * 2.5;
+
+      // Czy leży pod ostatnią linią w rozsądnym odstępie akapitu?
+      if (gapY < -Math.min(last.h, seg.h) * 0.4 || gapY > maxGapY) continue;
+
+      // Czy leży w tej samej kolumnie (nakładanie X lub wyrównanie lewej krawędzi)?
+      const ovX = Math.min(last.x1, seg.x1) - Math.max(last.x0, seg.x0);
+      const alignLeft = Math.abs(last.x0 - seg.x0);
+      const sameCol = (ovX > 0) || (alignLeft < alignTol);
+      if (!sameCol) continue;
+
+      const bMinX = Math.min(...b.lines.map(l => l.x0));
+      const bMaxX = Math.max(...b.lines.map(l => l.x1));
+      const blockOvX = Math.min(bMaxX, seg.x1) - Math.max(bMinX, seg.x0);
+      if (blockOvX < 0 && alignLeft >= alignTol) continue;
+
+      const score = Math.abs(gapY) * 2 + alignLeft;
+      if (score < minScore) {
+        minScore = score;
+        bestBlock = b;
+      }
+    }
+
+    if (bestBlock) {
+      bestBlock.lines.push(seg);
+      bestBlock.y1 = Math.max(bestBlock.y1, seg.y1);
+      bestBlock.x0 = Math.min(bestBlock.x0, seg.x0);
+      bestBlock.x1 = Math.max(bestBlock.x1, seg.x1);
+    } else {
+      blocks.push({
+        lines: [seg],
+        x0: seg.x0, x1: seg.x1,
+        y0: seg.y0, y1: seg.y1
+      });
+    }
+  }
+
+  // Sortowanie bloków w naturalnej kolejności czytania (kolumna lewa/margines przed prawą)
+  blocks.sort((a, b) => {
+    if (a.y1 <= b.y0 + 5) return -1;
+    if (b.y1 <= a.y0 + 5) return 1;
+    return a.x0 - b.x0;
+  });
+
+  return blocks;
+}
+
+async function runOcrForPage(n, scale, div) {
+  if (!window.Tesseract) return;
+  const k = `${fileKey || 'doc'}:ocr:${n}`;
+  if (ocrCache.has(k)) {
+    applyOcrToDiv(ocrCache.get(k), scale, div);
+    return;
+  }
+
+  const token = ocrSessionToken;
+  const myPdf = pdf;
+
+  return enqueueOcr(async () => {
+    // 1. Zabezpieczenie przed zmianą pliku w trakcie kolejkowania
+    if (token !== ocrSessionToken || pdf !== myPdf) return;
+
+    // 2. Zabezpieczenie przed niepotrzebnym przetwarzaniem stron, z których użytkownik już przewinął
+    const [nowA, nowB] = spreadOf(start);
+    if (n !== nowA && n !== nowB) return;
+
+    if (ocrCache.has(k)) {
+      applyOcrToDiv(ocrCache.get(k), scale, div);
+      return;
+    }
+
+    let canvas = canvasCache.get(cacheKey(n, scale));
+    if (!canvas) {
+      try {
+        canvas = await renderPage(n, scale);
+      } catch (e) {
+        return;
+      }
+    }
+    if (!canvas || token !== ocrSessionToken) return;
+
+    currentOcrPage = n;
+    lastProgressPct = -1;
+    showOcrStatus(`Strona ${n}: przygotowanie OCR…`, true);
+    const worker = await getOcrWorker();
+    if (!worker || token !== ocrSessionToken) return;
+
+    try {
+      const { data } = await worker.recognize(canvas);
+      if (token !== ocrSessionToken) return;
+
+      const rawWords = getRawWords(data);
+
+      if (rawWords.length) {
+        const cw = canvas.width || 1;
+        const ch = canvas.height || 1;
+
+        const lineItems = wordsToSegments(rawWords, cw, ch);
+        const blocks = clusterSegmentsIntoBlocks(lineItems, cw);
+
+        ocrCache.set(k, blocks);
+        applyOcrToDiv(blocks, scale, div);
+
+        const fullText = blocks.map(b => b.lines.map(l => l.text).join('\n')).join('\n\n');
+        textCache.set(n, fullText || data.text || '');
+
+        const [nowA, nowB] = spreadOf(start);
+        if (n === nowA || n === nowB) {
+          showOcrStatus(`Strona ${n}: rozpoznano ${lineItems.length} linii w ${blocks.length} blokach`, false, 2500);
+        }
+      } else {
+        const [nowA, nowB] = spreadOf(start);
+        if (n === nowA || n === nowB) {
+          showOcrStatus(`Strona ${n}: nie wykryto tekstu`, false, 2500);
+        }
+      }
+    } catch (err) {
+      console.warn(`Błąd OCR strony ${n}:`, err);
+      if (token === ocrSessionToken) {
+        showOcrStatus(`Strona ${n}: błąd skanowania`, false, 3000);
+      }
+    } finally {
+      if (currentOcrPage === n) currentOcrPage = null;
+    }
+  });
+}
+
+function forceOcrCurrent() {
+  const [a, b] = spreadOf(start);
+  const pages = [a, b].filter(Boolean);
+  if (!pages.length) return;
+  pages.forEach(n => ocrCache.delete(`${fileKey || 'doc'}:ocr:${n}`));
+  showOcrStatus(`Rozpoczynam OCR dla: ${pages.map(p => 'strona ' + p).join(', ')}…`, true);
+  const curScale = layoutSync(start)?.scale || 1;
+  const wrappers = stage.querySelectorAll('.page');
+  pages.forEach((n, idx) => {
+    const wrapper = wrappers[idx];
+    let div = wrapper?.querySelector('.textLayer');
+    if (!div && wrapper) {
+      div = document.createElement('div');
+      div.className = 'textLayer';
+      wrapper.append(div);
+    }
+    runOcrForPage(n, curScale, div);
+  });
+}
+
 async function textLayerFor(n, scale) {
   const k = cacheKey(n, scale);
   const hit = tlCache.get(k);
@@ -218,12 +635,20 @@ async function textLayerFor(n, scale) {
   const page = await pdf.getPage(n);
   const div = document.createElement('div');
   div.className = 'textLayer';
-  const tl = new pdfjsLib.TextLayer({
-    textContentSource: await textContent(n),
-    container: div,
-    viewport: page.getViewport({ scale })
-  });
-  await tl.render();
+
+  const tc = await textContent(n);
+  if (tc && tc.items && tc.items.length > 2) {
+    const tl = new pdfjsLib.TextLayer({
+      textContentSource: tc,
+      container: div,
+      viewport: page.getViewport({ scale })
+    });
+    await tl.render();
+  } else {
+    // Skan lub obraz bez tekstu -> uruchomienie OCR!
+    runOcrForPage(n, scale, div);
+  }
+
   const end = document.createElement('div');
   end.className = 'endOfContent';
   div.append(end);
@@ -332,13 +757,17 @@ async function open(src, name, key, startPage = null) {
   textCache.clear();
   tcCache.clear();
   tlCache.clear();
+  ocrCache.clear();
   textLayer.replaceChildren();
   pairing = localStorage.getItem('pairing:' + key) || localStorage.getItem('pairing') || 'odd';
   hint.hidden = true;
+  hideOcrStatus();
+  ocrSessionToken++;
 
   let p = parseInt(localStorage.getItem('pos:' + key), 10) || 1;
   if (startPage) p = startPage;
   show(spreadStartOf(p));
+  if (pinned) showMenu();
 }
 
 function nameFromUrl(u) {
@@ -433,35 +862,255 @@ window.addEventListener('drop', (e) => {
   openLocal(e.dataTransfer.files[0]);
 });
 
-// ---------- pasek z przyciskami: pojawia się po kliknięciu i sam znika ----------
+// ---------- pasek z przyciskami: pojawia się po kliknięciu / najechaniu ----------
 const menu = document.getElementById('menu');
-let menuTimer;
-function hideMenu() { menu.hidden = true; clearTimeout(menuTimer); }
+const pinBtn = menu.querySelector('.menu-pin');
+const pageInput = menu.querySelector('.page-input');
+const totalSpan = menu.querySelector('.total');
+const tipEl = document.getElementById('menu-tip');
+
+let pinned = localStorage.getItem('menuPinned') === '1';
+let menuTimer = null;
+let tipTimer = null;
+
+function hideTip() {
+  clearTimeout(tipTimer);
+  if (tipEl) {
+    tipEl.classList.remove('show');
+    tipEl.hidden = true;
+  }
+}
+
+function showTipFor(el) {
+  clearTimeout(tipTimer);
+  tipTimer = setTimeout(() => {
+    if (!el || !tipEl || menu.hidden) return;
+    const text = el.dataset.tip;
+    const key = el.dataset.key;
+    if (!text) return;
+    tipEl.innerHTML = `${text}${key ? ` <span class="tip-k">${key}</span>` : ''}`;
+    tipEl.hidden = false;
+
+    const rect = el.getBoundingClientRect();
+    const tipRect = tipEl.getBoundingClientRect();
+    let left = rect.left + rect.width / 2;
+    let top = rect.top - tipRect.height - 8;
+    if (top < 6) top = rect.bottom + 8;
+    left = Math.max(tipRect.width / 2 + 8, Math.min(window.innerWidth - tipRect.width / 2 - 8, left));
+
+    tipEl.style.left = `${left}px`;
+    tipEl.style.top = `${top}px`;
+    tipEl.classList.add('show');
+  }, 100);
+}
+
+// Rozwijanie paska opcji po najechaniu na dymek ze stroną (100ms)
+let expandTimer = null;
+let collapseTimer = null;
+
+function expandMenu() {
+  clearTimeout(collapseTimer);
+  menu.classList.add('expanded');
+}
+
+function collapseMenu() {
+  clearTimeout(expandTimer);
+  menu.classList.remove('expanded');
+  hideTip();
+}
+
+menu.addEventListener('mouseenter', () => {
+  clearTimeout(collapseTimer);
+  clearTimeout(menuTimer);
+  expandTimer = setTimeout(expandMenu, 100);
+});
+
+menu.addEventListener('mouseleave', () => {
+  clearTimeout(expandTimer);
+  collapseTimer = setTimeout(() => {
+    if (document.activeElement !== pageInput) {
+      collapseMenu();
+    }
+    if (!pinned && !menu.hidden && document.activeElement !== pageInput) {
+      clearTimeout(menuTimer);
+      menuTimer = setTimeout(hideMenu, 2500);
+    }
+  }, 150);
+});
+
+// Podpowiedzi do przycisków w menu
+menu.addEventListener('pointerover', (e) => {
+  const target = e.target.closest('[data-tip]');
+  if (target) showTipFor(target);
+});
+
+menu.addEventListener('pointerout', (e) => {
+  const target = e.target.closest('[data-tip]');
+  if (target) hideTip();
+});
+
+// Odsłanianie dymka przy najechaniu na dół ekranu (100ms)
+let hoverMenuTimer = null;
+window.addEventListener('mousemove', (e) => {
+  if (!pdf) return;
+  if (e.clientY >= window.innerHeight - 30) {
+    if (menu.hidden && !hoverMenuTimer) {
+      hoverMenuTimer = setTimeout(() => {
+        showMenu();
+        hoverMenuTimer = null;
+      }, 100);
+    }
+  } else {
+    clearTimeout(hoverMenuTimer);
+    hoverMenuTimer = null;
+  }
+});
+
+function hideMenu() {
+  collapseMenu();
+  if (pinned) return;
+  menu.hidden = true;
+  clearTimeout(menuTimer);
+  hideTip();
+}
+
 function showMenu() {
   if (!pdf) return;
   updateMenu();
   menu.hidden = false;
   clearTimeout(menuTimer);
-  menuTimer = setTimeout(hideMenu, 4000);
+  if (!pinned && !menu.matches(':hover')) menuTimer = setTimeout(hideMenu, 4000);
 }
 const label = (text, key) => `${text} <span class="k">(${key})</span>`;
 
 function updateMenu() {
   const [a, b] = spreadOf(start);
-  menu.querySelector('.pos').textContent = `${a && b ? a + '–' + b : (a || b)} / ${numPages}`;
+  if (document.activeElement !== pageInput) {
+    pageInput.value = (a && b ? `${a}–${b}` : `${a || b}`);
+  }
+  if (totalSpan) totalSpan.textContent = `/ ${numPages}`;
   menu.querySelector('[data-k="pages"]').innerHTML = label(two ? 'Jedna strona' : 'Dwie strony', 'P');
   const pr = menu.querySelector('[data-k="pairing"]');
   pr.innerHTML = label(pairing === 'odd' ? 'Pary 1–2' : 'Pary 1, 2–3', 'O');
   pr.hidden = !two;
   menu.querySelector('[data-k="theme"]').innerHTML = label(theme === 'gemini' ? 'Motyw Gemini' : 'Motyw zwykły', 'T');
   menu.querySelector('[data-k="dark"]').innerHTML = label(dark ? 'Ciemny' : 'Jasny', 'D');
+
+  if (pinBtn) {
+    pinBtn.classList.toggle('pinned', pinned);
+    pinBtn.querySelector('.icon-unlocked').hidden = pinned;
+    pinBtn.querySelector('.icon-locked').hidden = !pinned;
+    pinBtn.dataset.tip = pinned ? 'Odblokuj dymek (auto-ukrywanie)' : 'Zablokuj dymek strony na stałe';
+  }
 }
+
+// Obsługa ręcznego wpisywania numeru strony
+let pageJumpTimer = null;
+let digitTriggeredFocus = false;
+
+function schedulePageJump() {
+  clearTimeout(pageJumpTimer);
+  const val = parseInt(pageInput.value, 10);
+  if (val >= 1 && val <= numPages) {
+    pageJumpTimer = setTimeout(() => {
+      pageJumpTimer = null;
+      if (spreadStartOf(val) !== start) {
+        go(spreadStartOf(val));
+      }
+      if (document.activeElement === pageInput) {
+        pageInput.blur();
+      }
+    }, 1000);
+  }
+}
+
+pageInput.addEventListener('focus', () => {
+  clearTimeout(menuTimer);
+  clearTimeout(collapseTimer);
+  if (digitTriggeredFocus) {
+    digitTriggeredFocus = false;
+    return;
+  }
+  setTimeout(() => {
+    if (document.activeElement === pageInput) pageInput.select();
+  }, 10);
+});
+
+pageInput.addEventListener('keydown', (e) => {
+  e.stopPropagation();
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    clearTimeout(pageJumpTimer);
+    pageJumpTimer = null;
+    const val = parseInt(pageInput.value, 10);
+    if (val >= 1 && val <= numPages) {
+      if (spreadStartOf(val) !== start) go(spreadStartOf(val));
+      else updateMenu();
+    } else {
+      updateMenu();
+    }
+    pageInput.blur();
+  } else if (e.key === 'Escape') {
+    e.preventDefault();
+    clearTimeout(pageJumpTimer);
+    pageJumpTimer = null;
+    updateMenu();
+    pageInput.blur();
+  }
+});
+
+pageInput.addEventListener('blur', () => {
+  clearTimeout(pageJumpTimer);
+  pageJumpTimer = null;
+  const val = parseInt(pageInput.value, 10);
+  if (val >= 1 && val <= numPages && spreadStartOf(val) !== start) {
+    go(spreadStartOf(val));
+  } else {
+    updateMenu();
+  }
+  if (!menu.matches(':hover')) {
+    collapseMenu();
+    if (!pinned) menuTimer = setTimeout(hideMenu, 2500);
+  }
+});
+
+pageInput.addEventListener('click', (e) => e.stopPropagation());
+pageInput.addEventListener('mousedown', (e) => e.stopPropagation());
+pageInput.addEventListener('pointerdown', (e) => e.stopPropagation());
+pageInput.addEventListener('keyup', (e) => e.stopPropagation());
+pageInput.addEventListener('input', (e) => {
+  e.stopPropagation();
+  schedulePageJump();
+});
+
+const pageSelect = menu.querySelector('.page-select');
+pageSelect?.addEventListener('click', (e) => {
+  e.stopPropagation();
+  pageInput.focus();
+});
+pageSelect?.addEventListener('mousedown', (e) => e.stopPropagation());
+pageSelect?.addEventListener('pointerdown', (e) => e.stopPropagation());
 
 function act(k) {
   switch (k) {
     case 'prev': prev(); break;
     case 'next': next(); break;
     case 'open': pickFile(); break;
+    case 'ocr': forceOcrCurrent(); break;
+    case 'pin':
+      pinned = !pinned;
+      localStorage.setItem('menuPinned', pinned ? '1' : '0');
+      updateMenu();
+      if (pinned) {
+        clearTimeout(menuTimer);
+        flash('Dymek strony zablokowany (na stałe)', 1200);
+      } else {
+        if (!menu.matches(':hover')) {
+          menuTimer = setTimeout(hideMenu, 2500);
+        }
+        flash('Auto-ukrywanie dymka włączone', 1200);
+      }
+      break;
     case 'full':
       document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen();
       break;
@@ -502,15 +1151,16 @@ function act(k) {
 }
 
 menu.addEventListener('click', (e) => {
-  const b = e.target.closest('button');
-  if (!b) return;
   e.stopPropagation();
-  act(b.dataset.k);
+  const b = e.target.closest('button');
+  if (b) act(b.dataset.k);
 });
 
 window.addEventListener('click', () => {
   if (!pdf) { pickFile(); return; }
   if (String(getSelection())) return;      // nie przeszkadzamy przy zaznaczaniu tekstu
+  collapseMenu();
+  if (pinned) return;                      // zablokowany dymek nie znika po kliknięciu
   menu.hidden ? showMenu() : hideMenu();
 });
 
@@ -546,26 +1196,25 @@ window.addEventListener('wheel', (e) => {
   if (n) { acc -= n * TOUCHPAD_PX; flip(n); }
 }, { passive: false });
 
-let numBuf = '';
 window.addEventListener('keydown', (e) => {
+  if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.isContentEditable) return;
+  if (document.activeElement === pageInput) return;
   if ((e.ctrlKey || e.metaKey) && (e.key === 'o' || e.key === 'O')) { e.preventDefault(); pickFile(); return; }
   if (e.ctrlKey || e.metaKey || e.altKey) return;
-  hideMenu();
   const k = e.key;
 
-  // Skok do strony: wpisz numer + Enter
-  if (/^[0-9]$/.test(k)) { numBuf += k; flash('Idź do strony: ' + numBuf, 0); return; }
-  if (numBuf) {
-    if (k === 'Enter') {
-      const n = parseInt(numBuf, 10);
-      numBuf = ''; hint.hidden = true;
-      if (n >= 1 && n <= numPages) go(spreadStartOf(n));
-      else flash(`Dokument ma ${numPages} stron`);
-      return;
-    }
-    if (k === 'Backspace') { numBuf = numBuf.slice(0, -1); numBuf ? flash('Idź do strony: ' + numBuf, 0) : (hint.hidden = true); return; }
-    if (k === 'Escape') { numBuf = ''; hint.hidden = true; return; }
+  // Skok do strony: wpisanie cyfry przenosi bezpośrednio do pola tekstowego strony
+  if (/^[0-9]$/.test(k)) {
+    e.preventDefault();
+    showMenu();
+    digitTriggeredFocus = true;
+    pageInput.focus();
+    pageInput.value = k;
+    schedulePageJump();
+    return;
   }
+
+  hideMenu();
 
   switch (k) {
     case 'ArrowRight': case 'ArrowDown': case 'PageDown': case 'j': case 'l':
@@ -583,9 +1232,10 @@ window.addEventListener('keydown', (e) => {
     case 'p': case 'P': act('pages'); break;
     case 'o': case 'O': act('pairing'); break;
     case 'f': case 'F': act('full'); break;
+    case 'x': case 'X': act('ocr'); break;
     case '?':
       flash('→ ↓ Spacja PgDn  następne\n← ↑ PgUp  poprzednie\nHome / End  początek / koniec\n' +
-            'numer + Enter  skok do strony\nCtrl+O  otwórz plik z dysku\nP  jedna / dwie strony\nD  tryb ciemny\nT  motyw zwykły / Gemini\nO  pary nieparzyste / parzyste\nF  pełny ekran\nkliknięcie  pasek z przyciskami', 5000);
+            'numer + Enter  skok do strony\nCtrl+O  otwórz plik z dysku\nP  jedna / dwie strony\nD  tryb ciemny\nT  motyw zwykły / Gemini\nO  pary nieparzyste / parzyste\nF  pełny ekran\nX  rozpoznaj tekst (OCR)\nkliknięcie  pasek z przyciskami', 5000);
       break;
     default:
       return;

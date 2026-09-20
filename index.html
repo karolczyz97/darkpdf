@@ -5,7 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="robots" content="noindex">
   <title>DarkPDF</title>
-  <link rel="stylesheet" href="viewer.css?v=6">
+  <link rel="stylesheet" href="viewer.css?v=20">
+  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+  <script>if (!window.Tesseract) document.write('<script src="lib/tesseract.min.js"><\/script>');</script>
 </head>
 <body>
   <svg width="0" height="0" style="position:absolute" aria-hidden="true">
@@ -20,6 +22,10 @@
   </svg>
   <div id="stage"></div>
   <div id="hint" hidden></div>
+  <div id="ocr-status" hidden>
+    <span class="spinner"></span>
+    <span class="text"></span>
+  </div>
 
   <div id="welcome">
     <div class="card">
@@ -33,6 +39,7 @@
         <kbd>T</kbd><span>motyw zwykły albo Gemini</span>
         <kbd>O</kbd><span>parowanie stron</span>
         <kbd>F</kbd><span>pełny ekran</span>
+        <kbd>X</kbd><span>rozpoznawanie tekstu (OCR)</span>
         <kbd>1 2 3 ⏎</kbd><span>skok do strony</span>
       </div>
       <p class="foot">Kliknięcie w stronę otwiera pasek z przyciskami. Plik nie jest nigdzie wysyłany.</p>
@@ -40,18 +47,36 @@
   </div>
 
   <div id="menu" hidden>
-    <button data-k="prev" title="Poprzednia strona (←)">◀</button>
-    <span class="pos"></span>
-    <button data-k="next" title="Następna strona (→)">▶</button>
-    <span class="sep"></span>
-    <button data-k="pages" title="P"></button>
-    <button data-k="pairing" title="O"></button>
-    <button data-k="dark" title="D"></button>
-    <button data-k="theme" title="T"></button>
-    <button data-k="full">Pełny ekran <span class="k">(F)</span></button>
-    <button data-k="open">Otwórz plik <span class="k">(Ctrl+O)</span></button>
+    <div class="menu-actions">
+      <button data-k="pages" data-tip="Zmień widok stron" data-key="P"></button>
+      <button data-k="pairing" data-tip="Zmień parowanie stron" data-key="O"></button>
+      <button data-k="dark" data-tip="Przełącz tryb ciemny / jasny" data-key="D"></button>
+      <button data-k="theme" data-tip="Przełącz motyw" data-key="T"></button>
+      <button data-k="ocr" data-tip="Rozpoznaj tekst OCR" data-key="X">Skanuj OCR <span class="k">(X)</span></button>
+      <button data-k="full" data-tip="Pełny ekran" data-key="F">Pełny ekran <span class="k">(F)</span></button>
+      <button data-k="open" data-tip="Wybierz plik z dysku" data-key="Ctrl+O">Otwórz plik <span class="k">(Ctrl+O)</span></button>
+    </div>
+    <div class="menu-nav">
+      <button data-k="prev" data-tip="Poprzednia strona" data-key="←">◀</button>
+      <div class="page-select" data-tip="Wpisz numer strony (skok po 1s lub Enter)">
+        <input type="text" class="page-input" inputmode="numeric" pattern="[0-9]*" aria-label="Numer strony">
+        <span class="total"></span>
+      </div>
+      <button data-k="next" data-tip="Następna strona" data-key="→">▶</button>
+      <button class="menu-pin" data-k="pin" data-tip="Zablokuj dymek strony na stałe" aria-label="Zablokuj dymek strony">
+        <svg class="icon-unlocked" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+          <path d="M7 11V7a5 5 0 0 1 9.9-1"/>
+        </svg>
+        <svg class="icon-locked" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+          <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+        </svg>
+      </button>
+    </div>
   </div>
+  <div id="menu-tip" hidden></div>
   <main id="text" class="sr-only" aria-label="Tekst dokumentu"></main>
-  <script type="module" src="viewer.js?v=6"></script>
+  <script type="module" src="viewer.js?v=20"></script>
 </body>
 </html>
