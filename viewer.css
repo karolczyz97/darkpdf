@@ -134,23 +134,18 @@ html.gemini #hint { background: var(--ui-bg); color: var(--ui-text); font-family
 #menu {
   position: fixed; left: 50%; bottom: calc(18px + env(safe-area-inset-bottom, 0px));
   transform: translateX(-50%); z-index: 6;
-  display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 5px 8px;
-  max-width: calc(100vw - 24px);
-  transition: border-radius .18s ease, width .18s ease;
-  border-radius: 20px; background: var(--ui-bg); border: 1px solid var(--ui-line);
+  display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 6px 10px;
+  width: min(1000px, calc(100vw - 24px));
+  border-radius: 14px; background: var(--ui-bg); border: 1px solid var(--ui-line);
   box-shadow: 0 6px 24px rgba(0, 0, 0, .45);
   backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
   font: 13px var(--ui-font); color: var(--ui-text);
 }
 #menu[hidden] { display: none; }
-#menu.expanded {
-  border-radius: 14px;
-  width: min(1000px, calc(100vw - 24px));   /* rozwinięty pasek jest szeroki, zwinięty zostaje mały */
-}
 
-/* Lista przycisków: domyślnie ukryta, pojawia się po najechaniu na 100ms */
+/* Lista przycisków: widoczna zawsze gdy pasek jest otwarty */
 .menu-actions {
-  display: none;
+  display: flex;
   align-items: center;
   justify-content: center;
   gap: 2px;
@@ -159,21 +154,6 @@ html.gemini #hint { background: var(--ui-bg); color: var(--ui-text); font-family
   padding-bottom: 4px;
   border-bottom: 1px solid var(--ui-line);
   box-sizing: border-box;
-}
-#menu.expanded .menu-actions {
-  display: flex;
-  animation: menuAppear .14s cubic-bezier(0.16, 1, 0.3, 1);
-}
-
-@keyframes menuAppear {
-  from {
-    opacity: 0;
-    transform: translateY(4px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
 }
 
 /* Dymek ze stroną na dole */
@@ -208,6 +188,7 @@ html.gemini #hint { background: var(--ui-bg); color: var(--ui-text); font-family
   padding: 6px 11px; border-radius: 8px; white-space: nowrap;
 }
 #menu button:hover { background: var(--ui-hover); color: var(--ui-text-strong); }
+#menu button.active { background: var(--ui-accent-soft); color: var(--ui-accent); }
 #menu button[hidden] { display: none; }
 #menu .k { color: var(--ui-text-dim); font-size: 12px; }
 
@@ -411,46 +392,4 @@ html.calc-open #calc-sidebar {
 }
 .calc-resizer:hover, .calc-resizer.dragging {
   background: rgba(138, 180, 248, .4);
-}
-
-/* Szybki przycisk otwarcia kalkulatora (lewy górny róg) */
-#calc-toggle {
-  position: fixed;
-  top: 14px;
-  left: 14px;
-  z-index: 7;
-  width: 38px;
-  height: 38px;
-  border-radius: 10px;
-  background: rgba(24, 24, 24, .88);
-  border: 1px solid rgba(255, 255, 255, .12);
-  color: #ccc;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, .4);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
-  transition: background .15s, color .15s, transform .22s cubic-bezier(0.16, 1, 0.3, 1), left .22s cubic-bezier(0.16, 1, 0.3, 1);
-}
-#calc-toggle:hover {
-  background: rgba(45, 45, 45, .96);
-  color: #fff;
-  border-color: rgba(255, 255, 255, .25);
-}
-html.calc-open #calc-toggle {
-  transform: translateX(var(--calc-w, 440px));
-  border-left: 0;
-  border-top-left-radius: 0;
-  border-bottom-left-radius: 0;
-  background: rgba(30, 30, 30, .96);
-  color: #8ab4f8;
-}
-html.gemini #calc-toggle {
-  background: #282a2c;
-  border-color: #444746;
-}
-html.empty #calc-toggle {
-  display: none;
 }

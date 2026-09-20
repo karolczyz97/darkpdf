@@ -60,7 +60,6 @@ let fitMode = localStorage.getItem('fitMode') || 'auto'; // 'auto' | 'width' | '
 
 const calcSidebar = document.getElementById('calc-sidebar');
 const calcFrame = document.getElementById('calc-frame');
-const calcToggle = document.getElementById('calc-toggle');
 const calcClose = calcSidebar?.querySelector('.calc-close');
 const calcResizer = calcSidebar?.querySelector('.calc-resizer');
 
@@ -91,9 +90,14 @@ function getCalcUrl() {
   const custom = localStorage.getItem('calcUrl') || window.DARKPDF_CALC_URL;
   let base = custom;
   if (!base) {
-    base = (location.hostname === 'localhost' || location.hostname === '127.0.0.1')
-      ? '/calc/index.html'
-      : (location.hostname.endsWith('github.io') ? 'https://karolczyz97.github.io/calc/' : '../calc/index.html');
+    if (location.hostname === 'localhost' || location.hostname === '127.0.0.1') {
+      base = '/calc/index.html';
+    } else if (location.hostname.endsWith('github.io')) {
+      const user = location.hostname.split('.')[0];
+      base = `https://${user}.github.io/calc/`;
+    } else {
+      base = '../calc/index.html';
+    }
   }
   const sep = base.includes('?') ? '&' : '?';
   return `${base}${sep}embed=1&side=1&theme=${themeParam}`;
@@ -754,33 +758,24 @@ function showTipFor(el) {
 function expandMenu() { clearTimeout(collapseTimer); menu.classList.add('expanded'); }
 function collapseMenu() { clearTimeout(expandTimer); menu.classList.remove('expanded'); hideTip(); }
 
-// Pasek chowa się 2 s po tym, jak przestajesz z niego korzystać – wszystkie drogi
-// prowadzą tutaj, więc warunek jest w jednym miejscu.
+// Pasek chowa się po 3.5 s bezczynności, jeśli nie jest najechany ani zablokowany kłódką
 function scheduleHide() {
   clearTimeout(menuTimer);
   if (pinned || menu.hidden || menu.matches(':hover') || document.activeElement === pageInput) return;
-  menuTimer = setTimeout(hideMenu, 2000);
+  menuTimer = setTimeout(hideMenu, 3500);
 }
 
 menu.addEventListener('mouseenter', () => {
-  clearTimeout(collapseTimer);
   clearTimeout(menuTimer);
-  expandTimer = setTimeout(expandMenu, 100);
 });
 menu.addEventListener('mouseleave', () => {
-  clearTimeout(expandTimer);
-  collapseTimer = setTimeout(() => {
-    if (document.activeElement === pageInput) return;
-    collapseMenu();
-    scheduleHide();
-  }, 150);
+  scheduleHide();
 });
 
 menu.addEventListener('pointerover', (e) => { const t = e.target.closest('[data-tip]'); if (t) showTipFor(t); });
 menu.addEventListener('pointerout', (e) => { const t = e.target.closest('[data-tip]'); if (t) hideTip(); });
 
 function hideMenu() {
-  collapseMenu();
   if (pinned) return;
   menu.hidden = true;
   clearTimeout(menuTimer);
@@ -803,11 +798,19 @@ function updateMenu() {
   }
   if (totalSpan) totalSpan.textContent = `/ ${numPages}`;
   const calcBtn = menu.querySelector('[data-k="calc"]');
-  if (calcBtn) calcBtn.innerHTML = label(calcOpen ? 'Ukryj kalkulator' : 'Kalkulator', 'K');
-  const fitBtn = menu.querySelector('[data-k="fit"]');
-  if (fitBtn) {
-    const fitTxt = fitMode === 'width' ? 'Szerokość 100%' : (fitMode === 'height' ? 'Wysokość 100%' : 'Dopasowanie: Auto');
-    fitBtn.innerHTML = label(fitTxt, 'W');
+  if (calcBtn) {
+    calcBtn.classList.toggle('active', calcOpen);
+    calcBtn.innerHTML = label(calcOpen ? 'Ukryj kalkulator' : 'Kalkulator', 'K');
+  }
+  const fitWBtn = menu.querySelector('[data-k="fit-w"]');
+  if (fitWBtn) {
+    fitWBtn.classList.toggle('active', fitMode === 'width');
+    fitWBtn.innerHTML = label(fitMode === 'width' ? 'Szerokość [100%]' : 'Szerokość 100%', 'W');
+  }
+  const fitHBtn = menu.querySelector('[data-k="fit-h"]');
+  if (fitHBtn) {
+    fitHBtn.classList.toggle('active', fitMode === 'height');
+    fitHBtn.innerHTML = label(fitMode === 'height' ? 'Wysokość [100%]' : 'Wysokość 100%', 'H');
   }
   menu.querySelector('[data-k="pages"]').innerHTML = label(two ? 'Jedna strona' : 'Dwie strony', 'P');
   const pr = menu.querySelector('[data-k="pairing"]');
@@ -881,6 +884,7 @@ function setCalcOpen(open) {
   if (calcOpen && (!calcFrame.src || calcFrame.src === 'about:blank')) {
     calcFrame.src = getCalcUrl();
   }
+  window.focus(); // Fokus pozostaje na dokumencie PDF
   updateMenu();
   fitNow();
   clearTimeout(resizeTimer);
@@ -931,13 +935,16 @@ if (calcResizer) {
   });
 }
 
-calcToggle?.addEventListener('click', (e) => {
-  e.stopPropagation();
-  setCalcOpen(!calcOpen);
+window.addEventListener('message', (e) => {
+  if (e.data && e.data.type === 'darkpdf_close_calc') {
+    setCalcOpen(false);
+    window.focus();
+  }
 });
 calcClose?.addEventListener('click', (e) => {
   e.stopPropagation();
   setCalcOpen(false);
+  window.focus();
 });
 
 function setFitMode(mode) {
@@ -961,6 +968,12 @@ function act(k) {
     case 'next': next(); break;
     case 'open': pickFile(); break;
     case 'calc': setCalcOpen(!calcOpen); break;
+    case 'fit-w':
+      setFitMode(fitMode === 'width' ? 'auto' : 'width');
+      break;
+    case 'fit-h':
+      setFitMode(fitMode === 'height' ? 'auto' : 'height');
+      break;
     case 'fit':
       setFitMode(fitMode === 'auto' ? 'width' : (fitMode === 'width' ? 'height' : 'auto'));
       break;
@@ -1036,19 +1049,24 @@ function act(k) {
 
 menu.addEventListener('click', (e) => {
   e.stopPropagation();
+  clearTimeout(menuTimer);
   const b = e.target.closest('button');
-  if (b) act(b.dataset.k);
+  if (b) {
+    act(b.dataset.k);
+    scheduleHide();
+  }
 });
 
-window.addEventListener('dblclick', () => {
+window.addEventListener('dblclick', (e) => {
   if (!pdf || String(getSelection())) return;   // dwuklik w tekst zaznacza słowo
+  if (e.target.closest('#menu, #calc-sidebar')) return;
   act('full');
 });
 
-window.addEventListener('click', () => {
+window.addEventListener('click', (e) => {
   if (!pdf) { pickFile(); return; }
   if (String(getSelection())) return;
-  collapseMenu();
+  if (e.target.closest('#menu, #calc-sidebar')) return;
   if (pinned) return;
   menu.hidden ? showMenu() : hideMenu();
 });
@@ -1134,11 +1152,6 @@ window.addEventListener('keydown', (e) => {
     e.preventDefault();
     return;
   }
-  if ((k === 'h' || k === 'H') && e.shiftKey) {
-    setFitMode(fitMode === 'height' ? 'auto' : 'height');
-    e.preventDefault();
-    return;
-  }
 
   if (!pdf && k === 'Enter' && lastRecent) { e.preventDefault(); openRecent(lastRecent); return; }
 
@@ -1158,13 +1171,15 @@ window.addEventListener('keydown', (e) => {
     d: 'dark', D: 'dark', t: 'theme', T: 'theme',
     p: 'pages', P: 'pages', o: 'pairing', O: 'pairing',
     f: 'full', F: 'full', c: 'crop', C: 'crop', r: 'rotate', R: 'rotate',
-    k: 'calc', K: 'calc', w: 'fit', W: 'fit'
+    k: 'calc', K: 'calc',
+    w: 'fit-w', W: 'fit-w',
+    h: 'fit-h', H: 'fit-h'
   };
   if (keyActions[k]) { act(keyActions[k]); e.preventDefault(); return; }
 
   const jump = e.shiftKey ? 10 : 1;   // Shift = skok o 10 rozkładówek
   if (['ArrowRight', 'ArrowDown', 'PageDown', 'j', 'l'].includes(k)) { flip(jump); e.preventDefault(); return; }
-  if (['ArrowLeft', 'ArrowUp', 'PageUp', 'h'].includes(k)) { flip(-jump); e.preventDefault(); return; }
+  if (['ArrowLeft', 'ArrowUp', 'PageUp'].includes(k)) { flip(-jump); e.preventDefault(); return; }
   if (k === ' ') { e.shiftKey ? prev() : next(); e.preventDefault(); return; }
   if (k === 'b' || k === 'B') { toggleMark(); e.preventDefault(); return; }
   if (k === 'Home') { go(1); e.preventDefault(); return; }
@@ -1172,7 +1187,7 @@ window.addEventListener('keydown', (e) => {
   if (k === '?') {
     flash('→ ↓ Spacja PgDn  następne\n← ↑ PgUp  poprzednie\nHome / End  początek / koniec\n' +
           'numer (lub Enter)  skok do strony\nShift + strzałka  skok o 10\nB  zakładka na tej stronie\n' +
-          'K  kalkulator z boku\nW  zablokuj szerokość 100%\nShift+H  zablokuj wysokość 100%\n' +
+          'K  kalkulator z boku\nW  zablokuj szerokość 100%\nH  zablokuj wysokość 100%\n' +
           'C  przycinanie marginesów\nR  obrót o 90°\n' +
           'P  jedna / dwie strony\nD  tryb ciemny\nT  motyw zwykły / Gemini\nO  pary nieparzyste / parzyste\n' +
           'F  pełny ekran\ndwuklik  pełny ekran\nCtrl+O  otwórz plik\nkliknięcie  pasek z przyciskami', 6000);
