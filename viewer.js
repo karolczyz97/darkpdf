@@ -8,7 +8,7 @@ const TOUCHPAD_PX = 30;       // tyle px ruchu na touchpadzie = przeskok (jeden 
 const GESTURE_END_MS = 150;   // cisza, po której gest touchpada się kończy
 const PREFETCH_AHEAD = 3;     // ile rozkładówek do przodu renderować w tle
 const PREFETCH_BEHIND = 1;    // ile rozkładówek wstecz
-const TEXT_PAGES_AROUND = 10; // tekst ilu stron przed/po bieżącej trzymać w DOM (Infinity = cały dokument)
+const TEXT_PAGES_AROUND = 2;  // tekst ilu stron przed/po bieżącej trzymać w DOM dla Gemini (nie wpływa na szybkość)
 const MARGIN = 6;             // margines wokół stron (px)
 const GAP = 4;                // odstęp między stronami (px)
 const CACHE_MAX = 24;         // ile wyrenderowanych stron trzymać w pamięci
@@ -30,6 +30,7 @@ const pending = new Map();     // klucz -> Promise<canvas>
 const textCache = new Map();   // nr strony -> tekst
 
 applyDark();
+document.documentElement.classList.add('empty');
 
 // ---------- pomocnicze ----------
 function applyDark() { document.documentElement.classList.toggle('dark', dark); }
@@ -201,11 +202,12 @@ async function open(src, name, key, startPage = null) {
     }).promise;
   } catch (err) {
     flash('Nie udało się otworzyć pliku: ' + (err?.message || err) +
-          '\nMożesz przeciągnąć plik PDF do tego okna.', 0);
+          '\nKliknij, żeby wybrać plik PDF, albo przeciągnij go tutaj.', 0);
     return;
   }
   if (pdf) pdf.destroy();
   pdf = doc;
+  document.documentElement.classList.remove('empty');
   numPages = pdf.numPages;
   fileName = name;
   fileKey = key;
@@ -263,7 +265,7 @@ function loadViaExtension(url) {
 async function openFromHash() {
   const h = location.href;
   const i = h.indexOf('#file=');
-  if (i < 0) { flash('Przeciągnij plik PDF do tego okna', 0); return; }
+  if (i < 0) { flash('Kliknij, żeby wybrać plik PDF, albo przeciągnij go tutaj', 0); return; }
   let url = h.slice(i + 6);
   if (/^[a-z]+%3A/i.test(url)) url = decodeURIComponent(url);
   const pm = /#page=(\d+)/.exec(url);
@@ -274,8 +276,8 @@ async function openFromHash() {
     data = await loadViaExtension(clean);
   } catch (err) {
     flash(err.message === 'NOEXT'
-      ? 'Brak wtyczki DarkPDF.\nZainstaluj ją albo przeciągnij plik PDF do tego okna.'
-      : 'Nie udało się pobrać pliku: ' + err.message + '\nMożesz przeciągnąć plik PDF do tego okna.', 0);
+      ? 'Brak wtyczki DarkPDF.\nKliknij, żeby wybrać plik PDF, albo przeciągnij go tutaj.'
+      : 'Nie udało się pobrać pliku: ' + err.message + '\nKliknij, żeby wybrać plik PDF, albo przeciągnij go tutaj.', 0);
     return;
   }
   open({ data }, nameFromUrl(clean), clean, pm ? +pm[1] : null);
@@ -283,14 +285,25 @@ async function openFromHash() {
 openFromHash();
 window.addEventListener('hashchange', openFromHash);
 
-window.addEventListener('dragover', (e) => e.preventDefault());
-window.addEventListener('drop', async (e) => {
-  e.preventDefault();
-  const f = e.dataTransfer.files[0];
+// ---------- pliki z dysku: kliknięcie (gdy nic nie jest otwarte), Ctrl+O, przeciągnięcie ----------
+const picker = document.createElement('input');
+picker.type = 'file';
+picker.accept = 'application/pdf,.pdf';
+picker.hidden = true;
+document.body.append(picker);
+
+async function openLocal(f) {
   if (!f) return;
+  history.replaceState(null, '', location.pathname); // odświeżenie nie wróci do poprzedniego linku
   const data = new Uint8Array(await f.arrayBuffer());
   open({ data }, f.name, `local:${f.name}:${f.size}`);
-});
+}
+function pickFile() { picker.value = ''; picker.click(); }
+
+picker.addEventListener('change', () => openLocal(picker.files[0]));
+window.addEventListener('click', () => { if (!pdf) pickFile(); });
+window.addEventListener('dragover', (e) => e.preventDefault());
+window.addEventListener('drop', (e) => { e.preventDefault(); openLocal(e.dataTransfer.files[0]); });
 
 // ---------- sterowanie ----------
 // Kółko myszy: każdy ząbek = jedna rozkładówka.
@@ -324,6 +337,7 @@ window.addEventListener('wheel', (e) => {
 
 let numBuf = '';
 window.addEventListener('keydown', (e) => {
+  if ((e.ctrlKey || e.metaKey) && (e.key === 'o' || e.key === 'O')) { e.preventDefault(); pickFile(); return; }
   if (e.ctrlKey || e.metaKey || e.altKey) return;
   const k = e.key;
 
@@ -372,7 +386,7 @@ window.addEventListener('keydown', (e) => {
       break;
     case '?':
       flash('→ ↓ Spacja PgDn  następne\n← ↑ PgUp  poprzednie\nHome / End  początek / koniec\n' +
-            'numer + Enter  skok do strony\nD  tryb ciemny\nO  pary nieparzyste / parzyste\nF  pełny ekran', 5000);
+            'numer + Enter  skok do strony\nCtrl+O  otwórz plik z dysku\nD  tryb ciemny\nO  pary nieparzyste / parzyste\nF  pełny ekran', 5000);
       break;
     default:
       return;

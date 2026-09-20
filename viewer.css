@@ -5,6 +5,7 @@ html, body {
   background: #525659;
   user-select: none;
 }
+html.empty, html.empty body { cursor: pointer; }
 html.dark, html.dark body { background: #161616; }
 
 #stage {
