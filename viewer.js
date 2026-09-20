@@ -982,9 +982,6 @@ function act(k) {
     case 'fit-h':
       setFitMode(fitMode === 'height' ? 'auto' : 'height');
       break;
-    case 'fit':
-      setFitMode(fitMode === 'auto' ? 'width' : (fitMode === 'width' ? 'height' : 'auto'));
-      break;
     case 'pin':
       pinned = !pinned;
       pref.set('menuPinned', pinned);
