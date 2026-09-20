@@ -110,8 +110,11 @@ if (calcOpen && calcFrame) {
 function applyDark() {
   document.documentElement.classList.toggle('dark', dark);
   document.documentElement.classList.toggle('gemini', dark && theme === 'gemini');
+  const targetTheme = theme === 'gemini' ? 'gemini' : (dark ? 'dark' : 'auto');
   if (calcFrame && calcFrame.src && calcFrame.src !== 'about:blank') {
-    calcFrame.src = getCalcUrl();
+    try {
+      calcFrame.contentWindow?.postMessage({ type: 'darkpdf_theme', theme: targetTheme }, '*');
+    } catch {}
   }
 }
 
@@ -911,6 +914,8 @@ if (calcResizer) {
     calcResizer.classList.add('dragging');
     calcSidebar.style.transition = 'none';
     stage.style.transition = 'none';
+    if (calcFrame) calcFrame.style.pointerEvents = 'none';
+    try { calcResizer.setPointerCapture(e.pointerId); } catch {}
 
     const onMove = (ev) => {
       if (!isDragging) return;
@@ -919,11 +924,14 @@ if (calcResizer) {
       fitNow();
     };
 
-    const onUp = () => {
+    const onUp = (ev) => {
+      if (!isDragging) return;
       isDragging = false;
       calcResizer.classList.remove('dragging');
       calcSidebar.style.transition = '';
       stage.style.transition = '';
+      if (calcFrame) calcFrame.style.pointerEvents = '';
+      try { calcResizer.releasePointerCapture(ev.pointerId); } catch {}
       window.removeEventListener('pointermove', onMove);
       window.removeEventListener('pointerup', onUp);
       canvasCache.clear(); loCache.clear(); tlCache.clear();
@@ -1213,6 +1221,9 @@ function fitNow() {
 
 let resizeTimer;
 window.addEventListener('resize', () => {
+  if (calcOpen && calcWidth > window.innerWidth - 100) {
+    updateCalcWidth(window.innerWidth - 100);
+  }
   if (!pdf) return;
   fitNow();
   clearTimeout(resizeTimer);
