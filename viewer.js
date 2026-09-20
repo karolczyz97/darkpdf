@@ -265,7 +265,7 @@ async function updateText(s, token) {
     const h = document.createElement('h2');
     h.textContent = `Strona ${n}` + (n === a || n === b ? ' (widoczna)' : '');
     const pre = document.createElement('p');
-    pre.textContent = t || '[brak tekstu – strona jest prawdopodobnie skanem]';
+    pre.textContent = t || '[brak tekstu]';
     sec.append(h, pre);
     parts.push(sec);
   }
