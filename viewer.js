@@ -88,10 +88,15 @@ document.documentElement.classList.add('empty');
 
 function getCalcUrl() {
   const themeParam = theme === 'gemini' ? 'gemini' : (dark ? 'dark' : 'auto');
-  const base = (location.hostname === 'localhost' || location.hostname === '127.0.0.1')
-    ? '/calc/index.html'
-    : '../calc/index.html';
-  return `${base}?embed=1&side=1&theme=${themeParam}`;
+  const custom = localStorage.getItem('calcUrl') || window.DARKPDF_CALC_URL;
+  let base = custom;
+  if (!base) {
+    base = (location.hostname === 'localhost' || location.hostname === '127.0.0.1')
+      ? '/calc/index.html'
+      : (location.hostname.endsWith('github.io') ? 'https://karolczyz97.github.io/calc/' : '../calc/index.html');
+  }
+  const sep = base.includes('?') ? '&' : '?';
+  return `${base}${sep}embed=1&side=1&theme=${themeParam}`;
 }
 
 if (calcOpen && calcFrame) {
