@@ -56,6 +56,7 @@ function lru(max = Infinity) {
 // ---- Kalkulator i tryb dopasowania ----
 let calcOpen = false;
 let calcWidth = parseInt(localStorage.getItem('calcWidth'), 10) || 440;
+let targetPdfWidth = parseInt(localStorage.getItem('targetPdfWidth'), 10) || null;
 let fitMode = localStorage.getItem('fitMode') || 'auto'; // 'auto' | 'width' | 'height'
 
 const calcSidebar = document.getElementById('calc-sidebar');
@@ -889,9 +890,23 @@ function setCalcOpen(open) {
   if (open && !pdf) return;
   calcOpen = !!open;
   localStorage.setItem('calcOpen', calcOpen ? '1' : '0');
+  document.documentElement.classList.add('calc-animating');
+  setTimeout(() => document.documentElement.classList.remove('calc-animating'), 250);
   document.documentElement.classList.toggle('calc-open', calcOpen);
-  if (calcOpen && (!calcFrame.src || calcFrame.src === 'about:blank')) {
-    calcFrame.src = getCalcUrl();
+
+  if (calcOpen) {
+    if (!targetPdfWidth) {
+      targetPdfWidth = Math.max(120, window.innerWidth - calcWidth);
+      localStorage.setItem('targetPdfWidth', String(targetPdfWidth));
+    } else {
+      const minW = 320;
+      const maxW = Math.max(minW, window.innerWidth - 120);
+      const desiredW = Math.max(minW, Math.min(maxW, window.innerWidth - targetPdfWidth));
+      updateCalcWidth(desiredW, false);
+    }
+    if (!calcFrame.src || calcFrame.src === 'about:blank') {
+      calcFrame.src = getCalcUrl();
+    }
   }
   window.focus(); // Fokus pozostaje na dokumencie PDF
   updateMenu();
@@ -903,11 +918,16 @@ function setCalcOpen(open) {
   }, 120);
 }
 
-function updateCalcWidth(w) {
-  const maxW = Math.max(320, window.innerWidth - 120);
-  calcWidth = Math.max(320, Math.min(maxW, Math.round(w)));
+function updateCalcWidth(w, updateTargetPdf = true) {
+  const minW = 320;
+  const maxW = Math.max(minW, window.innerWidth - 120);
+  calcWidth = Math.max(minW, Math.min(maxW, Math.round(w)));
   document.documentElement.style.setProperty('--calc-w', calcWidth + 'px');
   localStorage.setItem('calcWidth', String(calcWidth));
+  if (updateTargetPdf) {
+    targetPdfWidth = Math.max(120, window.innerWidth - calcWidth);
+    localStorage.setItem('targetPdfWidth', String(targetPdfWidth));
+  }
 }
 
 // Przeciąganie krawędzi kalkulatora (resizer)
@@ -919,6 +939,7 @@ if (calcResizer) {
     initialW = calcWidth;
     calcResizer.classList.add('dragging');
     calcSidebar.style.transition = 'none';
+    stage.style.transition = 'none';
     document.body.style.userSelect = 'none';
     if (calcFrame) calcFrame.style.pointerEvents = 'none';
     try { calcResizer.setPointerCapture(e.pointerId); } catch {}
@@ -928,7 +949,7 @@ if (calcResizer) {
   const onPointerMove = (ev) => {
     if (!isDragging) return;
     const delta = ev.clientX - startX;
-    updateCalcWidth(initialW + delta);
+    updateCalcWidth(initialW + delta, true);
     fitNow();
   };
 
@@ -937,6 +958,7 @@ if (calcResizer) {
     isDragging = false;
     calcResizer.classList.remove('dragging');
     calcSidebar.style.transition = '';
+    stage.style.transition = '';
     document.body.style.userSelect = '';
     if (calcFrame) calcFrame.style.pointerEvents = '';
     try { calcResizer.releasePointerCapture(ev.pointerId); } catch {}
@@ -1233,8 +1255,15 @@ function fitNow() {
 
 let resizeTimer;
 window.addEventListener('resize', () => {
-  if (calcOpen && calcWidth > window.innerWidth - 120) {
-    updateCalcWidth(window.innerWidth - 120);
+  if (calcOpen) {
+    if (targetPdfWidth) {
+      const minW = 320;
+      const maxW = Math.max(minW, window.innerWidth - 120);
+      const desiredW = Math.max(minW, Math.min(maxW, window.innerWidth - targetPdfWidth));
+      updateCalcWidth(desiredW, false);
+    } else if (calcWidth > window.innerWidth - 120) {
+      updateCalcWidth(window.innerWidth - 120, true);
+    }
   }
   if (!pdf) return;
   fitNow();

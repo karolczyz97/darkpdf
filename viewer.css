@@ -40,6 +40,8 @@ html.dark, html.dark body { background: #161616; }
   display: flex;
   align-items: center;
   justify-content: center;
+}
+html.calc-animating #stage {
   transition: left .22s cubic-bezier(0.16, 1, 0.3, 1);
 }
 html.calc-open #stage {
