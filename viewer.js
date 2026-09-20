@@ -444,15 +444,17 @@ function showMenu() {
   clearTimeout(menuTimer);
   menuTimer = setTimeout(hideMenu, 4000);
 }
+const label = (text, key) => `${text} <span class="k">(${key})</span>`;
+
 function updateMenu() {
   const [a, b] = spreadOf(start);
   menu.querySelector('.pos').textContent = `${a && b ? a + '–' + b : (a || b)} / ${numPages}`;
-  menu.querySelector('[data-k="pages"]').textContent = two ? 'Jedna strona' : 'Dwie strony';
+  menu.querySelector('[data-k="pages"]').innerHTML = label(two ? 'Jedna strona' : 'Dwie strony', 'P');
   const pr = menu.querySelector('[data-k="pairing"]');
-  pr.textContent = pairing === 'odd' ? 'Pary 1–2' : 'Pary 1, 2–3';
+  pr.innerHTML = label(pairing === 'odd' ? 'Pary 1–2' : 'Pary 1, 2–3', 'O');
   pr.hidden = !two;
-  menu.querySelector('[data-k="theme"]').textContent = theme === 'gemini' ? 'Motyw Gemini' : 'Motyw zwykły';
-  menu.querySelector('[data-k="dark"]').textContent = dark ? 'Ciemny' : 'Jasny';
+  menu.querySelector('[data-k="theme"]').innerHTML = label(theme === 'gemini' ? 'Motyw Gemini' : 'Motyw zwykły', 'T');
+  menu.querySelector('[data-k="dark"]').innerHTML = label(dark ? 'Ciemny' : 'Jasny', 'D');
 }
 
 function act(k) {

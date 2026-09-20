@@ -100,6 +100,7 @@ html.gemini #hint { background: #282a2c; color: #e3e3e3; font-family: "Google Sa
 }
 #menu button:hover { background: rgba(255, 255, 255, .12); color: #fff; }
 #menu button[hidden] { display: none; }
+#menu .k { color: #8a8a8a; font-size: 12px; }
 #menu .pos { padding: 0 6px; color: #9a9a9a; font-variant-numeric: tabular-nums; white-space: nowrap; }
 #menu .sep { width: 1px; align-self: stretch; margin: 2px 6px; background: rgba(255, 255, 255, .12); }
 html.gemini #menu { background: #282a2c; border-color: #444746; color: #e3e3e3; font-family: "Google Sans Flex", "Google Sans", system-ui, sans-serif; }

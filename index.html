@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="robots" content="noindex">
   <title>DarkPDF</title>
-  <link rel="stylesheet" href="viewer.css">
+  <link rel="stylesheet" href="viewer.css?v=6">
 </head>
 <body>
   <svg width="0" height="0" style="position:absolute" aria-hidden="true">
@@ -40,18 +40,18 @@
   </div>
 
   <div id="menu" hidden>
-    <button data-k="prev" title="Poprzednia (←)">◀</button>
+    <button data-k="prev" title="Poprzednia strona (←)">◀</button>
     <span class="pos"></span>
-    <button data-k="next" title="Następna (→)">▶</button>
+    <button data-k="next" title="Następna strona (→)">▶</button>
     <span class="sep"></span>
     <button data-k="pages" title="P"></button>
     <button data-k="pairing" title="O"></button>
     <button data-k="dark" title="D"></button>
     <button data-k="theme" title="T"></button>
-    <button data-k="full" title="F">Pełny ekran</button>
-    <button data-k="open" title="Ctrl+O">Otwórz plik</button>
+    <button data-k="full">Pełny ekran <span class="k">(F)</span></button>
+    <button data-k="open">Otwórz plik <span class="k">(Ctrl+O)</span></button>
   </div>
   <main id="text" class="sr-only" aria-label="Tekst dokumentu"></main>
-  <script type="module" src="viewer.js"></script>
+  <script type="module" src="viewer.js?v=6"></script>
 </body>
 </html>
