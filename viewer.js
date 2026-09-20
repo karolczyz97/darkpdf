@@ -20,6 +20,7 @@ stage.style.gap = GAP + 'px';
 
 let dark = localStorage.getItem('dark') === '1';
 let theme = localStorage.getItem('theme') || 'normal';   // 'normal' | 'gemini'
+let two = localStorage.getItem('two') !== '0';           // dwie strony obok siebie czy jedna
 let pairing = 'odd';      // 'odd' = 1–2, 3–4…   'even' = 1, 2–3, 4–5…
 let pdf = null, numPages = 0, start = 1;
 let fileKey = null, fileName = 'PDF';
@@ -52,15 +53,17 @@ function flash(text, ms = 1200) {
 // ---------- rozkład stron ----------
 function spreadStartOf(p) {
   p = Math.min(Math.max(1, p), numPages);
+  if (!two) return p;
   if (pairing === 'odd') return p % 2 ? p : p - 1;
   return p === 1 ? 1 : (p % 2 ? p - 1 : p);
 }
 function spreadOf(s) {
+  if (!two) return [s, null];
   if (pairing === 'even' && s === 1) return [null, 1]; // okładka sama, po prawej
   return [s, s + 1 <= numPages ? s + 1 : null];
 }
 function nextStart(s) {
-  const n = (pairing === 'even' && s === 1) ? 2 : s + 2;
+  const n = !two ? s + 1 : (pairing === 'even' && s === 1) ? 2 : s + 2;
   return n <= numPages ? n : null;
 }
 function prevStart(s) { return s <= 1 ? null : spreadStartOf(s - 1); }
@@ -76,15 +79,29 @@ async function pageSize(n) {
 }
 
 // Skala dobrana tak, żeby rozkładówka wypełniła okno bez przewijania.
-async function layout(s) {
-  const [a, b] = spreadOf(s);
-  const sa = a ? await pageSize(a) : null;
-  const sb = b ? await pageSize(b) : null;
+function fit(a, b, sa, sb) {
+  const H = window.innerHeight - 2 * MARGIN;
+  if (!two) {
+    const scale = Math.min((window.innerWidth - 2 * MARGIN) / sa.w, H / sa.h);
+    return { a, b: null, scale, L: sa, R: sa, single: true };
+  }
   const L = sa || sb, R = sb || sa; // pojedyncza strona zachowuje rozmiar jak w parze
   const W = window.innerWidth - 2 * MARGIN - GAP;
-  const H = window.innerHeight - 2 * MARGIN;
-  const scale = Math.min(W / (L.w + R.w), H / Math.max(L.h, R.h));
-  return { a, b, scale, L, R };
+  return { a, b, scale: Math.min(W / (L.w + R.w), H / Math.max(L.h, R.h)), L, R, single: false };
+}
+
+async function layout(s) {
+  const [a, b] = spreadOf(s);
+  return fit(a, b, a ? await pageSize(a) : null, b ? await pageSize(b) : null);
+}
+
+// To samo bez czekania – przy zmianie rozmiaru okna wymiary stron są już znane.
+function layoutSync(s) {
+  const [a, b] = spreadOf(s);
+  const sa = a ? sizeCache.get(a) : null;
+  const sb = b ? sizeCache.get(b) : null;
+  if ((a && !sa) || (b && !sb)) return null;
+  return fit(a, b, sa, sb);
 }
 
 // ---------- renderowanie ----------
@@ -138,7 +155,7 @@ function blank(size, scale) {
 async function show(s) {
   const token = ++showToken;
   start = s;
-  const { a, b, scale, L, R } = await layout(s);
+  const { a, b, scale, L, R, single } = await layout(s);
   if (token !== showToken) return;
 
   const pages = [a, b];
@@ -156,7 +173,9 @@ async function show(s) {
   let shown = [];
   const put = ([ca, cb]) => {
     shown = [ca && wrap(ca), cb && wrap(cb)];
-    stage.replaceChildren(shown[0] || blank(L, scale), shown[1] || blank(R, scale));
+    stage.replaceChildren(...(single
+      ? [shown[0] || blank(L, scale)]
+      : [shown[0] || blank(L, scale), shown[1] || blank(R, scale)]));
     const range = a && b ? `${a}–${b}` : `${a || b}`;
     document.title = `${range} / ${numPages} – ${fileName}`;
   };
@@ -295,13 +314,14 @@ async function open(src, name, key, startPage = null) {
       isEvalSupported: false
     }).promise;
   } catch (err) {
-    flash('Nie udało się otworzyć pliku: ' + (err?.message || err) +
-          '\nKliknij, żeby wybrać plik PDF, albo przeciągnij go tutaj.', 0);
+    setEmpty(true);
+    flash('Nie udało się otworzyć pliku: ' + (err?.message || err), 4000);
     return;
   }
   if (pdf) pdf.destroy();
   pdf = doc;
   document.documentElement.classList.remove('empty');
+  hideMenu();
   numPages = pdf.numPages;
   fileName = name;
   fileKey = key;
@@ -363,19 +383,21 @@ function loadViaExtension(url) {
 async function openFromHash() {
   const h = location.href;
   const i = h.indexOf('#file=');
-  if (i < 0) { flash('Kliknij, żeby wybrać plik PDF, albo przeciągnij go tutaj', 0); return; }
+  if (i < 0) { setEmpty(true); return; }
   let url = h.slice(i + 6);
   if (/^[a-z]+%3A/i.test(url)) url = decodeURIComponent(url);
   const pm = /#page=(\d+)/.exec(url);
   const clean = url.split('#')[0];
+  setEmpty(false);
   flash('Ładowanie…', 0);
   let data;
   try {
     data = await loadViaExtension(clean);
   } catch (err) {
+    setEmpty(true);
     flash(err.message === 'NOEXT'
-      ? 'Brak wtyczki DarkPDF.\nKliknij, żeby wybrać plik PDF, albo przeciągnij go tutaj.'
-      : 'Nie udało się pobrać pliku: ' + err.message + '\nKliknij, żeby wybrać plik PDF, albo przeciągnij go tutaj.', 0);
+      ? 'Brak wtyczki DarkPDF – wybierz plik ręcznie'
+      : 'Nie udało się pobrać pliku: ' + err.message, 4000);
     return;
   }
   open({ data }, nameFromUrl(clean), clean, pm ? +pm[1] : null);
@@ -393,15 +415,102 @@ document.body.append(picker);
 async function openLocal(f) {
   if (!f) return;
   history.replaceState(null, '', location.pathname); // odświeżenie nie wróci do poprzedniego linku
+  setEmpty(false);
   const data = new Uint8Array(await f.arrayBuffer());
   open({ data }, f.name, `local:${f.name}:${f.size}`);
 }
 function pickFile() { picker.value = ''; picker.click(); }
 
 picker.addEventListener('change', () => openLocal(picker.files[0]));
-window.addEventListener('click', () => { if (!pdf) pickFile(); });
-window.addEventListener('dragover', (e) => e.preventDefault());
-window.addEventListener('drop', (e) => { e.preventDefault(); openLocal(e.dataTransfer.files[0]); });
+
+const welcome = document.getElementById('welcome');
+function setEmpty(v) { document.documentElement.classList.toggle('empty', v); }
+window.addEventListener('dragover', (e) => { e.preventDefault(); welcome.classList.add('drag'); });
+window.addEventListener('dragleave', () => welcome.classList.remove('drag'));
+window.addEventListener('drop', (e) => {
+  e.preventDefault();
+  welcome.classList.remove('drag');
+  openLocal(e.dataTransfer.files[0]);
+});
+
+// ---------- pasek z przyciskami: pojawia się po kliknięciu i sam znika ----------
+const menu = document.getElementById('menu');
+let menuTimer;
+function hideMenu() { menu.hidden = true; clearTimeout(menuTimer); }
+function showMenu() {
+  if (!pdf) return;
+  updateMenu();
+  menu.hidden = false;
+  clearTimeout(menuTimer);
+  menuTimer = setTimeout(hideMenu, 4000);
+}
+function updateMenu() {
+  const [a, b] = spreadOf(start);
+  menu.querySelector('.pos').textContent = `${a && b ? a + '–' + b : (a || b)} / ${numPages}`;
+  menu.querySelector('[data-k="pages"]').textContent = two ? 'Jedna strona' : 'Dwie strony';
+  const pr = menu.querySelector('[data-k="pairing"]');
+  pr.textContent = pairing === 'odd' ? 'Pary 1–2' : 'Pary 1, 2–3';
+  pr.hidden = !two;
+  menu.querySelector('[data-k="theme"]').textContent = theme === 'gemini' ? 'Motyw Gemini' : 'Motyw zwykły';
+  menu.querySelector('[data-k="dark"]').textContent = dark ? 'Ciemny' : 'Jasny';
+}
+
+function act(k) {
+  switch (k) {
+    case 'prev': prev(); break;
+    case 'next': next(); break;
+    case 'open': pickFile(); break;
+    case 'full':
+      document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen();
+      break;
+    case 'dark':
+      dark = !dark;
+      localStorage.setItem('dark', dark ? '1' : '0');
+      applyDark();
+      break;
+    case 'theme':
+      if (!dark) { dark = true; theme = 'gemini'; }
+      else theme = theme === 'gemini' ? 'normal' : 'gemini';
+      localStorage.setItem('dark', '1');
+      localStorage.setItem('theme', theme);
+      applyDark();
+      flash(theme === 'gemini' ? 'Motyw: Gemini' : 'Motyw: zwykły ciemny');
+      break;
+    case 'pages': {
+      if (!pdf) break;
+      const anchor = spreadOf(start).find(Boolean);
+      two = !two;
+      localStorage.setItem('two', two ? '1' : '0');
+      flash(two ? 'Dwie strony' : 'Jedna strona');
+      go(spreadStartOf(anchor));
+      break;
+    }
+    case 'pairing': {
+      if (!pdf || !two) break;
+      const anchor = spreadOf(start).find(Boolean);
+      pairing = pairing === 'odd' ? 'even' : 'odd';
+      localStorage.setItem('pairing', pairing);
+      if (fileKey) localStorage.setItem('pairing:' + fileKey, pairing);
+      flash(pairing === 'odd' ? 'Pary: 1–2, 3–4, 5–6…' : 'Pary: 1, 2–3, 4–5…');
+      go(spreadStartOf(anchor));
+      break;
+    }
+  }
+  if (!menu.hidden) showMenu();
+}
+
+menu.addEventListener('click', (e) => {
+  const b = e.target.closest('button');
+  if (!b) return;
+  e.stopPropagation();
+  act(b.dataset.k);
+});
+
+window.addEventListener('click', () => {
+  if (!pdf) { pickFile(); return; }
+  if (String(getSelection())) return;      // nie przeszkadzamy przy zaznaczaniu tekstu
+  menu.hidden ? showMenu() : hideMenu();
+});
 
 // ---------- sterowanie ----------
 // Kółko myszy: każdy ząbek = jedna rozkładówka, bez limitu szybkości.
@@ -417,6 +526,7 @@ window.addEventListener('wheel', (e) => {
   else if (e.deltaMode === 2) d *= window.innerHeight;
   if (!d) return;
 
+  hideMenu();
   const now = performance.now();
   const gap = now - lastWheel;
   lastWheel = now;
@@ -438,6 +548,7 @@ let numBuf = '';
 window.addEventListener('keydown', (e) => {
   if ((e.ctrlKey || e.metaKey) && (e.key === 'o' || e.key === 'O')) { e.preventDefault(); pickFile(); return; }
   if (e.ctrlKey || e.metaKey || e.altKey) return;
+  hideMenu();
   const k = e.key;
 
   // Skok do strony: wpisz numer + Enter
@@ -465,35 +576,14 @@ window.addEventListener('keydown', (e) => {
       go(1); break;
     case 'End':
       if (pdf) go(spreadStartOf(numPages)); break;
-    case 'd': case 'D':
-      dark = !dark;
-      localStorage.setItem('dark', dark ? '1' : '0');
-      applyDark();
-      break;
-    case 't': case 'T':
-      if (!dark) { dark = true; theme = 'gemini'; }
-      else theme = theme === 'gemini' ? 'normal' : 'gemini';
-      localStorage.setItem('dark', '1');
-      localStorage.setItem('theme', theme);
-      applyDark();
-      flash(theme === 'gemini' ? 'Motyw: Gemini' : 'Motyw: zwykły ciemny');
-      break;
-    case 'o': case 'O': {
-      if (!pdf) break;
-      const anchor = spreadOf(start).find(Boolean);
-      pairing = pairing === 'odd' ? 'even' : 'odd';
-      localStorage.setItem('pairing', pairing);
-      if (fileKey) localStorage.setItem('pairing:' + fileKey, pairing);
-      flash(pairing === 'odd' ? 'Pary: 1–2, 3–4, 5–6…' : 'Pary: 1, 2–3, 4–5…');
-      go(spreadStartOf(anchor));
-      break;
-    }
-    case 'f': case 'F':
-      document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen();
-      break;
+    case 'd': case 'D': act('dark'); break;
+    case 't': case 'T': act('theme'); break;
+    case 'p': case 'P': act('pages'); break;
+    case 'o': case 'O': act('pairing'); break;
+    case 'f': case 'F': act('full'); break;
     case '?':
       flash('→ ↓ Spacja PgDn  następne\n← ↑ PgUp  poprzednie\nHome / End  początek / koniec\n' +
-            'numer + Enter  skok do strony\nCtrl+O  otwórz plik z dysku\nD  tryb ciemny\nT  motyw zwykły / Gemini\nO  pary nieparzyste / parzyste\nF  pełny ekran', 5000);
+            'numer + Enter  skok do strony\nCtrl+O  otwórz plik z dysku\nP  jedna / dwie strony\nD  tryb ciemny\nT  motyw zwykły / Gemini\nO  pary nieparzyste / parzyste\nF  pełny ekran\nkliknięcie  pasek z przyciskami', 5000);
       break;
     default:
       return;
@@ -501,13 +591,30 @@ window.addEventListener('keydown', (e) => {
   e.preventDefault();
 });
 
-// Automatyczne dopasowanie przy zmianie rozmiaru okna / zoomu.
+// Zmiana rozmiaru okna: strony skalują się od razu przez CSS,
+// a ostre przerysowanie idzie dopiero, gdy przestaniesz ciągnąć.
+function fitNow() {
+  const l = layoutSync(start);
+  if (!l) return;
+  const sizes = l.single ? [l.L] : [l.L, l.R];
+  [...stage.children].forEach((el, i) => {
+    const size = sizes[i];
+    if (!size) return;
+    const w = Math.floor(size.w * l.scale) + 'px', h = Math.floor(size.h * l.scale) + 'px';
+    el.style.setProperty('--scale-factor', l.scale);
+    const c = el.querySelector('canvas');
+    if (c) { c.style.width = w; c.style.height = h; }
+    else { el.style.width = w; el.style.height = h; }
+  });
+}
+
 let resizeTimer;
 window.addEventListener('resize', () => {
+  if (!pdf) return;
+  fitNow();
   clearTimeout(resizeTimer);
   resizeTimer = setTimeout(() => {
-    if (!pdf) return;
     canvasCache.clear(); loCache.clear(); tlCache.clear();
     show(start);
-  }, 120);
+  }, 180);
 });

@@ -82,3 +82,53 @@ html.gemini #hint { background: #282a2c; color: #e3e3e3; font-family: "Google Sa
 /* Pomocniczy canvas, który pdf.js dokleja do body, żeby mierzyć szerokość tekstu.
    Bez tego widać go jako czarny prostokąt 300×150 w lewym górnym rogu. */
 .hiddenCanvasElement { position: absolute; top: 0; left: 0; width: 0; height: 0; display: none; }
+
+/* ---- pasek z przyciskami ---- */
+#menu {
+  position: fixed; left: 50%; bottom: calc(18px + env(safe-area-inset-bottom, 0px));
+  transform: translateX(-50%); z-index: 6;
+  display: flex; align-items: center; gap: 2px; padding: 5px;
+  max-width: calc(100vw - 24px); flex-wrap: wrap; justify-content: center;
+  border-radius: 12px; background: rgba(24, 24, 24, .94); border: 1px solid rgba(255, 255, 255, .08);
+  box-shadow: 0 6px 24px rgba(0, 0, 0, .45);
+  font: 13px system-ui, sans-serif; color: #e6e6e6;
+}
+#menu[hidden] { display: none; }
+#menu button {
+  background: none; border: 0; color: #d8d8d8; font: inherit; cursor: pointer;
+  padding: 7px 11px; border-radius: 8px; white-space: nowrap;
+}
+#menu button:hover { background: rgba(255, 255, 255, .12); color: #fff; }
+#menu button[hidden] { display: none; }
+#menu .pos { padding: 0 6px; color: #9a9a9a; font-variant-numeric: tabular-nums; white-space: nowrap; }
+#menu .sep { width: 1px; align-self: stretch; margin: 2px 6px; background: rgba(255, 255, 255, .12); }
+html.gemini #menu { background: #282a2c; border-color: #444746; color: #e3e3e3; font-family: "Google Sans Flex", "Google Sans", system-ui, sans-serif; }
+
+/* ---- ekran startowy ---- */
+#welcome { position: fixed; inset: 0; z-index: 4; display: none; align-items: center; justify-content: center; padding: 24px; }
+html.empty #welcome { display: flex; }
+#welcome .card {
+  width: 100%; max-width: 440px; padding: 34px 30px 26px; text-align: center;
+  border: 1px dashed rgba(255, 255, 255, .16); border-radius: 16px; background: rgba(255, 255, 255, .025);
+  font: 14px/1.5 system-ui, sans-serif; color: #ddd;
+}
+#welcome.drag .card { border-color: #8ab4f8; border-style: solid; background: rgba(138, 180, 248, .10); }
+#welcome .logo { font-size: 21px; font-weight: 600; letter-spacing: .04em; }
+#welcome .lead { margin: 8px 0 20px; color: #9a9a9a; }
+#welcome .pick {
+  padding: 10px 20px; border: 0; border-radius: 9px; background: #ececec; color: #1a1a1a;
+  font: 600 14px system-ui, sans-serif; cursor: pointer;
+}
+#welcome .pick:hover { background: #fff; }
+#welcome .keys {
+  display: grid; grid-template-columns: auto 1fr; gap: 7px 14px; align-items: center;
+  margin-top: 24px; padding-top: 18px; border-top: 1px solid rgba(255, 255, 255, .08);
+  text-align: left; color: #9a9a9a; font-size: 13px;
+}
+#welcome kbd {
+  justify-self: start; font: 12px ui-monospace, "Cascadia Mono", Consolas, monospace; color: #ddd;
+  background: rgba(255, 255, 255, .08); border: 1px solid rgba(255, 255, 255, .08);
+  border-radius: 5px; padding: 2px 7px; white-space: nowrap;
+}
+#welcome .foot { margin: 18px 0 0; font-size: 12px; color: #6f6f6f; }
+html.gemini #welcome .card { font-family: "Google Sans Flex", "Google Sans", system-ui, sans-serif; color: #e3e3e3; }

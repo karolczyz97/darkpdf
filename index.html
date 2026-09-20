@@ -20,6 +20,37 @@
   </svg>
   <div id="stage"></div>
   <div id="hint" hidden></div>
+
+  <div id="welcome">
+    <div class="card">
+      <div class="logo">DarkPDF</div>
+      <p class="lead">Przeciągnij plik PDF tutaj albo kliknij, żeby go wybrać.</p>
+      <button class="pick" type="button">Wybierz plik PDF</button>
+      <div class="keys">
+        <kbd>← →</kbd><span>przewijanie stron</span>
+        <kbd>P</kbd><span>jedna albo dwie strony</span>
+        <kbd>D</kbd><span>tryb ciemny</span>
+        <kbd>T</kbd><span>motyw zwykły albo Gemini</span>
+        <kbd>O</kbd><span>parowanie stron</span>
+        <kbd>F</kbd><span>pełny ekran</span>
+        <kbd>1 2 3 ⏎</kbd><span>skok do strony</span>
+      </div>
+      <p class="foot">Kliknięcie w stronę otwiera pasek z przyciskami. Plik nie jest nigdzie wysyłany.</p>
+    </div>
+  </div>
+
+  <div id="menu" hidden>
+    <button data-k="prev" title="Poprzednia (←)">◀</button>
+    <span class="pos"></span>
+    <button data-k="next" title="Następna (→)">▶</button>
+    <span class="sep"></span>
+    <button data-k="pages" title="P"></button>
+    <button data-k="pairing" title="O"></button>
+    <button data-k="dark" title="D"></button>
+    <button data-k="theme" title="T"></button>
+    <button data-k="full" title="F">Pełny ekran</button>
+    <button data-k="open" title="Ctrl+O">Otwórz plik</button>
+  </div>
   <main id="text" class="sr-only" aria-label="Tekst dokumentu"></main>
   <script type="module" src="viewer.js"></script>
 </body>
