@@ -339,6 +339,9 @@ html:not(.dark) #calc-sidebar {
 html.calc-open #calc-sidebar {
   transform: translateX(0);
 }
+html.empty #calc-sidebar {
+  display: none !important;
+}
 .calc-close {
   position: absolute;
   top: 10px;

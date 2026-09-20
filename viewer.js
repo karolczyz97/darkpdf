@@ -54,7 +54,7 @@ function lru(max = Infinity) {
 }
 
 // ---- Kalkulator i tryb dopasowania ----
-let calcOpen = localStorage.getItem('calcOpen') === '1';
+let calcOpen = false;
 let calcWidth = parseInt(localStorage.getItem('calcWidth'), 10) || 440;
 let fitMode = localStorage.getItem('fitMode') || 'auto'; // 'auto' | 'width' | 'height'
 
@@ -64,7 +64,6 @@ const calcClose = calcSidebar?.querySelector('.calc-close');
 const calcResizer = calcSidebar?.querySelector('.calc-resizer');
 
 document.documentElement.style.setProperty('--calc-w', calcWidth + 'px');
-document.documentElement.classList.toggle('calc-open', calcOpen);
 document.documentElement.classList.toggle('fit-width', fitMode === 'width');
 document.documentElement.classList.toggle('fit-height', fitMode === 'height');
 
@@ -103,9 +102,6 @@ function getCalcUrl() {
   return `${base}${sep}embed=1&side=1&theme=${themeParam}`;
 }
 
-if (calcOpen && calcFrame) {
-  calcFrame.src = getCalcUrl();
-}
 
 function applyDark() {
   document.documentElement.classList.toggle('dark', dark);
@@ -551,6 +547,9 @@ async function open(src, name, key, startPage = null) {
   if (src.data) rememberFile(key, name, src.data);
   let p = pref.get('pos:' + key, 1);
   if (startPage) p = startPage;
+  if (localStorage.getItem('calcOpen') === '1') {
+    setCalcOpen(true);
+  }
   show(spreadStartOf(p));
   if (pinned) showMenu();
 }
@@ -713,7 +712,13 @@ async function renderRecent() {
 
 function setEmpty(v) {
   document.documentElement.classList.toggle('empty', v);
-  if (v) { renderRecent(); renderBookmarks(); }
+  if (v) {
+    if (calcOpen) {
+      calcOpen = false;
+      document.documentElement.classList.remove('calc-open');
+    }
+    renderRecent(); renderBookmarks();
+  }
 }
 window.addEventListener('dragover', (e) => { e.preventDefault(); welcome.classList.add('drag'); });
 window.addEventListener('dragleave', () => welcome.classList.remove('drag'));
@@ -881,6 +886,7 @@ pageInput.addEventListener('input', schedulePageJump);
 menu.querySelector('.page-select').addEventListener('click', () => pageInput.focus());
 
 function setCalcOpen(open) {
+  if (open && !pdf) return;
   calcOpen = !!open;
   localStorage.setItem('calcOpen', calcOpen ? '1' : '0');
   document.documentElement.classList.toggle('calc-open', calcOpen);
@@ -908,52 +914,55 @@ function updateCalcWidth(w) {
 if (calcResizer) {
   let startX = 0, initialW = 0, isDragging = false;
   calcResizer.addEventListener('pointerdown', (e) => {
-    e.preventDefault();
-    isDragging = true;
+    if (e.button !== 0) return;
     startX = e.clientX;
     initialW = calcWidth;
     calcResizer.classList.add('dragging');
     calcSidebar.style.transition = 'none';
-    stage.style.transition = 'none';
+    document.body.style.userSelect = 'none';
     if (calcFrame) calcFrame.style.pointerEvents = 'none';
     try { calcResizer.setPointerCapture(e.pointerId); } catch {}
+    isDragging = true;
+  });
 
-    const onMove = (ev) => {
-      if (!isDragging) return;
-      const dx = ev.clientX - startX;
-      updateCalcWidth(initialW + dx);
-      fitNow();
-    };
+  const onPointerMove = (ev) => {
+    if (!isDragging) return;
+    const delta = ev.clientX - startX;
+    updateCalcWidth(initialW + delta);
+    fitNow();
+  };
 
-    const onUp = (ev) => {
-      if (!isDragging) return;
-      isDragging = false;
-      calcResizer.classList.remove('dragging');
-      calcSidebar.style.transition = '';
-      stage.style.transition = '';
-      if (calcFrame) calcFrame.style.pointerEvents = '';
-      try { calcResizer.releasePointerCapture(ev.pointerId); } catch {}
-      window.removeEventListener('pointermove', onMove);
-      window.removeEventListener('pointerup', onUp);
+  const onPointerUp = (ev) => {
+    if (!isDragging) return;
+    isDragging = false;
+    calcResizer.classList.remove('dragging');
+    calcSidebar.style.transition = '';
+    document.body.style.userSelect = '';
+    if (calcFrame) calcFrame.style.pointerEvents = '';
+    try { calcResizer.releasePointerCapture(ev.pointerId); } catch {}
+    fitNow();
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(() => {
       canvasCache.clear(); loCache.clear(); tlCache.clear();
       show(start);
-    };
+    }, 120);
+  };
 
-    window.addEventListener('pointermove', onMove);
-    window.addEventListener('pointerup', onUp);
-  });
+  calcResizer.addEventListener('pointermove', onPointerMove);
+  calcResizer.addEventListener('pointerup', onPointerUp);
+  calcResizer.addEventListener('pointercancel', onPointerUp);
 }
 
+// Nasłuchiwanie komunikatów z ramki kalkulatora
 window.addEventListener('message', (e) => {
   if (e.data && e.data.type === 'darkpdf_close_calc') {
     setCalcOpen(false);
-    window.focus();
   }
 });
+
 calcClose?.addEventListener('click', (e) => {
   e.stopPropagation();
   setCalcOpen(false);
-  window.focus();
 });
 
 function setFitMode(mode) {
@@ -976,11 +985,16 @@ function act(k) {
     case 'prev': prev(); break;
     case 'next': next(); break;
     case 'open': pickFile(); break;
-    case 'calc': setCalcOpen(!calcOpen); break;
+    case 'calc':
+      if (!pdf) break;
+      setCalcOpen(!calcOpen);
+      break;
     case 'fit-w':
+      if (!pdf) break;
       setFitMode(fitMode === 'width' ? 'auto' : 'width');
       break;
     case 'fit-h':
+      if (!pdf) break;
       setFitMode(fitMode === 'height' ? 'auto' : 'height');
       break;
     case 'pin':
