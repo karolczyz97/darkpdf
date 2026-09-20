@@ -18,21 +18,54 @@ const hint = document.getElementById('hint');
 const textLayer = document.getElementById('text');
 stage.style.gap = GAP + 'px';
 
-let dark = localStorage.getItem('dark') === '1';
-let theme = localStorage.getItem('theme') || 'normal';   // 'normal' | 'gemini'
-let two = localStorage.getItem('two') !== '0';           // dwie strony obok siebie czy jedna
+// Ustawienia trzymane w przeglądarce; typ bierzemy z wartości domyślnej.
+const pref = {
+  get(k, d) {
+    const v = localStorage.getItem(k);
+    if (v === null) return d;
+    if (typeof d === 'boolean') return v === '1';
+    if (typeof d === 'number') return parseInt(v, 10) || d;
+    return v;
+  },
+  set(k, v) { try { localStorage.setItem(k, typeof v === 'boolean' ? (v ? '1' : '0') : String(v)); } catch {} },
+  json(k, d) { try { return JSON.parse(localStorage.getItem(k)) ?? d; } catch { return d; } },
+  setJson(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} }
+};
+
+let dark = pref.get('dark', false);
+let theme = pref.get('theme', 'normal');   // 'normal' | 'gemini'
+let two = pref.get('two', true);           // dwie strony obok siebie czy jedna
+let crop = pref.get('crop', true);         // przycinanie białych marginesów
+let rot = 0;                                             // obrót stron: 0, 90, 180, 270
 let pairing = 'odd';      // 'odd' = 1–2, 3–4…   'even' = 1, 2–3, 4–5…
 let pdf = null, numPages = 0, start = 1;
 let fileKey = null, fileName = 'PDF';
 let showToken = 0;
 
-const sizeCache = new Map();   // nr strony -> {w, h}
-const canvasCache = new Map(); // klucz -> canvas (kolejność = LRU)
-const pending = new Map();     // klucz -> Promise<canvas>
-const textCache = new Map();   // nr strony -> tekst
-const tcCache = new Map();     // nr strony -> Promise<textContent>
-const tlCache = new Map();     // klucz -> gotowa warstwa tekstowa
-const loCache = new Map();     // szybkie podglądy niskiej rozdzielczości
+// Mapa, która sama wyrzuca najdawniej używany wpis po przekroczeniu limitu.
+function lru(max = Infinity) {
+  const m = new Map();
+  return {
+    has: (k) => m.has(k),
+    get(k) { const v = m.get(k); if (v !== undefined) { m.delete(k); m.set(k, v); } return v; },
+    set(k, v) { m.set(k, v); while (m.size > max) m.delete(m.keys().next().value); return v; },
+    clear: () => m.clear()
+  };
+}
+
+const sizeCache = lru();             // nr strony -> obszar do pokazania
+const canvasCache = lru(CACHE_MAX);  // klucz -> gotowa strona
+const loCache = lru(60);             // klucz -> szybki podgląd
+const tlCache = lru(CACHE_MAX);      // klucz -> warstwa tekstowa
+const textCache = lru();             // nr strony -> tekst
+const tcCache = lru();               // nr strony -> Promise<textContent>
+const pending = new Map();           // klucz -> trwające renderowanie
+
+function clearCaches() {
+  for (const job of pending.values()) job.cancel();
+  for (const c of [sizeCache, canvasCache, loCache, tlCache, textCache, tcCache]) c.clear();
+  cropJobs.clear();
+}
 
 applyDark();
 document.documentElement.classList.add('empty');
@@ -68,14 +101,94 @@ function nextStart(s) {
 }
 function prevStart(s) { return s <= 1 ? null : spreadStartOf(s - 1); }
 
-async function pageSize(n) {
-  let s = sizeCache.get(n);
-  if (!s) {
-    const v = (await pdf.getPage(n)).getViewport({ scale: 1 });
-    s = { w: v.width, h: v.height };
-    sizeCache.set(n, s);
+const rotationOf = (page) => (page.rotate + rot + 360) % 360;
+const CROP_SAMPLES = 5;        // ile stron badamy, żeby ustalić wspólne obcięcie
+const CROP_THRESHOLD = 235;    // jaśniejsze piksele uznajemy za pusty margines
+const CROP_STEP = 2;           // co który piksel miniatury sprawdzamy
+
+const cropJobs = new Map();    // klucz grupy stron -> Promise<box>
+
+// Strony lewe i prawe mają w książkach inne marginesy, a strona może mieć inny
+// rozmiar, więc grupujemy po parzystości i wymiarach. W obrębie grupy wszystkie
+// strony dostają to samo obcięcie, żeby tekst nie skakał przy przewracaniu.
+const groupKey = (n, full) => `${n % 2}|${Math.round(full.width)}x${Math.round(full.height)}|${rot}`;
+
+async function pageBox(n) {
+  const page = await pdf.getPage(n);
+  const full = page.getViewport({ scale: 1, rotation: rotationOf(page) });
+  const whole = { x: 0, y: 0, w: full.width, h: full.height };
+  if (!crop) return whole;
+  const k = groupKey(n, full);
+  if (!cropJobs.has(k)) cropJobs.set(k, groupBox(n, full, k));
+  return (await cropJobs.get(k)) || whole;
+}
+
+// Bierzemy kilka stron z tej samej grupy i najszerszy wspólny obszar treści,
+// więc nic się nie urywa, a wszystkie strony wychodzą tej samej wielkości.
+async function groupBox(n, full, k) {
+  const pages = [n];
+  for (let d = 2; pages.length < CROP_SAMPLES && d <= 2 * CROP_SAMPLES; d += 2) {
+    if (n + d <= numPages) pages.push(n + d);
+    if (pages.length < CROP_SAMPLES && n - d >= 1) pages.push(n - d);
   }
-  return s;
+  let box = null;
+  for (const p of pages) {
+    const page = await pdf.getPage(p);
+    const vp = page.getViewport({ scale: 1, rotation: rotationOf(page) });
+    if (groupKey(p, vp) !== k) continue;
+    const found = await detectContent(page, vp);
+    if (!found) continue;
+    box = box ? {
+      x: Math.min(box.x, found.x),
+      y: Math.min(box.y, found.y),
+      r: Math.max(box.r, found.r),
+      bt: Math.max(box.bt, found.bt)
+    } : found;
+  }
+  if (!box) return null;
+  const w = box.r - box.x, h = box.bt - box.y;
+  if (w < full.width * 0.3 || h < full.height * 0.3) return null;  // podejrzanie mało treści
+  return { x: box.x, y: box.y, w, h };
+}
+
+// Strona renderowana w miniaturze; szukamy pierwszego i ostatniego wiersza oraz
+// kolumny, w których jest dość ciemnych pikseli, żeby pominąć brud ze skanu.
+async function detectContent(page, full) {
+  try {
+    const s = Math.min(1, 240 / full.width);
+    const vp = page.getViewport({ scale: s, rotation: rotationOf(page) });
+    const c = document.createElement('canvas');
+    c.width = Math.max(1, Math.ceil(vp.width));
+    c.height = Math.max(1, Math.ceil(vp.height));
+    const ctx = c.getContext('2d', { alpha: false, willReadFrequently: true });
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(0, 0, c.width, c.height);
+    await page.render({ canvasContext: ctx, viewport: vp }).promise;
+    const d = ctx.getImageData(0, 0, c.width, c.height).data;
+    const rows = new Uint32Array(c.height), cols = new Uint32Array(c.width);
+    for (let y = 0; y < c.height; y += CROP_STEP) {
+      for (let x = 0; x < c.width; x += CROP_STEP) {
+        const i = (y * c.width + x) * 4;
+        if (d[i] < CROP_THRESHOLD || d[i + 1] < CROP_THRESHOLD || d[i + 2] < CROP_THRESHOLD) { rows[y]++; cols[x]++; }
+      }
+    }
+    const span = (arr, len) => {
+      const min = Math.max(2, Math.round(len * 0.004 / CROP_STEP));
+      let a = 0, b = arr.length - 1;
+      while (a < arr.length && arr[a] < min) a++;
+      while (b > a && arr[b] < min) b--;
+      return a <= b ? [a, b] : null;
+    };
+    const ys = span(rows, c.width), xs = span(cols, c.height);
+    if (!ys || !xs) return null;
+    const pad = 8 / s;                       // niewielki oddech wokół treści
+    return {
+      x: Math.max(0, xs[0] / s - pad),
+      y: Math.max(0, ys[0] / s - pad),
+      r: Math.min(full.width, (xs[1] + CROP_STEP) / s + pad),
+      bt: Math.min(full.height, (ys[1] + CROP_STEP) / s + pad)
+    };
+  } catch { return null; }
 }
 
 function fit(a, b, sa, sb) {
@@ -91,7 +204,10 @@ function fit(a, b, sa, sb) {
 
 async function layout(s) {
   const [a, b] = spreadOf(s);
-  return fit(a, b, a ? await pageSize(a) : null, b ? await pageSize(b) : null);
+  const sa = a ? await pageBox(a) : null, sb = b ? await pageBox(b) : null;
+  if (a) sizeCache.set(a, sa);
+  if (b) sizeCache.set(b, sb);
+  return fit(a, b, sa, sb);
 }
 
 function layoutSync(s) {
@@ -103,14 +219,14 @@ function layoutSync(s) {
 }
 
 // ---------- renderowanie ----------
-function cacheKey(n, scale, q = 1) { return `${n}|${scale.toFixed(5)}|${q === 1 ? devicePixelRatio : 'lo'}`; }
+function cacheKey(n, scale, q = 1) { return `${n}|${scale.toFixed(5)}|${q === 1 ? devicePixelRatio : 'lo'}|${rot}|${crop ? 1 : 0}`; }
 function cancelled() { const e = new Error('cancelled'); e.name = 'RenderingCancelledException'; return e; }
 
 function renderPage(n, scale, q = 1) {
   const k = cacheKey(n, scale, q);
   const cache = q === 1 ? canvasCache : loCache;
   const hit = cache.get(k);
-  if (hit) { cache.delete(k); cache.set(k, hit); return Promise.resolve(hit); }
+  if (hit) return Promise.resolve(hit);
   if (pending.has(k)) return pending.get(k).promise;
 
   let task = null, stop = false;
@@ -118,22 +234,23 @@ function renderPage(n, scale, q = 1) {
     const page = await pdf.getPage(n);
     if (stop) throw cancelled();
     const dpr = q === 1 ? (devicePixelRatio || 1) : q;
-    const css = page.getViewport({ scale });
-    const vp = page.getViewport({ scale: scale * dpr });
+    const b = await pageBox(n);
+    if (stop) throw cancelled();
+    const vp = page.getViewport({
+      scale: scale * dpr, rotation: rotationOf(page),
+      offsetX: -b.x * scale * dpr, offsetY: -b.y * scale * dpr
+    });
     const canvas = document.createElement('canvas');
-    canvas.width = Math.max(1, Math.floor(vp.width));
-    canvas.height = Math.max(1, Math.floor(vp.height));
-    canvas.style.width = Math.floor(css.width) + 'px';
-    canvas.style.height = Math.floor(css.height) + 'px';
+    canvas.width = Math.max(1, Math.floor(b.w * scale * dpr));
+    canvas.height = Math.max(1, Math.floor(b.h * scale * dpr));
+    canvas.style.width = Math.floor(b.w * scale) + 'px';
+    canvas.style.height = Math.floor(b.h * scale) + 'px';
     const ctx = canvas.getContext('2d', { alpha: false });
     ctx.fillStyle = '#ffffff';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     task = page.render({ canvasContext: ctx, viewport: vp });
     await task.promise;
-    cache.set(k, canvas);
-    const max = q === 1 ? CACHE_MAX : 60;
-    while (cache.size > max) cache.delete(cache.keys().next().value);
-    return canvas;
+    return cache.set(k, canvas);
   })().finally(() => pending.delete(k));
 
   pending.set(k, { promise, cancel() { stop = true; task?.cancel(); } });
@@ -175,6 +292,7 @@ async function show(s) {
     const range = a && b ? `${a}–${b}` : `${a || b}`;
     document.title = `${range} / ${numPages} – ${fileName}`;
     if (!menu.hidden) updateMenu();
+    showProgress();
   };
 
   try {
@@ -198,7 +316,7 @@ async function show(s) {
     if (token !== showToken || e?.name === 'RenderingCancelledException') return;
     throw e;
   }
-  if (fileKey) localStorage.setItem('pos:' + fileKey, String(a || b));
+  if (fileKey) pref.set('pos:' + fileKey, a || b);
   prefetch(s, token).then(() => updateText(s, token)).catch(() => {});
 }
 
@@ -218,10 +336,14 @@ async function textLayerFor(n, scale) {
 
   const tc = await textContent(n);
   if (tc) {
+    const b = await pageBox(n);
     const tl = new pdfjsLib.TextLayer({
       textContentSource: tc,
       container: div,
-      viewport: page.getViewport({ scale })
+      viewport: page.getViewport({
+        scale, rotation: rotationOf(page),
+        offsetX: -b.x * scale, offsetY: -b.y * scale
+      })
     });
     await tl.render();
   }
@@ -230,9 +352,7 @@ async function textLayerFor(n, scale) {
   end.className = 'endOfContent';
   div.append(end);
   div.addEventListener('pointerdown', () => div.classList.add('selecting'));
-  tlCache.set(k, div);
-  while (tlCache.size > CACHE_MAX) tlCache.delete(tlCache.keys().next().value);
-  return div;
+  return tlCache.set(k, div);
 }
 document.addEventListener('pointerup', () => {
   for (const d of stage.querySelectorAll('.textLayer.selecting')) d.classList.remove('selecting');
@@ -261,9 +381,8 @@ async function updateText(s, token) {
     if (token !== showToken) return;
     const sec = document.createElement('section');
     sec.setAttribute('aria-label', `Strona ${n}`);
-    if (n === a || n === b) sec.setAttribute('aria-current', 'page');
     const h = document.createElement('h2');
-    h.textContent = `Strona ${n}` + (n === a || n === b ? ' (widoczna)' : '');
+    h.textContent = `Strona ${n}`;
     const pre = document.createElement('p');
     pre.textContent = t || '[brak tekstu]';
     sec.append(h, pre);
@@ -285,6 +404,40 @@ async function prefetch(s, token) {
     if (token !== showToken) return;
     if (b) await renderPage(b, scale);
   }
+}
+
+// Cienki wskaźnik postępu przy prawej krawędzi – pokazuje się przy zmianie strony i znika.
+const prog = document.getElementById('prog');
+let progTimer;
+function showProgress() {
+  if (!pdf || !prog) return;
+  const [a, b] = spreadOf(start);
+  const page = a || b;
+  const frac = numPages > 1 ? (page - 1) / (numPages - 1) : 0;
+  const thumb = prog.firstElementChild;
+  thumb.style.height = Math.max(6, 100 / Math.max(1, numPages / (two ? 2 : 1))) + '%';
+  thumb.style.top = `calc(${(frac * 100).toFixed(2)}% - ${(frac * parseFloat(thumb.style.height)).toFixed(2)}%)`;
+  prog.classList.add('on');
+  clearTimeout(progTimer);
+  progTimer = setTimeout(() => prog.classList.remove('on'), 1200);
+}
+
+// ---------- zakładki ----------
+const marksKey = () => 'marks:' + fileKey;
+const getMarks = () => pref.json(marksKey(), []);
+function toggleMark() {
+  if (!pdf || !fileKey) return;
+  const page = spreadOf(start).find(Boolean);
+  const marks = getMarks();
+  const i = marks.indexOf(page);
+  if (i >= 0) marks.splice(i, 1);
+  else marks.push(page);
+  marks.sort((x, y) => x - y);
+  pref.setJson(marksKey(), marks);
+  const all = pref.json('bookmarks', []).filter((m) => m.key !== fileKey || m.page !== page);
+  if (i < 0) all.unshift({ key: fileKey, name: fileName, page, ts: Date.now() });
+  pref.setJson('bookmarks', all.slice(0, 30));
+  flash(i >= 0 ? `Zakładka na stronie ${page} usunięta` : `Zakładka: strona ${page}`);
 }
 
 function go(s) { if (pdf && s != null) show(s); }
@@ -325,18 +478,14 @@ async function open(src, name, key, startPage = null) {
   numPages = pdf.numPages;
   fileName = name;
   fileKey = key;
-  for (const job of pending.values()) job.cancel();
-  sizeCache.clear();
-  canvasCache.clear();
-  loCache.clear();
-  textCache.clear();
-  tcCache.clear();
-  tlCache.clear();
+  clearCaches();
   textLayer.replaceChildren();
-  pairing = localStorage.getItem('pairing:' + key) || localStorage.getItem('pairing') || 'odd';
+  pairing = pref.get('pairing:' + key, pref.get('pairing', 'odd'));
   hint.hidden = true;
 
-  let p = parseInt(localStorage.getItem('pos:' + key), 10) || 1;
+  rot = pref.get('rot:' + key, 0);
+  if (src.data) rememberFile(key, name, src.data);
+  let p = pref.get('pos:' + key, 1);
   if (startPage) p = startPage;
   show(spreadStartOf(p));
   if (pinned) showMenu();
@@ -380,7 +529,7 @@ function loadViaExtension(url) {
 async function openFromHash() {
   const h = location.href;
   const i = h.indexOf('#file=');
-  if (i < 0) { setEmpty(true); return; }
+  if (i < 0) { setEmpty(true); renderRecent(); return; }
   let url = h.slice(i + 6);
   if (/^[a-z]+%3A/i.test(url)) url = decodeURIComponent(url);
   const pm = /#page=(\d+)/.exec(url);
@@ -417,8 +566,91 @@ async function openLocal(f) {
 function pickFile() { picker.value = ''; picker.click(); }
 picker.addEventListener('change', () => openLocal(picker.files[0]));
 
-const welcome = document.getElementById('welcome');
-function setEmpty(v) { document.documentElement.classList.toggle('empty', v); }
+// ---------- ostatnio otwierane pliki ----------
+// Pliki z dysku trzymamy w IndexedDB przeglądarki, więc otwierają się bez pytania o dysk.
+// Dla plików z sieci pamiętamy sam adres i pobieramy je ponownie przez wtyczkę.
+const RECENT_MAX = 8;
+function idb() {
+  return new Promise((res, rej) => {
+    const r = indexedDB.open('darkpdf', 1);
+    r.onupgradeneeded = () => r.result.createObjectStore('recent', { keyPath: 'key' });
+    r.onsuccess = () => res(r.result);
+    r.onerror = () => rej(r.error);
+  });
+}
+function idbDo(mode, fn) {
+  return idb().then((db) => new Promise((res, rej) => {
+    const tx = db.transaction('recent', mode);
+    const out = fn(tx.objectStore('recent'));
+    tx.oncomplete = () => res(out && out.result !== undefined ? out.result : out);
+    tx.onerror = () => rej(tx.error);
+  }));
+}
+
+async function rememberFile(key, name, data) {
+  try {
+    const rec = { key, name, ts: Date.now() };
+    if (/^(https?|file):/i.test(key)) rec.url = key;
+    else rec.blob = new Blob([data]);
+    await idbDo('readwrite', (st) => st.put(rec));
+    const all = await idbDo('readonly', (st) => st.getAll());
+    all.sort((a, b) => b.ts - a.ts);
+    for (const old of all.slice(RECENT_MAX)) await idbDo('readwrite', (st) => st.delete(old.key));
+  } catch {}
+}
+
+// Wiersze na ekranie startowym: ostatnie pliki i zakładki wyglądają tak samo.
+function renderList(id, items, onPick) {
+  const box = document.getElementById(id);
+  if (!box) return;
+  box.replaceChildren();
+  box.hidden = items.length === 0;
+  for (const it of items.slice(0, 6)) {
+    const row = document.createElement('button');
+    row.type = 'button';
+    row.className = 'recent-row';
+    row.innerHTML = '<span class="rn"></span><span class="rp"></span>';
+    row.querySelector('.rn').textContent = it.name;
+    row.querySelector('.rp').textContent = `str. ${it.page}`;
+    row.title = it.title || it.name;
+    row.addEventListener('click', (e) => { e.stopPropagation(); onPick(it); });
+    box.append(row);
+  }
+}
+
+function renderBookmarks() {
+  const marks = pref.json('bookmarks', []);
+  renderList('marks', marks, async (m) => {
+    let rec = null;
+    try { rec = await idbDo('readonly', (st) => st.get(m.key)); } catch {}
+    setEmpty(false);
+    if (rec?.blob) open({ data: new Uint8Array(await rec.blob.arrayBuffer()) }, m.name, m.key, m.page);
+    else if (/^(https?|file):/i.test(m.key)) location.hash = '#file=' + m.key + '#page=' + m.page;
+    else { setEmpty(true); flash('Ten plik nie jest już zapisany – otwórz go z dysku', 3000); }
+  });
+}
+
+let lastRecent = null;
+async function openRecent(rec) {
+  if (!rec) return;
+  setEmpty(false);
+  if (rec.blob) open({ data: new Uint8Array(await rec.blob.arrayBuffer()) }, rec.name, rec.key);
+  else location.hash = '#file=' + rec.url;
+}
+
+async function renderRecent() {
+  let all = [];
+  try { all = await idbDo('readonly', (st) => st.getAll()); } catch {}
+  all.sort((x, y) => y.ts - x.ts);
+  lastRecent = all[0] || null;
+  document.getElementById('recentHint').hidden = all.length === 0;
+  renderList('recent', all.map((r) => ({ ...r, page: pref.get('pos:' + r.key, 1), title: r.url || r.name })), openRecent);
+}
+
+function setEmpty(v) {
+  document.documentElement.classList.toggle('empty', v);
+  if (v) { renderRecent(); renderBookmarks(); }
+}
 window.addEventListener('dragover', (e) => { e.preventDefault(); welcome.classList.add('drag'); });
 window.addEventListener('dragleave', () => welcome.classList.remove('drag'));
 window.addEventListener('drop', (e) => {
@@ -434,8 +666,8 @@ const pageInput = menu.querySelector('.page-input');
 const totalSpan = menu.querySelector('.total');
 const tipEl = document.getElementById('menu-tip');
 
-let pinned = localStorage.getItem('menuPinned') === '1';
-let menuTimer = null, tipTimer = null, expandTimer = null, collapseTimer = null, hoverMenuTimer = null;
+let pinned = pref.get('menuPinned', false);
+let menuTimer = null, tipTimer = null, expandTimer = null, collapseTimer = null;
 
 function hideTip() {
   clearTimeout(tipTimer);
@@ -465,6 +697,14 @@ function showTipFor(el) {
 function expandMenu() { clearTimeout(collapseTimer); menu.classList.add('expanded'); }
 function collapseMenu() { clearTimeout(expandTimer); menu.classList.remove('expanded'); hideTip(); }
 
+// Pasek chowa się 2 s po tym, jak przestajesz z niego korzystać – wszystkie drogi
+// prowadzą tutaj, więc warunek jest w jednym miejscu.
+function scheduleHide() {
+  clearTimeout(menuTimer);
+  if (pinned || menu.hidden || menu.matches(':hover') || document.activeElement === pageInput) return;
+  menuTimer = setTimeout(hideMenu, 2000);
+}
+
 menu.addEventListener('mouseenter', () => {
   clearTimeout(collapseTimer);
   clearTimeout(menuTimer);
@@ -473,28 +713,14 @@ menu.addEventListener('mouseenter', () => {
 menu.addEventListener('mouseleave', () => {
   clearTimeout(expandTimer);
   collapseTimer = setTimeout(() => {
-    if (document.activeElement !== pageInput) collapseMenu();
-    if (!pinned && !menu.hidden && document.activeElement !== pageInput) {
-      clearTimeout(menuTimer);
-      menuTimer = setTimeout(hideMenu, 2500);
-    }
+    if (document.activeElement === pageInput) return;
+    collapseMenu();
+    scheduleHide();
   }, 150);
 });
 
 menu.addEventListener('pointerover', (e) => { const t = e.target.closest('[data-tip]'); if (t) showTipFor(t); });
 menu.addEventListener('pointerout', (e) => { const t = e.target.closest('[data-tip]'); if (t) hideTip(); });
-
-window.addEventListener('mousemove', (e) => {
-  if (!pdf) return;
-  if (e.clientY >= window.innerHeight - 30) {
-    if (menu.hidden && !hoverMenuTimer) {
-      hoverMenuTimer = setTimeout(() => { showMenu(); hoverMenuTimer = null; }, 100);
-    }
-  } else {
-    clearTimeout(hoverMenuTimer);
-    hoverMenuTimer = null;
-  }
-});
 
 function hideMenu() {
   collapseMenu();
@@ -508,8 +734,7 @@ function showMenu() {
   if (!pdf) return;
   updateMenu();
   menu.hidden = false;
-  clearTimeout(menuTimer);
-  if (!pinned && !menu.matches(':hover')) menuTimer = setTimeout(hideMenu, 4000);
+  scheduleHide();
 }
 
 const label = (text, key) => `${text} <span class="k">(${key})</span>`;
@@ -526,6 +751,8 @@ function updateMenu() {
   pr.hidden = !two;
   menu.querySelector('[data-k="theme"]').innerHTML = label(theme === 'gemini' ? 'Motyw Gemini' : 'Motyw zwykły', 'T');
   menu.querySelector('[data-k="dark"]').innerHTML = label(dark ? 'Ciemny' : 'Jasny', 'D');
+  menu.querySelector('[data-k="crop"]').innerHTML = label(crop ? 'Z marginesami' : 'Przytnij marginesy', 'C');
+  menu.querySelector('[data-k="rotate"]').innerHTML = label('Obróć', 'R');
 
   if (pinBtn) {
     pinBtn.classList.toggle('pinned', pinned);
@@ -558,52 +785,30 @@ pageInput.addEventListener('focus', () => {
   setTimeout(() => { if (document.activeElement === pageInput) pageInput.select(); }, 10);
 });
 
-pageInput.addEventListener('keydown', (e) => {
-  e.stopPropagation();
-  if (e.key === 'Enter') {
-    e.preventDefault();
-    clearTimeout(pageJumpTimer);
-    pageJumpTimer = null;
-    const val = parseInt(pageInput.value, 10);
-    if (val >= 1 && val <= numPages) {
-      if (spreadStartOf(val) !== start) go(spreadStartOf(val));
-      else updateMenu();
-    } else {
-      updateMenu();
-    }
-    pageInput.blur();
-  } else if (e.key === 'Escape') {
-    e.preventDefault();
-    clearTimeout(pageJumpTimer);
-    pageJumpTimer = null;
-    updateMenu();
-    pageInput.blur();
-  }
-});
-
-pageInput.addEventListener('blur', () => {
+function applyPageInput(jump) {
   clearTimeout(pageJumpTimer);
   pageJumpTimer = null;
   const val = parseInt(pageInput.value, 10);
-  if (val >= 1 && val <= numPages && spreadStartOf(val) !== start) {
-    go(spreadStartOf(val));
-  } else {
-    updateMenu();
-  }
-  if (!menu.matches(':hover')) {
-    collapseMenu();
-    if (!pinned) menuTimer = setTimeout(hideMenu, 2500);
-  }
+  if (jump && val >= 1 && val <= numPages && spreadStartOf(val) !== start) go(spreadStartOf(val));
+  else updateMenu();
+}
+
+pageInput.addEventListener('keydown', (e) => {
+  if (e.key !== 'Enter' && e.key !== 'Escape') return;
+  e.preventDefault();
+  applyPageInput(e.key === 'Enter');
+  pageInput.blur();
 });
 
-['click', 'mousedown', 'pointerdown', 'keyup'].forEach(ev => pageInput.addEventListener(ev, e => e.stopPropagation()));
-pageInput.addEventListener('input', (e) => { e.stopPropagation(); schedulePageJump(); });
-
-const pageSelect = menu.querySelector('.page-select');
-['click', 'mousedown', 'pointerdown'].forEach(ev => pageSelect?.addEventListener(ev, e => {
-  e.stopPropagation();
-  if (ev === 'click') pageInput.focus();
-}));
+// Kliknięcia wewnątrz paska i tak nie wychodzą dalej (obsługa niżej), a klawisze
+// są pomijane, gdy piszesz w polu – dlatego wystarczy tyle:
+pageInput.addEventListener('blur', () => {
+  applyPageInput(true);
+  if (!menu.matches(':hover')) collapseMenu();
+  scheduleHide();
+});
+pageInput.addEventListener('input', schedulePageJump);
+menu.querySelector('.page-select').addEventListener('click', () => pageInput.focus());
 
 function act(k) {
   switch (k) {
@@ -612,29 +817,48 @@ function act(k) {
     case 'open': pickFile(); break;
     case 'pin':
       pinned = !pinned;
-      localStorage.setItem('menuPinned', pinned ? '1' : '0');
+      pref.set('menuPinned', pinned);
       updateMenu();
       if (pinned) {
         clearTimeout(menuTimer);
         flash('Dymek strony zablokowany (na stałe)', 1200);
       } else {
-        if (!menu.matches(':hover')) menuTimer = setTimeout(hideMenu, 2500);
+        if (!menu.matches(':hover')) menuTimer = setTimeout(hideMenu, 2000);
         flash('Auto-ukrywanie dymka włączone', 1200);
       }
       break;
     case 'full':
       document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen();
       break;
+    case 'crop':
+      if (!pdf) break;
+      crop = !crop;
+      pref.set('crop', crop);
+      sizeCache.clear();
+      cropJobs.clear();
+      flash(crop ? 'Marginesy przycięte' : 'Pełne strony');
+      show(start);
+      break;
+    case 'rotate': {
+      if (!pdf) break;
+      rot = (rot + 90) % 360;
+      if (fileKey) pref.set('rot:' + fileKey, rot);
+      sizeCache.clear();
+      cropJobs.clear();
+      flash(`Obrót ${rot}°`);
+      show(start);
+      break;
+    }
     case 'dark':
       dark = !dark;
-      localStorage.setItem('dark', dark ? '1' : '0');
+      pref.set('dark', dark);
       applyDark();
       break;
     case 'theme':
       if (!dark) { dark = true; theme = 'gemini'; }
       else theme = theme === 'gemini' ? 'normal' : 'gemini';
-      localStorage.setItem('dark', '1');
-      localStorage.setItem('theme', theme);
+      pref.set('dark', true);
+      pref.set('theme', theme);
       applyDark();
       flash(theme === 'gemini' ? 'Motyw: Gemini' : 'Motyw: zwykły ciemny');
       break;
@@ -642,7 +866,7 @@ function act(k) {
       if (!pdf) break;
       const anchor = spreadOf(start).find(Boolean);
       two = !two;
-      localStorage.setItem('two', two ? '1' : '0');
+      pref.set('two', two);
       flash(two ? 'Dwie strony' : 'Jedna strona');
       go(spreadStartOf(anchor));
       break;
@@ -651,8 +875,8 @@ function act(k) {
       if (!pdf || !two) break;
       const anchor = spreadOf(start).find(Boolean);
       pairing = pairing === 'odd' ? 'even' : 'odd';
-      localStorage.setItem('pairing', pairing);
-      if (fileKey) localStorage.setItem('pairing:' + fileKey, pairing);
+      pref.set('pairing', pairing);
+      if (fileKey) pref.set('pairing:' + fileKey, pairing);
       flash(pairing === 'odd' ? 'Pary: 1–2, 3–4, 5–6…' : 'Pary: 1, 2–3, 4–5…');
       go(spreadStartOf(anchor));
       break;
@@ -667,6 +891,11 @@ menu.addEventListener('click', (e) => {
   if (b) act(b.dataset.k);
 });
 
+window.addEventListener('dblclick', () => {
+  if (!pdf || String(getSelection())) return;   // dwuklik w tekst zaznacza słowo
+  act('full');
+});
+
 window.addEventListener('click', () => {
   if (!pdf) { pickFile(); return; }
   if (String(getSelection())) return;
@@ -674,6 +903,34 @@ window.addEventListener('click', () => {
   if (pinned) return;
   menu.hidden ? showMenu() : hideMenu();
 });
+
+// Kursor znika po 2 s bez ruchu i wraca przy pierwszym drgnięciu.
+let cursorTimer;
+function wakeCursor() {
+  document.documentElement.classList.remove('nocursor');
+  clearTimeout(cursorTimer);
+  if (pdf) cursorTimer = setTimeout(() => document.documentElement.classList.add('nocursor'), 2000);
+}
+['mousemove', 'mousedown', 'wheel', 'keydown'].forEach((ev) =>
+  window.addEventListener(ev, wakeCursor, { passive: true }));
+
+// Dotyk: przesunięcie palcem w bok zmienia stronę.
+let touchX = 0, touchY = 0, touchAt = 0;
+window.addEventListener('touchstart', (e) => {
+  if (e.touches.length !== 1) { touchAt = 0; return; }
+  touchX = e.touches[0].clientX;
+  touchY = e.touches[0].clientY;
+  touchAt = Date.now();
+}, { passive: true });
+window.addEventListener('touchend', (e) => {
+  if (!pdf || !touchAt || String(getSelection())) return;
+  const t = e.changedTouches[0];
+  const dx = t.clientX - touchX, dy = t.clientY - touchY;
+  const ms = Date.now() - touchAt;
+  touchAt = 0;
+  if (ms > 700 || Math.abs(dx) < 50 || Math.abs(dx) < Math.abs(dy) * 1.5) return;
+  dx < 0 ? next() : prev();
+}, { passive: true });
 
 // ---------- kółko myszy i gesty ----------
 let lastWheel = 0, notch = 100, acc = 0;
@@ -710,7 +967,9 @@ window.addEventListener('keydown', (e) => {
   if (e.ctrlKey || e.metaKey || e.altKey) return;
   const k = e.key;
 
-  if (/^[0-9]$/.test(k)) {
+  if (!pdf && k === 'Enter' && lastRecent) { e.preventDefault(); openRecent(lastRecent); return; }
+
+  if (/^[0-9]$/.test(k) && pdf) {
     e.preventDefault();
     showMenu();
     digitTriggeredFocus = true;
@@ -725,18 +984,20 @@ window.addEventListener('keydown', (e) => {
   const keyActions = {
     d: 'dark', D: 'dark', t: 'theme', T: 'theme',
     p: 'pages', P: 'pages', o: 'pairing', O: 'pairing',
-    f: 'full', F: 'full'
+    f: 'full', F: 'full', c: 'crop', C: 'crop', r: 'rotate', R: 'rotate'
   };
   if (keyActions[k]) { act(keyActions[k]); e.preventDefault(); return; }
 
-  if (['ArrowRight', 'ArrowDown', 'PageDown', 'j', 'l'].includes(k)) { next(); e.preventDefault(); return; }
-  if (['ArrowLeft', 'ArrowUp', 'PageUp', 'k', 'h'].includes(k)) { prev(); e.preventDefault(); return; }
+  const jump = e.shiftKey ? 10 : 1;   // Shift = skok o 10 rozkładówek
+  if (['ArrowRight', 'ArrowDown', 'PageDown', 'j', 'l'].includes(k)) { flip(jump); e.preventDefault(); return; }
+  if (['ArrowLeft', 'ArrowUp', 'PageUp', 'k', 'h'].includes(k)) { flip(-jump); e.preventDefault(); return; }
   if (k === ' ') { e.shiftKey ? prev() : next(); e.preventDefault(); return; }
+  if (k === 'b' || k === 'B') { toggleMark(); e.preventDefault(); return; }
   if (k === 'Home') { go(1); e.preventDefault(); return; }
   if (k === 'End') { if (pdf) go(spreadStartOf(numPages)); e.preventDefault(); return; }
   if (k === '?') {
     flash('→ ↓ Spacja PgDn  następne\n← ↑ PgUp  poprzednie\nHome / End  początek / koniec\n' +
-          'numer (lub Enter)  skok do strony\nCtrl+O  otwórz plik z dysku\nP  jedna / dwie strony\nD  tryb ciemny\nT  motyw zwykły / Gemini\nO  pary nieparzyste / parzyste\nF  pełny ekran\nkliknięcie  pasek z przyciskami', 5000);
+          'numer (lub Enter)  skok do strony\nShift + strzałka  skok o 10\nB  zakładka na tej stronie\ndwuklik  pełny ekran\nCtrl+O  otwórz plik z dysku\nC  przycinanie marginesów\nR  obrót o 90°\nP  jedna / dwie strony\nD  tryb ciemny\nT  motyw zwykły / Gemini\nO  pary nieparzyste / parzyste\nF  pełny ekran\nkliknięcie  pasek z przyciskami', 5000);
     e.preventDefault();
   }
 });
