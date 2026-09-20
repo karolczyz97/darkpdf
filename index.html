@@ -5,9 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="robots" content="noindex">
   <title>DarkPDF</title>
-  <link rel="stylesheet" href="viewer.css?v=21">
-  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
-  <script>if (!window.Tesseract) document.write('<script src="lib/tesseract.min.js"><\/script>');</script>
+  <link rel="stylesheet" href="viewer.css?v=22">
 </head>
 <body>
   <svg width="0" height="0" style="position:absolute" aria-hidden="true">
@@ -22,10 +20,6 @@
   </svg>
   <div id="stage"></div>
   <div id="hint" hidden></div>
-  <div id="ocr-status" hidden>
-    <span class="spinner"></span>
-    <span class="text"></span>
-  </div>
 
   <div id="welcome">
     <div class="card">
@@ -39,7 +33,6 @@
         <kbd>T</kbd><span>motyw zwykły albo Gemini</span>
         <kbd>O</kbd><span>parowanie stron</span>
         <kbd>F</kbd><span>pełny ekran</span>
-        <kbd>X</kbd><span>rozpoznawanie tekstu (OCR)</span>
         <kbd>1 2 3 ⏎</kbd><span>skok do strony</span>
       </div>
       <p class="foot">Kliknięcie w stronę otwiera pasek z przyciskami. Plik nie jest nigdzie wysyłany.</p>
@@ -52,7 +45,6 @@
       <button data-k="pairing" data-tip="Zmień parowanie stron" data-key="O"></button>
       <button data-k="dark" data-tip="Przełącz tryb ciemny / jasny" data-key="D"></button>
       <button data-k="theme" data-tip="Przełącz motyw" data-key="T"></button>
-      <button data-k="ocr" data-tip="Rozpoznaj tekst OCR" data-key="X">Skanuj OCR <span class="k">(X)</span></button>
       <button data-k="full" data-tip="Pełny ekran" data-key="F">Pełny ekran <span class="k">(F)</span></button>
       <button data-k="open" data-tip="Wybierz plik z dysku" data-key="Ctrl+O">Otwórz plik <span class="k">(Ctrl+O)</span></button>
     </div>
@@ -77,6 +69,6 @@
   </div>
   <div id="menu-tip" hidden></div>
   <main id="text" class="sr-only" aria-label="Tekst dokumentu"></main>
-  <script type="module" src="viewer.js?v=21"></script>
+  <script type="module" src="viewer.js?v=22"></script>
 </body>
 </html>

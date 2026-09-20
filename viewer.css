@@ -41,49 +41,6 @@ html.dark #stage canvas {
 }
 #hint[hidden] { display: none; }
 
-/* Wskaźnik OCR w rogu ekranu */
-#ocr-status {
-  position: fixed;
-  right: 14px;
-  bottom: 14px;
-  z-index: 5;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 4px 10px;
-  border-radius: 14px;
-  background: rgba(24, 24, 24, .92);
-  border: 1px solid rgba(255, 255, 255, .12);
-  box-shadow: 0 4px 16px rgba(0, 0, 0, .45);
-  color: #e6e6e6;
-  font: 12px/1.2 system-ui, sans-serif;
-  white-space: nowrap;
-  pointer-events: none;
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-}
-#ocr-status .text {
-  white-space: nowrap;
-}
-#ocr-status[hidden] { display: none; }
-#ocr-status .spinner {
-  width: 11px;
-  height: 11px;
-  border: 2px solid rgba(255, 255, 255, .25);
-  border-top-color: #8ab4f8;
-  border-radius: 50%;
-  animation: ocr-spin .75s linear infinite;
-  flex-shrink: 0;
-}
-#ocr-status .spinner[hidden] { display: none; }
-@keyframes ocr-spin { to { transform: rotate(360deg); } }
-html.gemini #ocr-status {
-  background: #282a2c;
-  border-color: #444746;
-  color: #e3e3e3;
-  font-family: "Google Sans Flex", "Google Sans", system-ui, sans-serif;
-}
-
 /* Tekst stron: niewidoczny na ekranie, ale obecny w DOM i drzewie dostępności */
 .sr-only {
   position: absolute;
@@ -102,17 +59,8 @@ html.gemini #ocr-status {
   user-select: text; -webkit-user-select: text;
   font-family: sans-serif;
 }
-.textLayer span {
+.textLayer :is(span, br) {
   color: transparent; position: absolute; white-space: pre; cursor: text; transform-origin: 0% 0%;
-}
-.textLayer br {
-  display: inline; pointer-events: none;
-}
-.textLayer .ocr-block {
-  position: absolute; inset: 0; pointer-events: none;
-}
-.textLayer .ocr-block span {
-  pointer-events: auto;
 }
 .textLayer > :not(.markedContent), .textLayer .markedContent span:not(.markedContent) { z-index: 1; }
 .textLayer span.markedContent { top: 0; height: 0; }

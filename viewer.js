@@ -1,5 +1,3 @@
-import { runOcrForPage, forceOcrCurrent, setOcrContext, ocrCache, hideOcrStatus } from './ocr.js?v=21';
-
 const PDFJS = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/';
 const pdfjsLib = await import(PDFJS + 'build/pdf.min.mjs');
 pdfjsLib.GlobalWorkerOptions.workerSrc = PDFJS + 'build/pdf.worker.min.mjs';
@@ -27,7 +25,6 @@ let pairing = 'odd';      // 'odd' = 1–2, 3–4…   'even' = 1, 2–3, 4–5�
 let pdf = null, numPages = 0, start = 1;
 let fileKey = null, fileName = 'PDF';
 let showToken = 0;
-let ocrSessionToken = 0;
 
 const sizeCache = new Map();   // nr strony -> {w, h}
 const canvasCache = new Map(); // klucz -> canvas (kolejność = LRU)
@@ -36,19 +33,6 @@ const textCache = new Map();   // nr strony -> tekst
 const tcCache = new Map();     // nr strony -> Promise<textContent>
 const tlCache = new Map();     // klucz -> gotowa warstwa tekstowa
 const loCache = new Map();     // szybkie podglądy niskiej rozdzielczości
-
-// Połączenie z modułem OCR
-setOcrContext({
-  getPdf: () => pdf,
-  getFileKey: () => fileKey,
-  getSessionToken: () => ocrSessionToken,
-  getCurrentSpread: () => spreadOf(start),
-  getScale: () => layoutSync(start)?.scale || 1,
-  getCanvas: (n, scale) => canvasCache.get(cacheKey(n, scale)),
-  renderPage: (n, scale) => renderPage(n, scale),
-  getPageWrappers: () => stage.querySelectorAll('.page'),
-  setTextCache: (n, txt) => textCache.set(n, txt)
-});
 
 applyDark();
 document.documentElement.classList.add('empty');
@@ -233,15 +217,13 @@ async function textLayerFor(n, scale) {
   div.className = 'textLayer';
 
   const tc = await textContent(n);
-  if (tc && tc.items && tc.items.length > 2) {
+  if (tc) {
     const tl = new pdfjsLib.TextLayer({
       textContentSource: tc,
       container: div,
       viewport: page.getViewport({ scale })
     });
     await tl.render();
-  } else {
-    runOcrForPage(n, scale, div);
   }
 
   const end = document.createElement('div');
@@ -350,12 +332,9 @@ async function open(src, name, key, startPage = null) {
   textCache.clear();
   tcCache.clear();
   tlCache.clear();
-  ocrCache.clear();
   textLayer.replaceChildren();
   pairing = localStorage.getItem('pairing:' + key) || localStorage.getItem('pairing') || 'odd';
   hint.hidden = true;
-  hideOcrStatus();
-  ocrSessionToken++;
 
   let p = parseInt(localStorage.getItem('pos:' + key), 10) || 1;
   if (startPage) p = startPage;
@@ -631,7 +610,6 @@ function act(k) {
     case 'prev': prev(); break;
     case 'next': next(); break;
     case 'open': pickFile(); break;
-    case 'ocr': forceOcrCurrent(); break;
     case 'pin':
       pinned = !pinned;
       localStorage.setItem('menuPinned', pinned ? '1' : '0');
@@ -747,7 +725,7 @@ window.addEventListener('keydown', (e) => {
   const keyActions = {
     d: 'dark', D: 'dark', t: 'theme', T: 'theme',
     p: 'pages', P: 'pages', o: 'pairing', O: 'pairing',
-    f: 'full', F: 'full', x: 'ocr', X: 'ocr'
+    f: 'full', F: 'full'
   };
   if (keyActions[k]) { act(keyActions[k]); e.preventDefault(); return; }
 
@@ -758,7 +736,7 @@ window.addEventListener('keydown', (e) => {
   if (k === 'End') { if (pdf) go(spreadStartOf(numPages)); e.preventDefault(); return; }
   if (k === '?') {
     flash('→ ↓ Spacja PgDn  następne\n← ↑ PgUp  poprzednie\nHome / End  początek / koniec\n' +
-          'numer (lub Enter)  skok do strony\nCtrl+O  otwórz plik z dysku\nP  jedna / dwie strony\nD  tryb ciemny\nT  motyw zwykły / Gemini\nO  pary nieparzyste / parzyste\nF  pełny ekran\nX  rozpoznaj tekst (OCR)\nkliknięcie  pasek z przyciskami', 5000);
+          'numer (lub Enter)  skok do strony\nCtrl+O  otwórz plik z dysku\nP  jedna / dwie strony\nD  tryb ciemny\nT  motyw zwykły / Gemini\nO  pary nieparzyste / parzyste\nF  pełny ekran\nkliknięcie  pasek z przyciskami', 5000);
     e.preventDefault();
   }
 });
