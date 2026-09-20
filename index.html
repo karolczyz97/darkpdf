@@ -8,6 +8,16 @@
   <link rel="stylesheet" href="viewer.css">
 </head>
 <body>
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <filter id="gemini-colors" color-interpolation-filters="sRGB">
+      <!-- czerń → #0f0f0f, biel → #e3e3e3 (kolory Gemini: tło body, --gem-sys-color--on-surface) -->
+      <feComponentTransfer>
+        <feFuncR type="linear" slope="0.8314" intercept="0.0588"/>
+        <feFuncG type="linear" slope="0.8314" intercept="0.0588"/>
+        <feFuncB type="linear" slope="0.8314" intercept="0.0588"/>
+      </feComponentTransfer>
+    </filter>
+  </svg>
   <div id="stage"></div>
   <div id="hint" hidden></div>
   <main id="text" class="sr-only" aria-label="Tekst dokumentu"></main>

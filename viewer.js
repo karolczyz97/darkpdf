@@ -19,6 +19,7 @@ const textLayer = document.getElementById('text');
 stage.style.gap = GAP + 'px';
 
 let dark = localStorage.getItem('dark') === '1';
+let theme = localStorage.getItem('theme') || 'normal';   // 'normal' | 'gemini'
 let pairing = 'odd';      // 'odd' = 1–2, 3–4…   'even' = 1, 2–3, 4–5…
 let pdf = null, numPages = 0, start = 1;
 let fileKey = null, fileName = 'PDF';
@@ -35,7 +36,10 @@ applyDark();
 document.documentElement.classList.add('empty');
 
 // ---------- pomocnicze ----------
-function applyDark() { document.documentElement.classList.toggle('dark', dark); }
+function applyDark() {
+  document.documentElement.classList.toggle('dark', dark);
+  document.documentElement.classList.toggle('gemini', dark && theme === 'gemini');
+}
 
 let hintTimer;
 function flash(text, ms = 1200) {
@@ -466,6 +470,14 @@ window.addEventListener('keydown', (e) => {
       localStorage.setItem('dark', dark ? '1' : '0');
       applyDark();
       break;
+    case 't': case 'T':
+      if (!dark) { dark = true; theme = 'gemini'; }
+      else theme = theme === 'gemini' ? 'normal' : 'gemini';
+      localStorage.setItem('dark', '1');
+      localStorage.setItem('theme', theme);
+      applyDark();
+      flash(theme === 'gemini' ? 'Motyw: Gemini' : 'Motyw: zwykły ciemny');
+      break;
     case 'o': case 'O': {
       if (!pdf) break;
       const anchor = spreadOf(start).find(Boolean);
@@ -481,7 +493,7 @@ window.addEventListener('keydown', (e) => {
       break;
     case '?':
       flash('→ ↓ Spacja PgDn  następne\n← ↑ PgUp  poprzednie\nHome / End  początek / koniec\n' +
-            'numer + Enter  skok do strony\nCtrl+O  otwórz plik z dysku\nD  tryb ciemny\nO  pary nieparzyste / parzyste\nF  pełny ekran', 5000);
+            'numer + Enter  skok do strony\nCtrl+O  otwórz plik z dysku\nD  tryb ciemny\nT  motyw zwykły / Gemini\nO  pary nieparzyste / parzyste\nF  pełny ekran', 5000);
       break;
     default:
       return;

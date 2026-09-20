@@ -65,6 +65,13 @@ html.dark #stage canvas {
 .textLayer span.markedContent { top: 0; height: 0; }
 .textLayer ::selection { background: rgba(0, 110, 255, .35); }
 html.dark .textLayer ::selection { background: rgba(90, 160, 255, .45); }
+
+/* Motyw Gemini: tło #0f0f0f, tekst #e3e3e3, zaznaczenie #a8c7fa – wartości z CSS gemini.google.com.
+   Strona zlewa się z tłem jak czat Gemini, kontrast mocniejszy niż w zwykłym trybie. */
+html.gemini, html.gemini body { background: #0f0f0f; }
+html.gemini #stage canvas { filter: invert(1) hue-rotate(180deg) url(#gemini-colors); }
+html.gemini .textLayer ::selection { background: rgba(168, 199, 250, .38); }
+html.gemini #hint { background: #282a2c; color: #e3e3e3; font-family: "Google Sans Flex", "Google Sans", "Helvetica Neue", system-ui, sans-serif; }
 .textLayer br::selection { background: transparent; }
 .textLayer .endOfContent {
   display: block; position: absolute; inset: 100% 0 0; z-index: 0; cursor: default;
