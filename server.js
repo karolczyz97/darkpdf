@@ -22,11 +22,26 @@ const MIME = {
 const server = http.createServer((req, res) => {
   let reqPath = decodeURIComponent(req.url.split('?')[0]);
   if (reqPath === '/' || reqPath === '') reqPath = '/index.html';
+  if (reqPath === '/calc') {
+    res.writeHead(302, { Location: '/calc/' });
+    return res.end();
+  }
 
-  const filePath = path.join(ROOT, reqPath);
-  if (!filePath.startsWith(ROOT)) {
-    res.writeHead(403);
-    return res.end('Forbidden');
+  let filePath;
+  const CALC_DIR = path.resolve(ROOT, '..', 'calc');
+  if (reqPath.startsWith('/calc/')) {
+    const subPath = reqPath.slice(6) || 'index.html';
+    filePath = path.join(CALC_DIR, subPath === '' ? 'index.html' : subPath);
+    if (!filePath.startsWith(CALC_DIR)) {
+      res.writeHead(403);
+      return res.end('Forbidden');
+    }
+  } else {
+    filePath = path.join(ROOT, reqPath);
+    if (!filePath.startsWith(ROOT)) {
+      res.writeHead(403);
+      return res.end('Forbidden');
+    }
   }
 
   fs.stat(filePath, (err, stats) => {

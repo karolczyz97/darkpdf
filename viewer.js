@@ -53,6 +53,22 @@ function lru(max = Infinity) {
   };
 }
 
+// ---- Kalkulator i tryb dopasowania ----
+let calcOpen = localStorage.getItem('calcOpen') === '1';
+let calcWidth = parseInt(localStorage.getItem('calcWidth'), 10) || 440;
+let fitMode = localStorage.getItem('fitMode') || 'auto'; // 'auto' | 'width' | 'height'
+
+const calcSidebar = document.getElementById('calc-sidebar');
+const calcFrame = document.getElementById('calc-frame');
+const calcToggle = document.getElementById('calc-toggle');
+const calcClose = calcSidebar?.querySelector('.calc-close');
+const calcResizer = calcSidebar?.querySelector('.calc-resizer');
+
+document.documentElement.style.setProperty('--calc-w', calcWidth + 'px');
+document.documentElement.classList.toggle('calc-open', calcOpen);
+document.documentElement.classList.toggle('fit-width', fitMode === 'width');
+document.documentElement.classList.toggle('fit-height', fitMode === 'height');
+
 const sizeCache = lru();             // nr strony -> obszar do pokazania
 const canvasCache = lru(CACHE_MAX);  // klucz -> gotowa strona
 const loCache = lru(60);             // klucz -> szybki podgląd
@@ -70,9 +86,24 @@ function clearCaches() {
 applyDark();
 document.documentElement.classList.add('empty');
 
+function getCalcUrl() {
+  const themeParam = theme === 'gemini' ? 'gemini' : (dark ? 'dark' : 'auto');
+  const base = (location.hostname === 'localhost' || location.hostname === '127.0.0.1')
+    ? '/calc/index.html'
+    : '../calc/index.html';
+  return `${base}?embed=1&side=1&theme=${themeParam}`;
+}
+
+if (calcOpen && calcFrame) {
+  calcFrame.src = getCalcUrl();
+}
+
 function applyDark() {
   document.documentElement.classList.toggle('dark', dark);
   document.documentElement.classList.toggle('gemini', dark && theme === 'gemini');
+  if (calcFrame && calcFrame.src && calcFrame.src !== 'about:blank') {
+    calcFrame.src = getCalcUrl();
+  }
 }
 
 let hintTimer;
@@ -191,15 +222,34 @@ async function detectContent(page, full) {
   } catch { return null; }
 }
 
+function getStageDimensions() {
+  const calcW = calcOpen ? calcWidth : 0;
+  const W = Math.max(120, (window.innerWidth - calcW) - 2 * MARGIN - (two ? GAP : 0));
+  const H = Math.max(120, window.innerHeight - 2 * MARGIN);
+  return { W, H };
+}
+
 function fit(a, b, sa, sb) {
-  const H = window.innerHeight - 2 * MARGIN;
+  const { W, H } = getStageDimensions();
   if (!two) {
-    const scale = Math.min((window.innerWidth - 2 * MARGIN) / sa.w, H / sa.h);
+    const scaleW = W / sa.w;
+    const scaleH = H / sa.h;
+    let scale;
+    if (fitMode === 'width') scale = scaleW;
+    else if (fitMode === 'height') scale = scaleH;
+    else scale = Math.min(scaleW, scaleH);
     return { a, b: null, scale, L: sa, R: sa, single: true };
   }
   const L = sa || sb, R = sb || sa;
-  const W = window.innerWidth - 2 * MARGIN - GAP;
-  return { a, b, scale: Math.min(W / (L.w + R.w), H / Math.max(L.h, R.h)), L, R, single: false };
+  const totalW = L.w + R.w;
+  const maxH = Math.max(L.h, R.h);
+  const scaleW = W / totalW;
+  const scaleH = H / maxH;
+  let scale;
+  if (fitMode === 'width') scale = scaleW;
+  else if (fitMode === 'height') scale = scaleH;
+  else scale = Math.min(scaleW, scaleH);
+  return { a, b, scale, L, R, single: false };
 }
 
 async function layout(s) {
@@ -289,6 +339,8 @@ async function show(s) {
     stage.replaceChildren(...(single
       ? [shown[0] || blank(L, scale)]
       : [shown[0] || blank(L, scale), shown[1] || blank(R, scale)]));
+    stage.scrollTop = 0;
+    stage.scrollLeft = 0;
     const range = a && b ? `${a}–${b}` : `${a || b}`;
     document.title = `${range} / ${numPages} – ${fileName}`;
     if (!menu.hidden) updateMenu();
@@ -745,6 +797,13 @@ function updateMenu() {
     pageInput.value = (a && b ? `${a}–${b}` : `${a || b}`);
   }
   if (totalSpan) totalSpan.textContent = `/ ${numPages}`;
+  const calcBtn = menu.querySelector('[data-k="calc"]');
+  if (calcBtn) calcBtn.innerHTML = label(calcOpen ? 'Ukryj kalkulator' : 'Kalkulator', 'K');
+  const fitBtn = menu.querySelector('[data-k="fit"]');
+  if (fitBtn) {
+    const fitTxt = fitMode === 'width' ? 'Szerokość 100%' : (fitMode === 'height' ? 'Wysokość 100%' : 'Dopasowanie: Auto');
+    fitBtn.innerHTML = label(fitTxt, 'W');
+  }
   menu.querySelector('[data-k="pages"]').innerHTML = label(two ? 'Jedna strona' : 'Dwie strony', 'P');
   const pr = menu.querySelector('[data-k="pairing"]');
   pr.innerHTML = label(pairing === 'odd' ? 'Pary 1–2' : 'Pary 1, 2–3', 'O');
@@ -810,11 +869,96 @@ pageInput.addEventListener('blur', () => {
 pageInput.addEventListener('input', schedulePageJump);
 menu.querySelector('.page-select').addEventListener('click', () => pageInput.focus());
 
+function setCalcOpen(open) {
+  calcOpen = !!open;
+  localStorage.setItem('calcOpen', calcOpen ? '1' : '0');
+  document.documentElement.classList.toggle('calc-open', calcOpen);
+  if (calcOpen && (!calcFrame.src || calcFrame.src === 'about:blank')) {
+    calcFrame.src = getCalcUrl();
+  }
+  updateMenu();
+  fitNow();
+  clearTimeout(resizeTimer);
+  resizeTimer = setTimeout(() => {
+    canvasCache.clear(); loCache.clear(); tlCache.clear();
+    show(start);
+  }, 120);
+}
+
+function updateCalcWidth(w) {
+  calcWidth = Math.max(320, Math.min(window.innerWidth - 100, Math.round(w)));
+  document.documentElement.style.setProperty('--calc-w', calcWidth + 'px');
+  localStorage.setItem('calcWidth', String(calcWidth));
+}
+
+// Przeciąganie krawędzi kalkulatora (resizer)
+if (calcResizer) {
+  let startX = 0, initialW = 0, isDragging = false;
+  calcResizer.addEventListener('pointerdown', (e) => {
+    e.preventDefault();
+    isDragging = true;
+    startX = e.clientX;
+    initialW = calcWidth;
+    calcResizer.classList.add('dragging');
+    calcSidebar.style.transition = 'none';
+    stage.style.transition = 'none';
+
+    const onMove = (ev) => {
+      if (!isDragging) return;
+      const dx = ev.clientX - startX;
+      updateCalcWidth(initialW + dx);
+      fitNow();
+    };
+
+    const onUp = () => {
+      isDragging = false;
+      calcResizer.classList.remove('dragging');
+      calcSidebar.style.transition = '';
+      stage.style.transition = '';
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+      canvasCache.clear(); loCache.clear(); tlCache.clear();
+      show(start);
+    };
+
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
+  });
+}
+
+calcToggle?.addEventListener('click', (e) => {
+  e.stopPropagation();
+  setCalcOpen(!calcOpen);
+});
+calcClose?.addEventListener('click', (e) => {
+  e.stopPropagation();
+  setCalcOpen(false);
+});
+
+function setFitMode(mode) {
+  fitMode = mode;
+  localStorage.setItem('fitMode', fitMode);
+  document.documentElement.classList.toggle('fit-width', fitMode === 'width');
+  document.documentElement.classList.toggle('fit-height', fitMode === 'height');
+  flash(fitMode === 'width' ? 'Zablokowano: Szerokość 100%' : (fitMode === 'height' ? 'Zablokowano: Wysokość 100%' : 'Dopasowanie: Auto'));
+  updateMenu();
+  fitNow();
+  clearTimeout(resizeTimer);
+  resizeTimer = setTimeout(() => {
+    canvasCache.clear(); loCache.clear(); tlCache.clear();
+    show(start);
+  }, 120);
+}
+
 function act(k) {
   switch (k) {
     case 'prev': prev(); break;
     case 'next': next(); break;
     case 'open': pickFile(); break;
+    case 'calc': setCalcOpen(!calcOpen); break;
+    case 'fit':
+      setFitMode(fitMode === 'auto' ? 'width' : (fitMode === 'width' ? 'height' : 'auto'));
+      break;
     case 'pin':
       pinned = !pinned;
       pref.set('menuPinned', pinned);
@@ -936,6 +1080,19 @@ window.addEventListener('touchend', (e) => {
 let lastWheel = 0, notch = 100, acc = 0;
 window.addEventListener('wheel', (e) => {
   if (e.ctrlKey) return;
+  // W trybie blokady szerokości pozwól na naturalne przewijanie, jeśli strona wystaje pionowo
+  if (fitMode === 'width') {
+    const isScrollable = stage.scrollHeight > stage.clientHeight + 10;
+    if (isScrollable) {
+      const atTop = stage.scrollTop <= 2;
+      const atBottom = stage.scrollTop + stage.clientHeight >= stage.scrollHeight - 2;
+      const scrollingDown = e.deltaY > 0;
+      const scrollingUp = e.deltaY < 0;
+      if ((scrollingDown && !atBottom) || (scrollingUp && !atTop)) {
+        return; // Naturalne przewijanie strony
+      }
+    }
+  }
   e.preventDefault();
   let d = Math.abs(e.deltaY) >= Math.abs(e.deltaX) ? e.deltaY : e.deltaX;
   if (e.deltaMode === 1) d *= 40;
@@ -967,6 +1124,17 @@ window.addEventListener('keydown', (e) => {
   if (e.ctrlKey || e.metaKey || e.altKey) return;
   const k = e.key;
 
+  if (k === 'Escape' && calcOpen) {
+    setCalcOpen(false);
+    e.preventDefault();
+    return;
+  }
+  if ((k === 'h' || k === 'H') && e.shiftKey) {
+    setFitMode(fitMode === 'height' ? 'auto' : 'height');
+    e.preventDefault();
+    return;
+  }
+
   if (!pdf && k === 'Enter' && lastRecent) { e.preventDefault(); openRecent(lastRecent); return; }
 
   if (/^[0-9]$/.test(k) && pdf) {
@@ -984,20 +1152,25 @@ window.addEventListener('keydown', (e) => {
   const keyActions = {
     d: 'dark', D: 'dark', t: 'theme', T: 'theme',
     p: 'pages', P: 'pages', o: 'pairing', O: 'pairing',
-    f: 'full', F: 'full', c: 'crop', C: 'crop', r: 'rotate', R: 'rotate'
+    f: 'full', F: 'full', c: 'crop', C: 'crop', r: 'rotate', R: 'rotate',
+    k: 'calc', K: 'calc', w: 'fit', W: 'fit'
   };
   if (keyActions[k]) { act(keyActions[k]); e.preventDefault(); return; }
 
   const jump = e.shiftKey ? 10 : 1;   // Shift = skok o 10 rozkładówek
   if (['ArrowRight', 'ArrowDown', 'PageDown', 'j', 'l'].includes(k)) { flip(jump); e.preventDefault(); return; }
-  if (['ArrowLeft', 'ArrowUp', 'PageUp', 'k', 'h'].includes(k)) { flip(-jump); e.preventDefault(); return; }
+  if (['ArrowLeft', 'ArrowUp', 'PageUp', 'h'].includes(k)) { flip(-jump); e.preventDefault(); return; }
   if (k === ' ') { e.shiftKey ? prev() : next(); e.preventDefault(); return; }
   if (k === 'b' || k === 'B') { toggleMark(); e.preventDefault(); return; }
   if (k === 'Home') { go(1); e.preventDefault(); return; }
   if (k === 'End') { if (pdf) go(spreadStartOf(numPages)); e.preventDefault(); return; }
   if (k === '?') {
     flash('→ ↓ Spacja PgDn  następne\n← ↑ PgUp  poprzednie\nHome / End  początek / koniec\n' +
-          'numer (lub Enter)  skok do strony\nShift + strzałka  skok o 10\nB  zakładka na tej stronie\ndwuklik  pełny ekran\nCtrl+O  otwórz plik z dysku\nC  przycinanie marginesów\nR  obrót o 90°\nP  jedna / dwie strony\nD  tryb ciemny\nT  motyw zwykły / Gemini\nO  pary nieparzyste / parzyste\nF  pełny ekran\nkliknięcie  pasek z przyciskami', 5000);
+          'numer (lub Enter)  skok do strony\nShift + strzałka  skok o 10\nB  zakładka na tej stronie\n' +
+          'K  kalkulator z boku\nW  zablokuj szerokość 100%\nShift+H  zablokuj wysokość 100%\n' +
+          'C  przycinanie marginesów\nR  obrót o 90°\n' +
+          'P  jedna / dwie strony\nD  tryb ciemny\nT  motyw zwykły / Gemini\nO  pary nieparzyste / parzyste\n' +
+          'F  pełny ekran\ndwuklik  pełny ekran\nCtrl+O  otwórz plik\nkliknięcie  pasek z przyciskami', 6000);
     e.preventDefault();
   }
 });

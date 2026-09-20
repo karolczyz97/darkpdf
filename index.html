@@ -18,6 +18,36 @@
       </feComponentTransfer>
     </filter>
   </svg>
+  <!-- Boczny panel kalkulatora -->
+  <aside id="calc-sidebar" aria-label="Kalkulator naukowy">
+    <div class="calc-header">
+      <div class="calc-title">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="2" width="16" height="20" rx="2"/><line x1="8" y1="6" x2="16" y2="6"/><line x1="8" y1="10" x2="16" y2="10"/><line x1="8" y1="14" x2="10" y2="14"/><line x1="14" y1="14" x2="16" y2="14"/><line x1="8" y1="18" x2="10" y2="18"/><line x1="14" y1="18" x2="16" y2="18"/></svg>
+        <span>Kalkulator naukowy</span>
+      </div>
+      <button class="calc-close" title="Zamknij kalkulator (K lub Esc)" aria-label="Zamknij kalkulator">✕</button>
+    </div>
+    <iframe id="calc-frame" title="Kalkulator naukowy" allow="clipboard-read; clipboard-write"></iframe>
+    <div class="calc-resizer" title="Przeciągnij, aby zmienić szerokość"></div>
+  </aside>
+
+  <!-- Pływający przycisk kalkulatora -->
+  <button id="calc-toggle" title="Kalkulator naukowy (K)" aria-label="Otwórz kalkulator">
+    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="4" y="2" width="16" height="20" rx="2"/>
+      <line x1="8" y1="6" x2="16" y2="6"/>
+      <circle cx="8" cy="11" r="1" fill="currentColor"/>
+      <circle cx="12" cy="11" r="1" fill="currentColor"/>
+      <circle cx="16" cy="11" r="1" fill="currentColor"/>
+      <circle cx="8" cy="15" r="1" fill="currentColor"/>
+      <circle cx="12" cy="15" r="1" fill="currentColor"/>
+      <circle cx="16" cy="15" r="1" fill="currentColor"/>
+      <circle cx="8" cy="19" r="1" fill="currentColor"/>
+      <circle cx="12" cy="19" r="1" fill="currentColor"/>
+      <circle cx="16" cy="19" r="1" fill="currentColor"/>
+    </svg>
+  </button>
+
   <div id="stage"></div>
   <div id="hint" hidden></div>
   <div id="prog"><span></span></div>
@@ -32,6 +62,9 @@
       <div id="marks" hidden></div>
       <div class="keys">
         <kbd>← →</kbd><span>przewijanie stron</span>
+        <kbd>K</kbd><span>kalkulator naukowy z boku</span>
+        <kbd>W</kbd><span>zablokuj szerokość 100%</span>
+        <kbd>H</kbd><span>zablokuj wysokość 100%</span>
         <kbd>P</kbd><span>jedna albo dwie strony</span>
         <kbd>D</kbd><span>tryb ciemny</span>
         <kbd>T</kbd><span>motyw zwykły albo Gemini</span>
@@ -49,6 +82,8 @@
 
   <div id="menu" hidden>
     <div class="menu-actions">
+      <button data-k="calc" data-tip="Przełącz kalkulator naukowy z boku" data-key="K">Kalkulator <span class="k">(K)</span></button>
+      <button data-k="fit" data-tip="Dopasowanie: Auto / Szerokość 100% / Wysokość 100%" data-key="W"></button>
       <button data-k="pages" data-tip="Zmień widok stron" data-key="P"></button>
       <button data-k="pairing" data-tip="Zmień parowanie stron" data-key="O"></button>
       <button data-k="dark" data-tip="Przełącz tryb ciemny / jasny" data-key="D"></button>
@@ -78,7 +113,6 @@
     </div>
   </div>
   <div id="menu-tip" hidden></div>
-  <main id="text" class="sr-only" aria-label="Tekst dokumentu"></main>
-  <script type="module" src="viewer.js?v=27"></script>
+  <script type="module" src="viewer.js?v=28"></script>
 </body>
 </html>
