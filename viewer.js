@@ -3,9 +3,9 @@ const pdfjsLib = await import(PDFJS + 'build/pdf.min.mjs');
 pdfjsLib.GlobalWorkerOptions.workerSrc = PDFJS + 'build/pdf.worker.min.mjs';
 
 // ---- Ustawienia do ewentualnej zmiany ----
-const NOTCH_PX = 80;          // pojedyncze zdarzenie >= tyle px = ząbek kółka myszy → od razu przeskok
-const TOUCHPAD_PX = 30;       // tyle px ruchu na touchpadzie = przeskok (jeden na gest)
-const GESTURE_END_MS = 150;   // cisza, po której gest touchpada się kończy
+const NOTCH_MIN_PX = 40;      // zdarzenie kółka >= tyle px = ząbek myszy (każdy ząbek = rozkładówka)
+const TOUCHPAD_PX = 100;      // tyle px ruchu touchpada = jedna rozkładówka
+const LO_QUALITY = 0.35;      // rozdzielczość szybkiego podglądu, gdy strona nie jest jeszcze gotowa
 const PREFETCH_AHEAD = 3;     // ile rozkładówek do przodu renderować w tle
 const PREFETCH_BEHIND = 1;    // ile rozkładówek wstecz
 const TEXT_PAGES_AROUND = 2;  // tekst ilu stron przed/po bieżącej trzymać w DOM dla Gemini (nie wpływa na szybkość)
@@ -28,6 +28,8 @@ const sizeCache = new Map();   // nr strony -> {w, h}
 const canvasCache = new Map(); // klucz -> canvas (kolejność = LRU)
 const pending = new Map();     // klucz -> Promise<canvas>
 const textCache = new Map();   // nr strony -> tekst
+const tcCache = new Map();     // nr strony -> Promise<textContent>
+const tlCache = new Map();     // klucz -> gotowa warstwa tekstowa (zaznaczanie)
 
 applyDark();
 document.documentElement.classList.add('empty');
@@ -82,31 +84,40 @@ async function layout(s) {
 }
 
 // ---------- renderowanie ----------
-function cacheKey(n, scale) { return `${n}|${scale.toFixed(5)}|${devicePixelRatio}`; }
+function cacheKey(n, scale, q = 1) { return `${n}|${scale.toFixed(5)}|${q === 1 ? devicePixelRatio : 'lo'}`; }
 
-function renderPage(n, scale) {
-  const k = cacheKey(n, scale);
-  const hit = canvasCache.get(k);
-  if (hit) { canvasCache.delete(k); canvasCache.set(k, hit); return Promise.resolve(hit); }
-  if (pending.has(k)) return pending.get(k);
+const loCache = new Map(); // szybkie podglądy niskiej rozdzielczości
+function cancelled() { const e = new Error('cancelled'); e.name = 'RenderingCancelledException'; return e; }
 
-  const job = (async () => {
+function renderPage(n, scale, q = 1) {
+  const k = cacheKey(n, scale, q);
+  const cache = q === 1 ? canvasCache : loCache;
+  const hit = cache.get(k);
+  if (hit) { cache.delete(k); cache.set(k, hit); return Promise.resolve(hit); }
+  if (pending.has(k)) return pending.get(k).promise;
+
+  let task = null, stop = false;
+  const promise = (async () => {
     const page = await pdf.getPage(n);
-    const dpr = devicePixelRatio || 1;
+    if (stop) throw cancelled();
+    const dpr = q === 1 ? (devicePixelRatio || 1) : q;
+    const css = page.getViewport({ scale });
     const vp = page.getViewport({ scale: scale * dpr });
     const canvas = document.createElement('canvas');
-    canvas.width = Math.floor(vp.width);
-    canvas.height = Math.floor(vp.height);
-    canvas.style.width = canvas.width / dpr + 'px';
-    canvas.style.height = canvas.height / dpr + 'px';
-    await page.render({ canvasContext: canvas.getContext('2d', { alpha: false }), viewport: vp }).promise;
-    canvasCache.set(k, canvas);
-    while (canvasCache.size > CACHE_MAX) canvasCache.delete(canvasCache.keys().next().value);
+    canvas.width = Math.max(1, Math.floor(vp.width));
+    canvas.height = Math.max(1, Math.floor(vp.height));
+    canvas.style.width = Math.floor(css.width) + 'px';
+    canvas.style.height = Math.floor(css.height) + 'px';
+    task = page.render({ canvasContext: canvas.getContext('2d', { alpha: false }), viewport: vp });
+    await task.promise;
+    cache.set(k, canvas);
+    const max = q === 1 ? CACHE_MAX : 60;
+    while (cache.size > max) cache.delete(cache.keys().next().value);
     return canvas;
   })().finally(() => pending.delete(k));
 
-  pending.set(k, job);
-  return job;
+  pending.set(k, { promise, cancel() { stop = true; task?.cancel(); } });
+  return promise;
 }
 
 function blank(size, scale) {
@@ -117,28 +128,95 @@ function blank(size, scale) {
   return d;
 }
 
-// Nowa rozkładówka podmieniana jest dopiero, gdy obie strony są gotowe –
-// żadnych animacji ani połówek stron.
+// Strony podmieniane są w całości, bez animacji. Jeśli rozkładówka nie jest jeszcze
+// wyrenderowana, najpierw pojawia się szybki podgląd, a ostra wersja zaraz po nim.
+// Przy szybkim przewijaniu niepotrzebne już renderowania są przerywane.
 async function show(s) {
   const token = ++showToken;
   start = s;
   const { a, b, scale, L, R } = await layout(s);
-  const [ca, cb] = await Promise.all([
-    a ? renderPage(a, scale) : null,
-    b ? renderPage(b, scale) : null
-  ]);
   if (token !== showToken) return;
-  stage.replaceChildren(ca || blank(L, scale), cb || blank(R, scale));
-  const range = a && b ? `${a}–${b}` : `${a || b}`;
-  document.title = `${range} / ${numPages} – ${fileName}`;
+
+  const pages = [a, b];
+  const need = new Set();
+  for (const n of pages) if (n) { need.add(cacheKey(n, scale)); need.add(cacheKey(n, scale, LO_QUALITY)); }
+  for (const [k, job] of pending) if (!need.has(k)) job.cancel();
+
+  const wrap = (canvas) => {
+    const w = document.createElement('div');
+    w.className = 'page';
+    w.style.setProperty('--scale-factor', scale);
+    w.append(canvas);
+    return w;
+  };
+  let shown = [];
+  const put = ([ca, cb]) => {
+    shown = [ca && wrap(ca), cb && wrap(cb)];
+    stage.replaceChildren(shown[0] || blank(L, scale), shown[1] || blank(R, scale));
+    const range = a && b ? `${a}–${b}` : `${a || b}`;
+    document.title = `${range} / ${numPages} – ${fileName}`;
+  };
+
+  try {
+    const hiP = Promise.all(pages.map((n) => n ? renderPage(n, scale) : null));
+    const ready = pages.every((n) => !n || canvasCache.has(cacheKey(n, scale)));
+    if (!ready) {
+      hiP.catch(() => {});
+      const lo = await Promise.all(pages.map((n) => n ? renderPage(n, scale, LO_QUALITY) : null));
+      if (token !== showToken) return;
+      put(lo);
+    }
+    const hi = await hiP;
+    if (token !== showToken) return;
+    put(hi);
+    const wrappers = shown;
+    Promise.all(pages.map((n) => n ? textLayerFor(n, scale) : null)).then((tls) => {
+      if (token !== showToken) return;
+      tls.forEach((tl, i) => { if (tl && wrappers[i]) wrappers[i].append(tl); });
+    }).catch(() => {});
+  } catch (e) {
+    if (token !== showToken || e?.name === 'RenderingCancelledException') return;
+    throw e;
+  }
   if (fileKey) localStorage.setItem('pos:' + fileKey, String(a || b));
-  prefetch(s, token).then(() => updateText(s, token));
+  prefetch(s, token).then(() => updateText(s, token)).catch(() => {});
 }
 
-// ---------- tekst stron w DOM (dla Gemini / czytników ekranu) ----------
+// ---------- warstwa tekstowa: zaznaczanie i kopiowanie tekstu ----------
+function textContent(n) {
+  if (!tcCache.has(n)) tcCache.set(n, pdf.getPage(n).then((p) => p.getTextContent()));
+  return tcCache.get(n);
+}
+
+async function textLayerFor(n, scale) {
+  const k = cacheKey(n, scale);
+  const hit = tlCache.get(k);
+  if (hit) return hit;
+  const page = await pdf.getPage(n);
+  const div = document.createElement('div');
+  div.className = 'textLayer';
+  const tl = new pdfjsLib.TextLayer({
+    textContentSource: await textContent(n),
+    container: div,
+    viewport: page.getViewport({ scale })
+  });
+  await tl.render();
+  const end = document.createElement('div');
+  end.className = 'endOfContent';
+  div.append(end);
+  div.addEventListener('pointerdown', () => div.classList.add('selecting'));
+  tlCache.set(k, div);
+  while (tlCache.size > CACHE_MAX) tlCache.delete(tlCache.keys().next().value);
+  return div;
+}
+document.addEventListener('pointerup', () => {
+  for (const d of stage.querySelectorAll('.textLayer.selecting')) d.classList.remove('selecting');
+});
+
+// ---------- tekst sąsiednich stron w DOM (dla Gemini / czytników ekranu) ----------
 async function pageText(n) {
   if (textCache.has(n)) return textCache.get(n);
-  const tc = await (await pdf.getPage(n)).getTextContent();
+  const tc = await textContent(n);
   let out = '';
   for (const it of tc.items) {
     if (!('str' in it)) continue;
@@ -155,6 +233,7 @@ async function updateText(s, token) {
   const to = Math.min(numPages, (b || a) + TEXT_PAGES_AROUND);
   const parts = [];
   for (let n = from; n <= to; n++) {
+    if (n === a || n === b) continue;   // widoczne strony mają własną warstwę tekstową
     const t = await pageText(n);
     if (token !== showToken) return;
     const sec = document.createElement('section');
@@ -180,13 +259,24 @@ async function prefetch(s, token) {
     const { a, b, scale } = await layout(t);
     if (token !== showToken) return;
     if (a) await renderPage(a, scale);
+    if (token !== showToken) return;
     if (b) await renderPage(b, scale);
   }
 }
 
 function go(s) { if (pdf && s != null) show(s); }
-const next = () => go(nextStart(start));
-const prev = () => go(prevStart(start));
+function flip(n) {           // n > 0 do przodu, n < 0 wstecz, o |n| rozkładówek
+  if (!pdf || !n) return;
+  let t = start;
+  for (let i = 0; i < Math.abs(n); i++) {
+    const u = n > 0 ? nextStart(t) : prevStart(t);
+    if (u == null) break;
+    t = u;
+  }
+  if (t !== start) go(t);
+}
+const next = () => flip(1);
+const prev = () => flip(-1);
 
 // ---------- otwieranie ----------
 async function open(src, name, key, startPage = null) {
@@ -211,9 +301,13 @@ async function open(src, name, key, startPage = null) {
   numPages = pdf.numPages;
   fileName = name;
   fileKey = key;
+  for (const job of pending.values()) job.cancel();
   sizeCache.clear();
   canvasCache.clear();
+  loCache.clear();
   textCache.clear();
+  tcCache.clear();
+  tlCache.clear();
   textLayer.replaceChildren();
   pairing = localStorage.getItem('pairing:' + key) || localStorage.getItem('pairing') || 'odd';
   hint.hidden = true;
@@ -306,9 +400,11 @@ window.addEventListener('dragover', (e) => e.preventDefault());
 window.addEventListener('drop', (e) => { e.preventDefault(); openLocal(e.dataTransfer.files[0]); });
 
 // ---------- sterowanie ----------
-// Kółko myszy: każdy ząbek = jedna rozkładówka.
-// Touchpad: jeden gest = jedna rozkładówka (bezwładność nie przerzuca 10 stron).
-let lastWheel = 0, acc = 0, locked = false;
+// Kółko myszy: każdy ząbek = jedna rozkładówka, bez limitu szybkości.
+// Gdy przeglądarka połączy kilka ząbków w jedno zdarzenie (przy bardzo szybkim kręceniu),
+// przeskakujemy o tyle rozkładówek, ile było ząbków.
+// Touchpad: co TOUCHPAD_PX ruchu jedna rozkładówka.
+let lastWheel = 0, notch = 100, acc = 0;
 window.addEventListener('wheel', (e) => {
   if (e.ctrlKey) return; // Ctrl+kółko zostawiamy przeglądarce
   e.preventDefault();
@@ -320,19 +416,18 @@ window.addEventListener('wheel', (e) => {
   const now = performance.now();
   const gap = now - lastWheel;
   lastWheel = now;
-  if (gap > GESTURE_END_MS) { acc = 0; locked = false; }
+  const ad = Math.abs(d);
 
-  if (Math.abs(d) >= NOTCH_PX && gap > 30) { // ząbek kółka
-    d > 0 ? next() : prev();
-    locked = true; acc = 0;
+  if (ad >= NOTCH_MIN_PX) {                 // ząbek (lub kilka połączonych)
+    if (gap > 120) notch = ad;              // pojedynczy, spokojny ząbek → zapamiętaj jego wielkość
+    acc = 0;
+    flip(Math.sign(d) * Math.max(1, Math.round(ad / notch)));
     return;
   }
-  if (locked) return;
+  if (Math.sign(d) !== Math.sign(acc)) acc = 0;
   acc += d;
-  if (Math.abs(acc) >= TOUCHPAD_PX) {
-    acc > 0 ? next() : prev();
-    locked = true; acc = 0;
-  }
+  const n = Math.trunc(acc / TOUCHPAD_PX);
+  if (n) { acc -= n * TOUCHPAD_PX; flip(n); }
 }, { passive: false });
 
 let numBuf = '';
@@ -400,7 +495,7 @@ window.addEventListener('resize', () => {
   clearTimeout(resizeTimer);
   resizeTimer = setTimeout(() => {
     if (!pdf) return;
-    canvasCache.clear();
+    canvasCache.clear(); loCache.clear(); tlCache.clear();
     show(start);
   }, 120);
 });
