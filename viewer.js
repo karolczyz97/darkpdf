@@ -61,7 +61,7 @@ let fitMode = localStorage.getItem('fitMode') || 'auto'; // 'auto' | 'width' | '
 
 const calcSidebar = document.getElementById('calc-sidebar');
 const calcFrame = document.getElementById('calc-frame');
-const calcResizer = calcSidebar?.querySelector('.calc-resizer');
+const calcResizer = document.getElementById('calc-resizer');
 
 document.documentElement.style.setProperty('--calc-w', calcWidth + 'px');
 document.documentElement.classList.toggle('fit-width', fitMode === 'width');
@@ -231,7 +231,7 @@ async function detectContent(page, full) {
 }
 
 function getStageDimensions() {
-  const calcW = calcOpen ? (calcWidth + 8) : 0;
+  const calcW = calcOpen ? (calcWidth + 9) : 0;
   const W = Math.max(120, (window.innerWidth - calcW) - 2 * MARGIN - (two ? GAP : 0));
   const H = Math.max(120, window.innerHeight - 2 * MARGIN);
   return { W, H };
@@ -895,12 +895,12 @@ function setCalcOpen(open) {
 
   if (calcOpen) {
     if (!targetPdfWidth) {
-      targetPdfWidth = Math.max(120, window.innerWidth - (calcWidth + 8));
+      targetPdfWidth = Math.max(120, window.innerWidth - (calcWidth + 9));
       localStorage.setItem('targetPdfWidth', String(targetPdfWidth));
     } else {
       const minW = 320;
       const maxW = Math.max(minW, window.innerWidth - 140);
-      const desiredW = Math.max(minW, Math.min(maxW, window.innerWidth - targetPdfWidth - 8));
+      const desiredW = Math.max(minW, Math.min(maxW, window.innerWidth - targetPdfWidth - 9));
       updateCalcWidth(desiredW, false);
     }
     if (!calcFrame.src || calcFrame.src === 'about:blank') {
@@ -924,7 +924,7 @@ function updateCalcWidth(w, updateTargetPdf = true) {
   document.documentElement.style.setProperty('--calc-w', calcWidth + 'px');
   localStorage.setItem('calcWidth', String(calcWidth));
   if (updateTargetPdf) {
-    targetPdfWidth = Math.max(120, window.innerWidth - (calcWidth + 8));
+    targetPdfWidth = Math.max(120, window.innerWidth - (calcWidth + 9));
     localStorage.setItem('targetPdfWidth', String(targetPdfWidth));
   }
 }
@@ -1253,7 +1253,7 @@ window.addEventListener('resize', () => {
     if (targetPdfWidth) {
       const minW = 320;
       const maxW = Math.max(minW, window.innerWidth - 140);
-      const desiredW = Math.max(minW, Math.min(maxW, window.innerWidth - targetPdfWidth - 8));
+      const desiredW = Math.max(minW, Math.min(maxW, window.innerWidth - targetPdfWidth - 9));
       updateCalcWidth(desiredW, false);
     } else if (calcWidth > window.innerWidth - 140) {
       updateCalcWidth(window.innerWidth - 140, true);
