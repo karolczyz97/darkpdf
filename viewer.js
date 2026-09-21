@@ -99,7 +99,7 @@ function getCalcUrl() {
     }
   }
   const sep = base.includes('?') ? '&' : '?';
-  return `${base}${sep}embed=1&side=1&theme=${themeParam}`;
+  return `${base}${sep}embed=1&side=1&theme=${themeParam}&v=42`;
 }
 
 

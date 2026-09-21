@@ -48,11 +48,21 @@ html.dark #stage, html.gemini #stage {
 html.calc-animating #stage {
   transition: left .22s cubic-bezier(0.16, 1, 0.3, 1), border-radius .22s cubic-bezier(0.16, 1, 0.3, 1);
 }
-html.calc-open body {
-  background: #2c2c2c;
+html.calc-animating #menu {
+  transition: left .22s cubic-bezier(0.16, 1, 0.3, 1), width .22s cubic-bezier(0.16, 1, 0.3, 1);
 }
+html.calc-animating #hint {
+  transition: left .22s cubic-bezier(0.16, 1, 0.3, 1);
+}
+html.calc-open,
+html.calc-open body,
+html.gemini.calc-open body,
+html.dark.calc-open body {
+  background: #2c2c2c !important;
+}
+html:not(.dark).calc-open,
 html:not(.dark).calc-open body {
-  background: #e0e0e0;
+  background: #e0e0e0 !important;
 }
 html.calc-open #stage {
   left: calc(var(--calc-w, 440px) + 9px);
@@ -62,6 +72,13 @@ html.calc-open #stage {
 }
 html:not(.dark).calc-open #stage {
   background: #f1f3f4;
+}
+html.calc-open #menu {
+  left: calc((100vw + var(--calc-w, 440px) + 9px) / 2);
+  width: min(1000px, calc(100vw - var(--calc-w, 440px) - 9px - 24px));
+}
+html.calc-open #hint {
+  left: calc((100vw + var(--calc-w, 440px) + 9px) / 2);
 }
 
 /* Blokowanie dopasowania strony PDF */
