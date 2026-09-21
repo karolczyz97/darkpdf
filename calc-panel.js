@@ -15,6 +15,7 @@ let calcOpen = false;
 let calcWidth = 440;
 let targetPdfWidth = null;
 let userCustomWidth = false;
+let fixedW = null;                    // tryb szerokości: kalkulator stoi w miejscu, PDF bierze resztę
 let userCalcW = null;                 // szerokość z rozdzielacza (bez przycinania do okna – żeby nie „zjadało” jej zwężanie)
 let autoCollapsed = false;
 let lastNarrow = false;               // czy przy poprzednim sprawdzeniu okno było „mobilne”
@@ -151,7 +152,13 @@ export function handleCalcResize() {
 
   if (!calcOpen || narrow) return;
   let w = userCalcW ?? calcWidth;
-  if (!userCustomWidth) {
+  if (!userCustomWidth && ctx.getFitMode() === 'width') {
+    // Szerokość 100%: nie dopasowujemy kalkulatora do strony – zostaje tak szeroki, jak był,
+    // a przy zmianie okna zmienia się tylko PDF
+    if (fixedW == null) fixedW = calcWidth;
+    w = fixedW;
+  } else if (!userCustomWidth) {
+    fixedW = null;
     const neededW = getNeededPdfWidth();
     if (neededW != null) w = window.innerWidth - neededW - 9;
   }
