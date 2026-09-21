@@ -5,11 +5,8 @@ import { mountCalculator } from '../calc/calc-app.js?v=3';   // jedno źródło:
 export const CALC_MIN_W = 320;         // najwęższy sensowny kalkulator
 export const PDF_MIN_W = 140;          // tyle miejsca zostawiamy zawsze na PDF
 
-// Maksymalna szerokość kalkulatora: 720 px (mieści 2 kolumny) i max 45% szerokości okna
-export const getMaxCalcW = () => Math.max(CALC_MIN_W, Math.min(720, Math.floor(window.innerWidth * 0.45)));
-
 export const clampCalcW = (w) => {
-  const max = Math.max(CALC_MIN_W, Math.min(window.innerWidth - PDF_MIN_W, getMaxCalcW()));
+  const max = Math.max(CALC_MIN_W, window.innerWidth - PDF_MIN_W);
   return Math.max(CALC_MIN_W, Math.min(max, Math.round(w)));
 };
 
@@ -123,11 +120,14 @@ export function setCalcOpen(open) {
     if (ctx.getFitMode() === 'height' && !userCustomWidth) {
       snapCalcToHeightFit();
     } else {
+      calcWidth = clampCalcW(ctx.pref.get('calcWidth', 440));
       targetPdfWidth = Math.max(PDF_MIN_W, window.innerWidth - (calcWidth + 9));
-      updateCalcWidth(calcWidth, false);
+      document.documentElement.style.setProperty('--calc-w', calcWidth + 'px');
     }
     ensureCalcMounted();
     setTimeout(() => calcInstance?.focus(), 50);
+  } else {
+    targetPdfWidth = null;
   }
   window.focus();
   ctx.updateMenu();
@@ -157,29 +157,19 @@ export function handleCalcResize() {
 
   // Przy zmianie szerokości okna: karta z PDF-em zachowuje stałą szerokość,
   // a kalkulator rozciąga się lub kurczy absorbując zmianę szerokości:
-  if (!targetPdfWidth) {
+  if (targetPdfWidth == null) {
     targetPdfWidth = Math.max(PDF_MIN_W, window.innerWidth - (calcWidth + 9));
   }
 
   const rawDesired = window.innerWidth - targetPdfWidth - 9;
-  const clampedW = clampCalcW(rawDesired);
-
-  // Jeśli uderzyliśmy w limit min/max kalkulatora, synchronizujemy targetPdfWidth
-  // z realną przestrzenią pozostałą dla PDF-a, zapobiegając blokowaniu przy zmianie kierunku resize:
-  if (clampedW !== rawDesired) {
-    calcWidth = clampedW;
-    document.documentElement.style.setProperty('--calc-w', calcWidth + 'px');
-    ctx.pref.set('calcWidth', calcWidth);
-    targetPdfWidth = Math.max(PDF_MIN_W, window.innerWidth - (calcWidth + 9));
-  } else {
-    updateCalcWidth(rawDesired, false);
-  }
+  calcWidth = clampCalcW(rawDesired);
+  document.documentElement.style.setProperty('--calc-w', calcWidth + 'px');
 }
 
 export function initCalcPanel(context) {
   ctx = context;
   calcWidth = clampCalcW(ctx.pref.get('calcWidth', 440));
-  targetPdfWidth = Math.max(PDF_MIN_W, window.innerWidth - (calcWidth + 9));
+  targetPdfWidth = null;
 
   calcSidebar = document.getElementById('calc-sidebar');
   calcContainer = document.getElementById('calc-container');
