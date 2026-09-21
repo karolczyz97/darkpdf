@@ -451,6 +451,7 @@ async function layout(s) {
   ]);
   if (a) sizeCache.set(a, sa);
   if (b) sizeCache.set(b, sb);
+  handleCalcResize();
   return fit(a, b, sa, sb);
 }
 
