@@ -3,10 +3,11 @@
 import { mountCalculator } from '../calc/calc-app.js?v=3';   // jedno źródło: repo calc
 
 export const CALC_MIN_W = 320;         // najwęższy sensowny kalkulator
-export const PDF_MIN_W = 140;          // tyle miejsca zostawiamy zawsze na PDF
+export const PDF_MIN_W = 400;          // tyle miejsca zostawiamy zawsze na PDF (żeby tekst był czytelny)
+export const COLLAPSE_W = 800;         // poniżej tej szerokości zwijamy kalkulator do paska
 
 export const clampCalcW = (w) => {
-  const max = Math.max(CALC_MIN_W, window.innerWidth - PDF_MIN_W);
+  const max = Math.max(CALC_MIN_W, window.innerWidth - PDF_MIN_W - 9);
   return Math.max(CALC_MIN_W, Math.min(max, Math.round(w)));
 };
 
@@ -15,6 +16,8 @@ let calcOpen = false;
 let calcWidth = 440;
 let targetPdfWidth = null;
 let userCustomWidth = false;
+let autoCollapsed = false;
+let lastWindowWidth = typeof window !== 'undefined' ? window.innerWidth : 1024;
 
 let calcSidebar = null;
 let calcContainer = null;
@@ -37,7 +40,7 @@ function ensureCalcMounted() {
   if (!calcInstance && calcContainer) {
     calcInstance = mountCalculator(calcContainer, {
       isEmbedded: true,
-      onClose: () => setCalcOpen(false),
+      onClose: () => setCalcOpen(false, true),
       onFlash: (text, ms) => ctx?.flash?.(text, ms)
     });
   }
@@ -70,16 +73,18 @@ export function getNeededPdfWidth() {
   const H = Math.max(120, window.innerHeight - 2 * ctx.MARGIN);
   if (!ctx.showTwo()) {
     const size = sa || sb;
+    if (!size || !size.h || !size.w) return null;
     const scaleH = H / size.h;
     const w = Math.ceil(size.w * scaleH);
     return w + 2 * ctx.MARGIN + 4;
   } else {
     const L = sa || sb, R = sb || sa;
-    const maxH = Math.max(L.h, R.h);
+    if (!L || !L.h || !L.w) return null;
+    const maxH = Math.max(L.h, R?.h || L.h);
     const scaleH = H / maxH;
     const hasBoth = Boolean(sa && sb);
     const totalPagesW = hasBoth
-      ? (Math.ceil(L.w * scaleH) + Math.ceil(R.w * scaleH) + ctx.GAP)
+      ? (Math.ceil(L.w * scaleH) + Math.ceil((R?.w || 0) * scaleH) + ctx.GAP)
       : Math.ceil(L.w * scaleH);
     return totalPagesW + 2 * ctx.MARGIN + 4;
   }
@@ -96,7 +101,11 @@ export async function snapCalcToHeightFit() {
   ctx?.fitNow?.();
 }
 
-export function setCalcOpen(open) {
+export function setCalcOpen(open, fromUser = false) {
+  if (fromUser) {
+    autoCollapsed = false;
+    lastWindowWidth = typeof window !== 'undefined' ? window.innerWidth : 1024;
+  }
   if (open && !ctx?.isPdfLoaded?.()) return;
   calcOpen = !!open;
   ctx.pref.set('calcOpen', calcOpen);
@@ -117,16 +126,34 @@ export function setCalcOpen(open) {
   }
 }
 
-export function toggleCalc() {
-  setCalcOpen(!calcOpen);
+export function toggleCalc(fromUser = true) {
+  setCalcOpen(!calcOpen, fromUser);
 }
 
 export function handleCalcResize() {
+  const prevW = lastWindowWidth;
+  const curW = typeof window !== 'undefined' ? window.innerWidth : 1024;
+  lastWindowWidth = curW;
+
+  // Automatyczne zwijanie kalkulatora przy zwężaniu okna poniżej COLLAPSE_W
+  if (calcOpen && !autoCollapsed && prevW >= COLLAPSE_W && curW < COLLAPSE_W) {
+    autoCollapsed = true;
+    setCalcOpen(false, false);
+    return;
+  }
+
+  // Automatyczne przywracanie kalkulatora przy ponownym rozszerzeniu okna
+  if (!calcOpen && autoCollapsed && prevW < COLLAPSE_W && curW >= COLLAPSE_W) {
+    autoCollapsed = false;
+    setCalcOpen(true, false);
+    return;
+  }
+
   if (!calcOpen || ctx?.isMobile?.()) return;
 
   const neededW = getNeededPdfWidth();
   if (neededW != null) {
-    const desiredCalcW = window.innerWidth - neededW - 9;
+    const desiredCalcW = curW - neededW - 9;
     calcWidth = clampCalcW(desiredCalcW);
     document.documentElement.style.setProperty('--calc-w', calcWidth + 'px');
   }
@@ -134,6 +161,7 @@ export function handleCalcResize() {
 
 export function initCalcPanel(context) {
   ctx = context;
+  lastWindowWidth = typeof window !== 'undefined' ? window.innerWidth : 1024;
   calcWidth = clampCalcW(ctx.pref.get('calcWidth', 440));
   targetPdfWidth = null;
 
@@ -186,5 +214,5 @@ export function initCalcPanel(context) {
     calcResizer.addEventListener('pointercancel', onPointerUp);
   }
 
-  document.getElementById('calc-close')?.addEventListener('click', () => setCalcOpen(false));
+  document.getElementById('calc-close')?.addEventListener('click', () => setCalcOpen(false, true));
 }

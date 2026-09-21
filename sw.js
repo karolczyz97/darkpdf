@@ -1,7 +1,7 @@
 // DarkPDF – pamięć podręczna aplikacji, dzięki której czytnik działa bez internetu.
 // Pliki aplikacji: najpierw z sieci (zawsze świeże), bez sieci – ostatnia zapisana wersja.
 // pdf.js w lib/pdfjs się nie zmienia, więc bierzemy go od razu z pamięci.
-const CACHE = 'darkpdf-v6';
+const CACHE = 'darkpdf-v7';
 const CORE = [
   './',
   'index.html',

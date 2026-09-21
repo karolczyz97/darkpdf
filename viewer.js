@@ -13,7 +13,7 @@ import {
   isUserCustomWidth,
   snapCalcToHeightFit,
   handleCalcResize
-} from './calc-panel.js?v=2';
+} from './calc-panel.js?v=3';
 
 // Pamięć podręczna aplikacji: po pierwszej wizycie czytnik otwiera się też offline
 if ('serviceWorker' in navigator && location.protocol === 'https:') {
@@ -85,8 +85,9 @@ let two = pref.get('two', true);           // dwie strony obok siebie czy jedna
 // (dwie byłyby nieczytelne), a zapamiętane ustawienie P zostaje na komputer.
 // Tylko po rozmiarze ekranu: laptopy z ekranem dotykowym zgłaszają „dotyk” i „brak najechania”,
 // więc na tym nie można polegać. Telefon w pionie jest wąski, a w poziomie niski.
-const mobileMq = matchMedia('(max-width: 760px), (max-height: 500px) and (max-width: 1000px)');
+const mobileMq = matchMedia('(max-width: 800px), (max-height: 500px) and (max-width: 1000px)');
 const isMobile = () => mobileMq.matches;
+let lastMobileState = isMobile();
 const showTwo = () => two && !(isMobile() && window.innerWidth < window.innerHeight);
 document.documentElement.classList.toggle('mobile', isMobile());
 let crop = pref.get('crop', true);         // przycinanie białych marginesów
@@ -428,17 +429,22 @@ function getStageDimensions() {
 function fit(a, b, sa, sb) {
   const { W, H } = getStageDimensions();
   if (!showTwo()) {
-    const scaleW = W / sa.w;
-    const scaleH = H / sa.h;
+    const s = sa || sb;
+    if (!s || !s.w || !s.h) return { a, b: null, scale: 1, L: s, R: s, single: true };
+    const scaleW = W / s.w;
+    const scaleH = H / s.h;
     // Wysokość 100% nie może wypchnąć strony poza ekran – wtedy zostaje dopasowanie całości
     const scale = fitMode === 'width' ? scaleW : Math.min(scaleW, scaleH);
-    return { a, b: null, scale, L: sa, R: sa, single: true };
+    return { a, b: null, scale, L: s, R: s, single: true };
   }
   const L = sa || sb, R = sb || sa;
-  const totalW = L.w + R.w;
-  const maxH = Math.max(L.h, R.h);
-  const scaleW = W / totalW;
-  const scaleH = H / maxH;
+  if (!L || !L.w || !L.h) return { a, b, scale: 1, L, R, single: false };
+  const rw = R?.w || L.w;
+  const rh = R?.h || L.h;
+  const totalW = L.w + rw;
+  const maxH = Math.max(L.h, rh);
+  const scaleW = totalW > 0 ? W / totalW : 1;
+  const scaleH = maxH > 0 ? H / maxH : 1;
   const scale = fitMode === 'width' ? scaleW : Math.min(scaleW, scaleH);
   return { a, b, scale, L, R, single: false };
 }
@@ -739,7 +745,7 @@ async function open(src, name, key, startPage = null, rawBlob = null) {
     if (blobToSave) rememberFile(key, name, blobToSave);
     let p = pref.get('pos:' + key, 1);
     if (startPage) p = startPage;
-    if (pref.get('calcOpen', false)) {
+    if (pref.get('calcOpen', false) && !isMobile()) {
       setCalcOpen(true);
     }
     show(spreadStartOf(p));
@@ -788,7 +794,7 @@ function loadViaExtension(url) {
 }
 
 async function openFromHash() {
-  const h = location.href;
+  const h = location.href || '';
   const i = h.indexOf('#file=');
   if (i < 0) { setEmpty(true); renderRecent(); return; }
   let url = h.slice(i + 6);
@@ -1402,19 +1408,21 @@ function fitNow() {
 }
 
 window.addEventListener('resize', () => {
+  document.documentElement.classList.toggle('mobile', isMobile());
   handleCalcResize();
   if (!pdf) return;
   fitNow();
   clearTimeout(resizeTimer);
   resizeTimer = setTimeout(() => {
     const isMob = isMobile();
-    const wasMob = document.documentElement.classList.contains('mobile');
+    const mobChanged = isMob !== lastMobileState;
+    lastMobileState = isMob;
     document.documentElement.classList.toggle('mobile', isMob);
     const l = layoutSync(start);
     const dpr = window.devicePixelRatio || 1;
     const dprChanged = Math.abs(dpr - lastRenderedDpr) > 1e-3;
     const scaleChanged = !l || Math.abs((l.scale || 0) - (lastRenderedScale || 0)) > 1e-4;
-    if (scaleChanged || isMob !== wasMob || dprChanged) {
+    if (scaleChanged || mobChanged || dprChanged) {
       clearRenderCaches();
       show(spreadStartOf(start));
     }
