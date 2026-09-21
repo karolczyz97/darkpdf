@@ -515,7 +515,8 @@ const next = () => flip(1);
 const prev = () => flip(-1);
 
 // ---------- otwieranie dokumentów ----------
-async function open(src, name, key, startPage = null) {
+async function open(src, name, key, startPage = null, rawBlob = null) {
+  const blobToSave = rawBlob || (src?.data ? new Blob([src.data]) : null);
   flash('Ładowanie…', 0);
   let doc;
   try {
@@ -544,7 +545,7 @@ async function open(src, name, key, startPage = null) {
   hint.hidden = true;
 
   rot = pref.get('rot:' + key, 0);
-  if (src.data) rememberFile(key, name, src.data);
+  if (blobToSave) rememberFile(key, name, blobToSave);
   let p = pref.get('pos:' + key, 1);
   if (startPage) p = startPage;
   if (localStorage.getItem('calcOpen') === '1') {
@@ -624,10 +625,12 @@ async function openLocal(f) {
   history.replaceState(null, '', location.pathname);
   setEmpty(false);
   const data = new Uint8Array(await f.arrayBuffer());
-  open({ data }, f.name, `local:${f.name}:${f.size}`);
+  open({ data }, f.name, `local:${f.name}:${f.size}`, null, f);
 }
 function pickFile() { picker.value = ''; picker.click(); }
 picker.addEventListener('change', () => openLocal(picker.files[0]));
+const welcomePickBtn = document.querySelector('#welcome .pick');
+if (welcomePickBtn) welcomePickBtn.addEventListener('click', (e) => { e.stopPropagation(); pickFile(); });
 
 // ---------- ostatnio otwierane pliki ----------
 // Pliki z dysku trzymamy w IndexedDB przeglądarki, więc otwierają się bez pytania o dysk.
@@ -650,11 +653,12 @@ function idbDo(mode, fn) {
   }));
 }
 
-async function rememberFile(key, name, data) {
+async function rememberFile(key, name, dataOrBlob) {
   try {
     const rec = { key, name, ts: Date.now() };
     if (/^(https?|file):/i.test(key)) rec.url = key;
-    else rec.blob = new Blob([data]);
+    else rec.blob = (dataOrBlob instanceof Blob) ? dataOrBlob : new Blob([dataOrBlob]);
+    if (rec.blob && rec.blob.size === 0) return;
     await idbDo('readwrite', (st) => st.put(rec));
     const all = await idbDo('readonly', (st) => st.getAll());
     all.sort((a, b) => b.ts - a.ts);
@@ -687,7 +691,14 @@ function renderBookmarks() {
     let rec = null;
     try { rec = await idbDo('readonly', (st) => st.get(m.key)); } catch {}
     setEmpty(false);
-    if (rec?.blob) open({ data: new Uint8Array(await rec.blob.arrayBuffer()) }, m.name, m.key, m.page);
+    if (rec?.blob) {
+      if (rec.blob.size === 0) {
+        setEmpty(true);
+        flash('Ten plik w pamięci był uszkodzony – wybierz go ponownie z dysku', 3500);
+        return;
+      }
+      open({ data: new Uint8Array(await rec.blob.arrayBuffer()) }, m.name, m.key, m.page, rec.blob);
+    }
     else if (/^(https?|file):/i.test(m.key)) location.hash = '#file=' + m.key + '#page=' + m.page;
     else { setEmpty(true); flash('Ten plik nie jest już zapisany – otwórz go z dysku', 3000); }
   });
@@ -696,9 +707,15 @@ function renderBookmarks() {
 let lastRecent = null;
 async function openRecent(rec) {
   if (!rec) return;
+  if (rec.blob && rec.blob.size === 0) {
+    flash('Zapisany plik był uszkodzony lub pusty – otwórz go ponownie z dysku', 3500);
+    try { await idbDo('readwrite', (st) => st.delete(rec.key)); } catch {}
+    renderRecent();
+    return;
+  }
   setEmpty(false);
-  if (rec.blob) open({ data: new Uint8Array(await rec.blob.arrayBuffer()) }, rec.name, rec.key);
-  else location.hash = '#file=' + rec.url;
+  if (rec.blob) open({ data: new Uint8Array(await rec.blob.arrayBuffer()) }, rec.name, rec.key, null, rec.blob);
+  else if (rec.url) location.hash = '#file=' + rec.url;
 }
 
 async function renderRecent() {
@@ -1102,9 +1119,9 @@ window.addEventListener('dblclick', (e) => {
 });
 
 window.addEventListener('click', (e) => {
-  if (!pdf) { pickFile(); return; }
+  if (!pdf) return;
   if (String(getSelection())) return;
-  if (e.target.closest('#menu, #calc-sidebar')) return;
+  if (e.target.closest('#menu, #calc-sidebar, #calc-resizer')) return;
   if (pinned) return;
   menu.hidden ? showMenu() : hideMenu();
 });
@@ -1159,8 +1176,7 @@ window.addEventListener('wheel', (e) => {
   if (e.deltaMode === 1) d *= 40;
   else if (e.deltaMode === 2) d *= window.innerHeight;
   if (!d) return;
-
-  hideMenu();
+  if (!menu.hidden && !pinned) scheduleHide();
   const now = performance.now(), gap = now - lastWheel;
   lastWheel = now;
   const ad = Math.abs(d);
@@ -1185,10 +1201,17 @@ window.addEventListener('keydown', (e) => {
   if (e.ctrlKey || e.metaKey || e.altKey) return;
   const k = e.key;
 
-  if (k === 'Escape' && calcOpen) {
-    setCalcOpen(false);
-    e.preventDefault();
-    return;
+  if (k === 'Escape') {
+    if (calcOpen) {
+      setCalcOpen(false);
+      e.preventDefault();
+      return;
+    }
+    if (!menu.hidden && !pinned) {
+      hideMenu();
+      e.preventDefault();
+      return;
+    }
   }
 
   if (!pdf && k === 'Enter' && lastRecent) { e.preventDefault(); openRecent(lastRecent); return; }
@@ -1203,7 +1226,7 @@ window.addEventListener('keydown', (e) => {
     return;
   }
 
-  hideMenu();
+  if (!menu.hidden && !pinned) scheduleHide();
 
   const keyActions = {
     d: 'dark', D: 'dark', t: 'theme', T: 'theme',
