@@ -65,7 +65,9 @@ let two = pref.get('two', true);           // dwie strony obok siebie czy jedna
 
 // Tryb mobilny: wąski ekran albo dotyk. Na telefonie w pionie zawsze jedna strona
 // (dwie byłyby nieczytelne), a zapamiętane ustawienie P zostaje na komputer.
-const mobileMq = matchMedia('(max-width: 760px), (pointer: coarse) and (max-width: 1100px)');
+// Tylko po rozmiarze ekranu: laptopy z ekranem dotykowym zgłaszają „dotyk” i „brak najechania”,
+// więc na tym nie można polegać. Telefon w pionie jest wąski, a w poziomie niski.
+const mobileMq = matchMedia('(max-width: 760px), (max-height: 500px) and (max-width: 1000px)');
 const isMobile = () => mobileMq.matches;
 const showTwo = () => two && !(isMobile() && window.innerWidth < window.innerHeight);
 document.documentElement.classList.toggle('mobile', isMobile());

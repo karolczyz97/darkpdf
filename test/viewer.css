@@ -626,7 +626,7 @@ html.mobile .page-input { min-height: 34px; font-size: 16px; }   /* 16 px: iOS n
 html.mobile .menu-popover { width: min(92vw, 360px); }
 html.mobile .menu-item { padding-top: 11px; padding-bottom: 11px; }
 html.mobile .menu-item .k { display: none; }                    /* bez klawiatury skróty są zbędne */
-@media (hover: none) { .menu-nav [data-tip]::after { display: none; } }
+html.mobile .menu-nav [data-tip]::after { display: none; }   /* na telefonie dymki tylko przeszkadzają */
 
 /* Kalkulator na telefonie zasłania PDF na całą szerokość; wraca się przyciskiem */
 html.mobile #calc-resizer { display: none; }
