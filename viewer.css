@@ -227,6 +227,8 @@ html.gemini #hint { background: var(--ui-bg); color: var(--ui-text); font-family
 .menu-popover:not(:popover-open) { opacity: 0; transform: translateY(6px); }
 @starting-style { .menu-popover:popover-open { opacity: 0; transform: translateY(6px); } }
 
+.menu-item[hidden] { display: none; }   /* np. parowanie przy jednej stronie */
+
 .menu-section {
   display: flex;
   flex-direction: column;
@@ -424,7 +426,7 @@ html.gemini .page-input:focus { border-color: var(--gem-accent); box-shadow: 0 0
 #welcome { position: fixed; inset: 0; z-index: 4; display: none; align-items: center; justify-content: center; padding: 24px; }
 html.empty #welcome { display: flex; }
 #welcome .card {
-  width: 100%; max-width: 540px; padding: 32px 28px 22px; text-align: center;
+  width: 100%; max-width: 720px; padding: 32px 28px 22px; text-align: center;
   border: 1px dashed var(--ui-line); border-radius: 16px; background: rgba(255, 255, 255, .025);
   font: 14px/1.5 var(--ui-font); color: var(--ui-text);
 }
@@ -438,7 +440,7 @@ html.empty #welcome { display: flex; }
 #welcome .pick:hover { background: #fff; }
 #welcome .keys-sections {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
   gap: 16px 24px;
   margin-top: 22px;
   padding-top: 18px;
@@ -462,16 +464,19 @@ html.empty #welcome { display: flex; }
   color: var(--ui-accent);
   padding-left: 2px;
 }
-#welcome .keys-grid {
+/* Wiersz skrótu: ta sama ikona co w menu, opis, klawisze */
+#welcome .k-row {
   display: grid;
-  grid-template-columns: auto 1fr;
-  gap: 6px 12px;
+  grid-template-columns: 18px 1fr auto;
+  gap: 10px;
   align-items: center;
-  color: var(--ui-text-dim);
+  color: var(--ui-text);
   font-size: 12.5px;
 }
+#welcome .k-row .ic { color: var(--ui-text-dim); }
+#welcome .k-keys { display: flex; align-items: center; gap: 3px; color: var(--ui-text-dim); white-space: nowrap; }
+#welcome .k-keys em { font-style: normal; font-size: 11.5px; color: var(--ui-text-dim); }
 #welcome kbd {
-  justify-self: start;
   min-width: 22px;
   text-align: center;
   box-sizing: border-box;
@@ -602,3 +607,37 @@ html:not(.dark) #calc-resizer::after {
 html.empty #calc-resizer {
   display: none !important;
 }
+
+/* ---- wspólne ikony ---- */
+.ic { width: 18px; height: 18px; flex: none; display: block; }
+
+/* ---- tryb mobilny ---- */
+.mobile-only { display: none !important; }
+html.mobile .mobile-only { display: revert !important; }
+html.mobile .desktop-only { display: none !important; }
+html.mobile #welcome .keys-group.mobile-only { display: flex !important; margin-top: 20px; text-align: left; }
+html.mobile #welcome { align-items: flex-start; overflow-y: auto; }
+html.mobile #welcome .card { padding: 26px 18px 20px; }
+
+/* Pasek na dole ekranu i większe cele do dotyku */
+html.mobile #menu, html.mobile.calc-open #menu,
+html.mobile #hint, html.mobile.calc-open #hint { left: 50%; }
+html.mobile .menu-nav { padding: 4px 6px; gap: 4px; }
+html.mobile .menu-nav button { min-width: 40px; min-height: 40px; }
+html.mobile .page-input { min-height: 34px; font-size: 16px; }   /* 16 px: iOS nie przybliża pola */
+html.mobile .menu-popover { width: min(92vw, 360px); }
+html.mobile .menu-item { padding-top: 11px; padding-bottom: 11px; }
+html.mobile .menu-item .k { display: none; }                    /* bez klawiatury skróty są zbędne */
+html.mobile .menu-nav [data-tip]::after { display: none; }   /* na telefonie dymki tylko przeszkadzają */
+
+/* Kalkulator na telefonie zasłania PDF na całą szerokość; wraca się przyciskiem */
+html.mobile #calc-resizer { display: none; }
+html.mobile #calc-sidebar { width: 100vw; max-width: none; min-width: 0; border-radius: 0; }
+html.mobile.calc-open #stage { left: 0; border-radius: 0; }
+#calc-close {
+  align-items: center; gap: 8px; margin: 8px; padding: 10px 14px; align-self: flex-start;
+  border: 1px solid var(--ui-line); border-radius: 20px; background: var(--ui-fill);
+  color: var(--ui-text); font: 14px var(--ui-font); cursor: pointer;
+}
+html.mobile #calc-close { display: inline-flex !important; }
+html.mobile #stage { touch-action: pan-y pinch-zoom; }

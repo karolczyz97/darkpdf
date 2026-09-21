@@ -40,16 +40,7 @@ const COLOR_LABELS = {
   light: 'Tryb: Jasny',
   auto: 'Tryb: Auto'
 };
-const DARK_ICONS = {
-  dark: `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>`,
-  light: `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>`,
-  auto: `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 0 1 0 18z" fill="currentColor"/></svg>`
-};
 
-const THEME_ICONS = {
-  gemini: `<svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M12 2L14.4 9.6L22 12L14.4 14.4L12 22L9.6 14.4L2 12L9.6 9.6L12 2Z"/></svg>`,
-  system: `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>`
-};
 
 let colorMode = pref.get('colorMode', null);
 if (!colorMode) {
@@ -71,6 +62,15 @@ systemDark.addEventListener('change', () => {
 });
 
 let two = pref.get('two', true);           // dwie strony obok siebie czy jedna
+
+// Tryb mobilny: wąski ekran albo dotyk. Na telefonie w pionie zawsze jedna strona
+// (dwie byłyby nieczytelne), a zapamiętane ustawienie P zostaje na komputer.
+// Tylko po rozmiarze ekranu: laptopy z ekranem dotykowym zgłaszają „dotyk” i „brak najechania”,
+// więc na tym nie można polegać. Telefon w pionie jest wąski, a w poziomie niski.
+const mobileMq = matchMedia('(max-width: 760px), (max-height: 500px) and (max-width: 1000px)');
+const isMobile = () => mobileMq.matches;
+const showTwo = () => two && !(isMobile() && window.innerWidth < window.innerHeight);
+document.documentElement.classList.toggle('mobile', isMobile());
 let crop = pref.get('crop', true);         // przycinanie białych marginesów
 let rot = 0;                                             // obrót stron: 0, 90, 180, 270
 let pairing = 'odd';      // 'odd' = 1–2, 3–4…   'even' = 1, 2–3, 4–5…
@@ -187,17 +187,17 @@ function flash(text, ms = 1200) {
 // ---------- rozkład stron ----------
 function spreadStartOf(p) {
   p = Math.min(Math.max(1, p), numPages);
-  if (!two) return p;
+  if (!showTwo()) return p;
   if (pairing === 'odd') return p % 2 ? p : p - 1;
   return p === 1 ? 1 : (p % 2 ? p - 1 : p);
 }
 function spreadOf(s) {
-  if (!two) return [s, null];
+  if (!showTwo()) return [s, null];
   if (pairing === 'even' && s === 1) return [null, 1]; // okładka sama, po prawej
   return [s, s + 1 <= numPages ? s + 1 : null];
 }
 function nextStart(s) {
-  const n = !two ? s + 1 : (pairing === 'even' && s === 1) ? 2 : s + 2;
+  const n = !showTwo() ? s + 1 : (pairing === 'even' && s === 1) ? 2 : s + 2;
   return n <= numPages ? n : null;
 }
 function prevStart(s) { return s <= 1 ? null : spreadStartOf(s - 1); }
@@ -384,15 +384,15 @@ async function detectContent(page, full) {
 }
 
 function getStageDimensions() {
-  const calcW = calcOpen ? (calcWidth + 9) : 0;
-  const W = Math.max(120, (window.innerWidth - calcW) - 2 * MARGIN - (two ? GAP : 0));
+  const calcW = calcOpen && !isMobile() ? (calcWidth + 9) : 0;
+  const W = Math.max(120, (window.innerWidth - calcW) - 2 * MARGIN - (showTwo() ? GAP : 0));
   const H = Math.max(120, window.innerHeight - 2 * MARGIN);
   return { W, H };
 }
 
 function fit(a, b, sa, sb) {
   const { W, H } = getStageDimensions();
-  if (!two) {
+  if (!showTwo()) {
     const scaleW = W / sa.w;
     const scaleH = H / sa.h;
     // Wysokość 100% nie może wypchnąć strony poza ekran – wtedy zostaje dopasowanie całości
@@ -626,7 +626,7 @@ function showProgress() {
   const page = a || b;
   const frac = numPages > 1 ? (page - 1) / (numPages - 1) : 0;
   const thumb = prog.firstElementChild;
-  thumb.style.height = Math.max(6, 100 / Math.max(1, numPages / (two ? 2 : 1))) + '%';
+  thumb.style.height = Math.max(6, 100 / Math.max(1, numPages / (showTwo() ? 2 : 1))) + '%';
   thumb.style.top = `calc(${(frac * 100).toFixed(2)}% - ${(frac * parseFloat(thumb.style.height)).toFixed(2)}%)`;
   prog.classList.add('on');
   clearTimeout(progTimer);
@@ -997,16 +997,17 @@ function updateMenu() {
     if (active !== undefined) btn.classList.toggle('active', active);
   }
   const pr = menu.querySelector('[data-k="pairing"]');
-  if (pr) pr.hidden = !two;
+  if (pr) pr.hidden = !showTwo();
+  // telefon w pionie zawsze pokazuje jedną stronę – przełącznik nic by nie zmienił
+  const pagesBtn = menu.querySelector('[data-k="pages"]');
+  if (pagesBtn) pagesBtn.hidden = isMobile() && window.innerWidth < window.innerHeight;
   const darkBtn = menu.querySelector('[data-k="dark"]');
   if (darkBtn) {
-    const iconEl = darkBtn.querySelector('.icon');
-    if (iconEl && DARK_ICONS[colorMode]) iconEl.innerHTML = DARK_ICONS[colorMode];
+    darkBtn.querySelector('use')?.setAttribute('href', `#i-mode-${colorMode}`);
   }
   const themeBtn = menu.querySelector('[data-k="theme"]');
   if (themeBtn) {
-    const iconEl = themeBtn.querySelector('.icon');
-    if (iconEl && THEME_ICONS[palette]) iconEl.innerHTML = THEME_ICONS[palette];
+    themeBtn.querySelector('use')?.setAttribute('href', `#i-pal-${palette}`);
   }
 
   if (pinBtn) {
@@ -1084,7 +1085,7 @@ async function getOptimalCalcWidthForHeightFit(s = start) {
   const H = Math.max(120, window.innerHeight - 2 * MARGIN);
   let neededPdfWidth;
 
-  if (!two) {
+  if (!showTwo()) {
     const size = sa || sb;
     const scaleH = H / size.h;
     const w = Math.floor(size.w * scaleH);
@@ -1215,6 +1216,8 @@ if (calcResizer) {
 }
 
 // Nasłuchiwanie komunikatów z ramki kalkulatora
+document.getElementById('calc-close')?.addEventListener('click', () => setCalcOpen(false));
+
 window.addEventListener('message', (e) => {
   if (!calcFrame || e.source !== calcFrame.contentWindow) return;   // tylko nasz kalkulator
   if (e.data && e.data.type === 'darkpdf_close_calc') {
@@ -1318,7 +1321,7 @@ function act(k) {
       break;
     }
     case 'pairing': {
-      if (!pdf || !two) break;
+      if (!pdf || !showTwo()) break;
       const anchor = spreadOf(start).find(Boolean);
       pairing = pairing === 'odd' ? 'even' : 'odd';
       pref.set('pairing', pairing);
@@ -1342,6 +1345,7 @@ menu.addEventListener('click', (e) => {
 });
 
 window.addEventListener('dblclick', (e) => {
+  if (isMobile()) return;
   if (!pdf || String(window.getSelection())) return;   // dwuklik w tekst zaznacza słowo
   if (e.target.closest('#menu, #calc-sidebar')) return;
   act('full');
@@ -1351,6 +1355,12 @@ window.addEventListener('click', (e) => {
   if (!pdf) return;
   if (String(window.getSelection())) return;
   if (e.target.closest('#menu, #calc-sidebar, #calc-resizer')) return;
+  // Telefon: stuknięcie w lewą / prawą część strony przewraca, środek otwiera pasek
+  if (isMobile()) {
+    const x = e.clientX / window.innerWidth;
+    if (x < 0.3) { hideMenu(); prev(); return; }
+    if (x > 0.7) { hideMenu(); next(); return; }
+  }
   if (pinned) {
     if (popoverOpen) setPopoverOpen(false);
     return;
@@ -1530,6 +1540,8 @@ window.addEventListener('resize', () => {
   clearTimeout(resizeTimer);
   resizeTimer = setTimeout(() => {
     canvasCache.clear(); loCache.clear(); tlCache.clear();
-    show(start);
+    document.documentElement.classList.toggle('mobile', isMobile());
+    show(spreadStartOf(start));      // po obrocie telefonu mogła się zmienić liczba stron na ekranie
+    updateMenu();
   }, 180);
 });
