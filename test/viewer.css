@@ -1,0 +1,604 @@
+/* MOTYW SYSTEMOWY: Kolory z systemu / Chrome PDF Viewer */
+:root {
+  color-scheme: dark;
+  --ui-bg: rgba(24, 24, 24, .95);
+  --ui-bg-solid: #1b1c1e;                      /* bezpieczny fallback tła */
+  --ui-stage-bg: #0b0c0d;
+  --ui-resizer-bg: #2c2c2c;                    /* bezpieczny fallback separatora */
+  --ui-text: #e6e6e6;                          /* bezpieczny fallback tekstu */
+  --ui-text-strong: #ffffff;
+  --ui-text-dim: #8a8a8a;                      /* bezpieczny fallback wygaszonego tekstu */
+  --ui-line: rgba(255, 255, 255, .10);
+  --ui-hover: rgba(255, 255, 255, .10);
+  --ui-fill: rgba(255, 255, 255, .06);
+  --ui-accent: #8ab4f8;                        /* bezpieczny fallback akcentu */
+  --ui-accent-soft: rgba(138, 180, 248, .14);
+  --ui-font: system-ui, -apple-system, sans-serif;
+  --calc-w: 440px;
+}
+
+@supports (color: CanvasText) {
+  :root {
+    --ui-bg-solid: Canvas;
+    --ui-resizer-bg: Canvas;
+    --ui-text: CanvasText;
+    --ui-text-dim: GrayText;
+    --ui-accent: AccentColor;
+  }
+}
+
+/* MOTYW GEMINI: Oficjalne tokeny projektowe Google Gemini (gemini.google.com i panel boczny Chrome) */
+html.gemini {
+  color-scheme: dark;
+  --ui-bg: rgba(19, 19, 20, .96);             /* --gem-sys-color--surface (#131314) */
+  --ui-bg-solid: #131314;                      /* --gem-sys-color--surface */
+  --ui-stage-bg: #0b0c0d;                      /* tło panelu bocznego Gemini w Chrome */
+  --ui-resizer-bg: #2c2c2c;                    /* separator z panelu Gemini */
+  --ui-text: #e3e3e3;                          /* --gem-sys-color--on-surface */
+  --ui-text-strong: #ffffff;
+  --ui-text-dim: #9a9b9c;                      /* --gem-sys-color--on-surface-variant */
+  --ui-line: rgba(255, 255, 255, .08);         /* --gem-sys-color--outline-variant subtelny */
+  --ui-hover: #282a2c;                         /* --gem-sys-color--surface-container-high */
+  --ui-fill: #1e1f20;                          /* --gem-sys-color--surface-container */
+  --ui-accent: #a8c7fa;                        /* --gem-sys-color--primary */
+  --ui-accent-soft: rgba(168, 199, 250, .14);  /* --gem-sys-color--primary z przezroczystością */
+  --ui-font: "Google Sans Flex", "Google Sans", "Helvetica Neue", system-ui, sans-serif;
+}
+html, body {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  background: #525659;
+  user-select: none;
+}
+html.dark, html.dark body { background: var(--ui-stage-bg); }
+
+#stage {
+  position: fixed;
+  top: 0;
+  bottom: 0;
+  right: 0;
+  left: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+html.dark #stage, html.gemini #stage {
+  background: var(--ui-stage-bg);
+}
+html.calc-animating #stage {
+  transition: left .22s cubic-bezier(0.16, 1, 0.3, 1), border-radius .22s cubic-bezier(0.16, 1, 0.3, 1);
+}
+html.calc-animating #menu {
+  transition: left .22s cubic-bezier(0.16, 1, 0.3, 1);
+}
+html.calc-animating #hint {
+  transition: left .22s cubic-bezier(0.16, 1, 0.3, 1);
+}
+html.calc-open,
+html.calc-open body,
+html.gemini.calc-open body,
+html.dark.calc-open body {
+  background: var(--ui-resizer-bg) !important;
+}
+html:not(.dark):not(.gemini).calc-open,
+html:not(.dark):not(.gemini).calc-open body {
+  background: #e0e0e0 !important;
+}
+html.calc-open #stage {
+  left: calc(var(--calc-w, 440px) + 9px);
+  border-top-left-radius: 10px;
+  border-bottom-left-radius: 10px;
+  background: var(--ui-stage-bg);
+}
+html:not(.dark).calc-open #stage {
+  background: #f1f3f4;
+}
+html.calc-open #menu {
+  left: calc((100vw + var(--calc-w, 440px) + 9px) / 2);
+}
+html.calc-open #hint {
+  left: calc((100vw + var(--calc-w, 440px) + 9px) / 2);
+}
+
+/* Blokowanie dopasowania strony PDF */
+html.fit-width #stage {
+  overflow-y: auto;
+  overflow-x: hidden;
+  align-items: flex-start;
+  padding: 10px 0;
+  box-sizing: border-box;
+}
+html.fit-height #stage {
+  overflow-x: auto;
+  overflow-y: hidden;
+  align-items: center;
+  padding: 0;
+  box-sizing: border-box;
+  scrollbar-width: none;
+}
+html.fit-height #stage::-webkit-scrollbar {
+  display: none;
+}
+#stage .page, #stage .blank { display: block; flex: none; position: relative; overflow: hidden; }
+#stage canvas { display: block; background: #fff; box-shadow: 0 0 6px rgba(0, 0, 0, .45); }
+#stage .blank { visibility: hidden; }
+
+/* Tryb ciemny: odwrócenie kolorów strony, odcienie zachowane */
+html.dark #stage canvas {
+  filter: invert(.9) hue-rotate(180deg);
+  box-shadow: none;
+}
+
+#hint {
+  position: fixed;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 6px 12px;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, .78);
+  color: #eee;
+  font: 13px/1.4 system-ui, sans-serif;
+  white-space: pre;
+  pointer-events: none;
+  z-index: 1;
+}
+#hint[hidden] { display: none; }
+
+/* Tekst stron: niewidoczny na ekranie, ale obecny w DOM i drzewie dostępności */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: pre-wrap;
+}
+
+/* Warstwa tekstowa pdf.js: przezroczysty tekst nad stroną do zaznaczania i kopiowania */
+.textLayer {
+  position: absolute; inset: 0; overflow: clip; line-height: 1; text-align: initial;
+  transform-origin: 0 0; caret-color: CanvasText; z-index: 0;
+  -webkit-text-size-adjust: none; text-size-adjust: none; forced-color-adjust: none;
+  user-select: text; -webkit-user-select: text;
+  font-family: sans-serif;
+}
+.textLayer :is(span, br) {
+  color: transparent; position: absolute; white-space: pre; cursor: text; transform-origin: 0% 0%;
+}
+.textLayer > :not(.markedContent), .textLayer .markedContent span:not(.markedContent) { z-index: 1; }
+.textLayer span.markedContent { top: 0; height: 0; }
+.textLayer ::selection { background: rgba(0, 110, 255, .35); }
+html.dark .textLayer ::selection { background: rgba(90, 160, 255, .45); }
+
+/* Motyw Gemini: tło #0f0f0f, tekst #e3e3e3, zaznaczenie #a8c7fa – wartości z CSS gemini.google.com.
+   Strona zlewa się z tłem jak czat Gemini, kontrast mocniejszy niż w zwykłym trybie. */
+html.gemini, html.gemini body { background: #0b0c0d; }
+html.gemini #stage canvas { filter: invert(1) hue-rotate(180deg) url(#gemini-colors); }
+html.gemini .textLayer ::selection { background: rgba(168, 199, 250, .38); }
+html.gemini #hint { background: var(--ui-bg); color: var(--ui-text); font-family: var(--ui-font); }
+.textLayer br::selection { background: transparent; }
+.textLayer .endOfContent {
+  display: block; position: absolute; inset: 100% 0 0; z-index: 0; cursor: default;
+  user-select: none; -webkit-user-select: none;
+}
+.textLayer.selecting .endOfContent { top: 0; }
+
+/* Pomocniczy canvas, który pdf.js dokleja do body, żeby mierzyć szerokość tekstu.
+   Bez tego widać go jako czarny prostokąt 300×150 w lewym górnym rogu. */
+.hiddenCanvasElement { position: absolute; top: 0; left: 0; width: 0; height: 0; display: none; }
+
+/* ---- pasek z przyciskami ---- */
+#menu {
+  position: fixed; left: 50%; bottom: calc(18px + env(safe-area-inset-bottom, 0px));
+  transform: translateX(-50%); z-index: 6;
+  pointer-events: none;
+  user-select: none;
+}
+#menu[hidden] { display: none; }
+#menu > * { pointer-events: auto; }
+
+/* Pionowy popover z opcjami – natywny [popover], zakotwiczony nad dolnym paskiem */
+.menu-nav { anchor-name: --menu-nav; }
+.menu-popover {
+  position: fixed;
+  inset: auto;
+  margin: 0 0 8px;
+  position-anchor: --menu-nav;
+  position-area: top;
+  width: 270px;
+  color: var(--ui-text);
+  box-sizing: border-box;
+  padding: 5px;
+  border-radius: 14px;
+  background: var(--ui-bg-solid);
+  border: 1px solid var(--ui-line);
+  box-shadow: 0 10px 32px rgba(0, 0, 0, .55), 0 2px 8px rgba(0, 0, 0, .35);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  transform-origin: bottom center;
+  transition: opacity .16s ease, transform .16s ease, display .16s allow-discrete, overlay .16s allow-discrete;
+}
+.menu-popover:not(:popover-open) { opacity: 0; transform: translateY(6px); }
+@starting-style { .menu-popover:popover-open { opacity: 0; transform: translateY(6px); } }
+
+.menu-section {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.menu-divider {
+  height: 1px;
+  background: var(--ui-line);
+  margin: 3px 6px;
+  border: 0;
+}
+
+.menu-item {
+  display: flex !important;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 6px 10px;
+  border-radius: 7px;
+  border: 0;
+  background: transparent;
+  color: var(--ui-text);
+  font: 13px var(--ui-font);
+  cursor: pointer;
+  text-align: left;
+  box-sizing: border-box;
+  transition: background .12s, color .12s;
+}
+.menu-item:hover {
+  background: var(--ui-hover);
+  color: var(--ui-text-strong);
+}
+.menu-item.active {
+  background: var(--ui-accent-soft);
+  color: var(--ui-accent);
+}
+.menu-item .icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  color: var(--ui-text-dim);
+}
+.menu-item:hover .icon,
+.menu-item.active .icon {
+  color: inherit;
+}
+.menu-item .label-text {
+  flex: 1;
+  min-width: 0;
+  font-weight: 450;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.menu-item .k {
+  margin-left: auto;
+  font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
+  font-size: 11px;
+  color: var(--ui-text-dim);
+  background: var(--ui-fill);
+  border: 1px solid var(--ui-line);
+  border-radius: 4px;
+  padding: 1px 5px;
+  line-height: 1.3;
+  flex-shrink: 0;
+}
+
+/* Dymek ze stroną na dole (nawigacja) */
+.menu-nav {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  padding: 3px 5px;
+  border-radius: 20px;
+  background: var(--ui-bg-solid);
+  border: 1px solid var(--ui-line);
+  box-shadow: 0 4px 18px rgba(0, 0, 0, .45);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  font: 13px var(--ui-font);
+  color: var(--ui-text);
+  box-sizing: border-box;
+}
+
+.menu-nav button {
+  background: none;
+  border: 0;
+  color: var(--ui-text);
+  font: inherit;
+  cursor: pointer;
+  border-radius: 14px;
+  padding: 4px 8px;
+  white-space: nowrap;
+  transition: background .12s, color .12s;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.menu-nav button:hover {
+  background: var(--ui-hover);
+  color: var(--ui-text-strong);
+}
+
+.menu-pin, .menu-toggle {
+  width: 28px;
+  height: 28px;
+  min-width: 28px;
+  max-width: 28px;
+  padding: 0 !important;
+  border-radius: 14px;
+  color: var(--ui-text-dim);
+  cursor: pointer;
+  display: inline-flex !important;
+  align-items: center;
+  justify-content: center;
+  transition: color .15s, background .15s;
+  flex-shrink: 0;
+  box-sizing: border-box;
+}
+.menu-pin:hover, .menu-toggle:hover {
+  color: var(--ui-text-strong) !important;
+  background: var(--ui-hover) !important;
+}
+.menu-pin.pinned, .menu-toggle.open {
+  color: var(--ui-accent) !important;
+  background: var(--ui-accent-soft) !important;
+}
+
+.menu-pin .icon-unlocked { display: block; }
+.menu-pin .icon-locked { display: none; }
+.menu-pin.pinned .icon-unlocked { display: none; }
+.menu-pin.pinned .icon-locked { display: block; }
+
+.page-select {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  color: var(--ui-text);
+  font-variant-numeric: tabular-nums;
+  font-weight: 500;
+  user-select: none;
+  padding: 0 4px;
+}
+.page-input {
+  background: var(--ui-fill);
+  border: 1px solid var(--ui-line);
+  border-radius: 6px;
+  color: var(--ui-text-strong);
+  font: inherit;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 500;
+  text-align: center;
+  width: 56px;
+  padding: 2px 4px;
+  outline: none;
+  transition: border-color .15s, background .15s;
+}
+.page-input:focus {
+  background: var(--ui-hover);
+  border-color: var(--ui-accent);
+  box-shadow: 0 0 0 1px var(--ui-accent);
+  color: var(--ui-text-strong);
+}
+.page-select .total {
+  color: var(--ui-text-dim);
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+/* Dymki na dolnym pasku – czysty CSS: tekst z data-tip, skrót z data-key */
+.menu-nav [data-tip] { position: relative; }
+.menu-nav [data-tip]::after {
+  content: attr(data-tip) "  " attr(data-key);
+  position: absolute; left: 50%; bottom: calc(100% + 10px); z-index: 10;
+  padding: 5px 10px; border-radius: 6px; white-space: pre;
+  background: var(--ui-bg-solid); border: 1px solid var(--ui-line);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, .5);
+  color: var(--ui-text-strong); font: 12px/1.2 var(--ui-font);
+  pointer-events: none; opacity: 0; transform: translate(-50%, 4px);
+  transition: opacity .12s ease, transform .12s ease;
+}
+.menu-nav [data-tip]:hover::after { opacity: 1; transform: translate(-50%, 0); transition-delay: .1s; }
+.menu-popover:popover-open ~ .menu-nav [data-tip]::after { display: none; }   /* nie zasłaniamy otwartego menu */
+
+html.gemini .page-input:focus { border-color: #a8c7fa; box-shadow: 0 0 0 1px #a8c7fa; }
+
+/* ---- ekran startowy ---- */
+#welcome { position: fixed; inset: 0; z-index: 4; display: none; align-items: center; justify-content: center; padding: 24px; }
+html.empty #welcome { display: flex; }
+#welcome .card {
+  width: 100%; max-width: 540px; padding: 32px 28px 22px; text-align: center;
+  border: 1px dashed var(--ui-line); border-radius: 16px; background: rgba(255, 255, 255, .025);
+  font: 14px/1.5 var(--ui-font); color: var(--ui-text);
+}
+#welcome.drag .card { border-color: var(--ui-accent); border-style: solid; background: var(--ui-accent-soft); }
+#welcome .logo { font-size: 21px; font-weight: 600; letter-spacing: .04em; }
+#welcome .lead { margin: 8px 0 20px; color: var(--ui-text-dim); }
+#welcome .pick {
+  padding: 10px 20px; border: 0; border-radius: 9px; background: #ececec; color: #1a1a1a;
+  font: 600 14px system-ui, sans-serif; cursor: pointer;
+}
+#welcome .pick:hover { background: #fff; }
+#welcome .keys-sections {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 16px 24px;
+  margin-top: 22px;
+  padding-top: 18px;
+  border-top: 1px solid rgba(255, 255, 255, .08);
+  text-align: left;
+}
+#welcome .keys-col {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+#welcome .keys-group {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+#welcome .keys-title {
+  font: 600 11px var(--ui-font);
+  text-transform: uppercase;
+  letter-spacing: .7px;
+  color: var(--ui-accent);
+  padding-left: 2px;
+}
+#welcome .keys-grid {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 6px 12px;
+  align-items: center;
+  color: var(--ui-text-dim);
+  font-size: 12.5px;
+}
+#welcome kbd {
+  justify-self: start;
+  min-width: 22px;
+  text-align: center;
+  box-sizing: border-box;
+  font: 11.5px ui-monospace, "Cascadia Mono", Consolas, monospace;
+  color: var(--ui-text);
+  background: var(--ui-fill);
+  border: 1px solid var(--ui-line);
+  border-radius: 5px;
+  padding: 2px 6px;
+  white-space: nowrap;
+}
+#welcome .foot { margin: 18px 0 0; font-size: 12px; color: #6f6f6f; }
+
+/* ---- ostatnio otwierane na ekranie startowym ---- */
+#recent { display: flex; flex-direction: column; gap: 2px; margin-top: 20px; text-align: left; }
+#recent[hidden] { display: none; }
+.recent-row {
+  display: flex; align-items: baseline; gap: 10px; width: 100%; padding: 7px 10px;
+  border: 0; border-radius: 8px; background: var(--ui-fill);
+  color: var(--ui-text); font: 13px var(--ui-font); cursor: pointer; text-align: left;
+}
+.recent-row:hover { background: var(--ui-hover); color: var(--ui-text-strong); }
+.recent-row .rn { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.recent-row .rp { flex: none; color: var(--ui-text-dim); font-size: 12px; }
+
+/* ---- wskaźnik postępu przy prawej krawędzi ---- */
+#prog {
+  position: fixed; right: 2px; top: 8px; bottom: 8px; width: 3px; z-index: 3;
+  opacity: 0; transition: opacity .25s ease; pointer-events: none;
+}
+#prog.on { opacity: 1; }
+#prog span {
+  position: absolute; left: 0; width: 100%; border-radius: 2px;
+  background: rgba(255, 255, 255, .28);
+}
+html.gemini #prog span { background: rgba(168, 199, 250, .45); }
+
+html.nocursor, html.nocursor body { cursor: none; }
+html.nocursor .textLayer :is(span, br) { cursor: none; }
+
+/* ---- Boczny panel kalkulatora ---- */
+#calc-sidebar {
+  position: fixed;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: var(--calc-w, 440px);
+  min-width: 320px;
+  max-width: calc(100vw - 140px);
+  background: var(--ui-stage-bg);
+  border-top-right-radius: 10px;
+  border-bottom-right-radius: 10px;
+  z-index: 8;
+  display: flex;
+  flex-direction: column;
+  transform: translateX(calc(-100% - 12px));
+  transition: transform .22s cubic-bezier(0.16, 1, 0.3, 1);
+  box-sizing: border-box;
+  overflow: hidden;
+}
+html.gemini #calc-sidebar {
+  background: var(--ui-stage-bg);
+}
+html:not(.dark):not(.gemini) #calc-sidebar {
+  background: #f1f3f4;
+}
+html.calc-open #calc-sidebar {
+  transform: translateX(0);
+}
+html.empty #calc-sidebar {
+  display: none !important;
+}
+#calc-frame {
+  flex: 1;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  border-top-right-radius: 10px;
+  border-bottom-right-radius: 10px;
+  background: var(--ui-stage-bg);
+  display: block;
+}
+html:not(.dark):not(.gemini) #calc-frame {
+  background: #f1f3f4;
+}
+#calc-resizer {
+  position: fixed;
+  top: 0;
+  bottom: 0;
+  left: var(--calc-w, 440px);
+  width: 9px;
+  background: var(--ui-resizer-bg);
+  cursor: ew-resize;
+  z-index: 10;
+  display: none;
+  box-sizing: border-box;
+}
+html.calc-open #calc-resizer {
+  display: block;
+}
+html.calc-animating #calc-resizer {
+  transition: left .22s cubic-bezier(0.16, 1, 0.3, 1);
+}
+#calc-resizer::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 4px;
+  height: 24px;
+  border-radius: 2px;
+  background: var(--ui-text-dim);
+  opacity: 0;
+  transition: opacity .12s ease;
+  pointer-events: none;
+}
+#calc-resizer:hover::after,
+#calc-resizer.dragging::after {
+  opacity: 1;
+}
+html:not(.dark):not(.gemini) #calc-resizer {
+  background: #e0e0e0;
+}
+html:not(.dark) #calc-resizer::after {
+  background: rgba(0, 0, 0, .45);
+}
+html.empty #calc-resizer {
+  display: none !important;
+}
