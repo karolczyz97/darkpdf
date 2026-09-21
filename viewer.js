@@ -920,11 +920,11 @@ let popoverOpen = pref.get('popoverOpen', true);
 let menuTimer = null;
 menuReady = true;     // od teraz applyTheme() może odświeżać pasek
 
-// Pasek chowa się po 3.5 s bezczynności, jeśli nie jest najechany ani zablokowany kłódką
+// Pasek chowa się po 2 s bezczynności, jeśli nie jest najechany ani zablokowany kłódką
 function scheduleHide() {
   clearTimeout(menuTimer);
   if (pinned || menu.hidden || menu.matches(':hover') || document.activeElement === pageInput) return;
-  menuTimer = setTimeout(hideMenu, 3500);
+  menuTimer = setTimeout(hideMenu, 2000);
 }
 
 menu.addEventListener('mouseenter', () => {
