@@ -1,6 +1,12 @@
-const PDFJS = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/';
+// pdf.js 4.10.38 trzymamy w repo (lib/pdfjs), więc razem z plikiem sw.js czytnik działa też bez internetu
+const PDFJS = new URL('lib/pdfjs/', import.meta.url).href;
 const pdfjsLib = await import(PDFJS + 'build/pdf.min.mjs');
 pdfjsLib.GlobalWorkerOptions.workerSrc = PDFJS + 'build/pdf.worker.min.mjs';
+
+// Pamięć podręczna aplikacji: po pierwszej wizycie czytnik otwiera się też offline
+if ('serviceWorker' in navigator && location.protocol === 'https:') {
+  navigator.serviceWorker.register(new URL('sw.js', import.meta.url)).catch(() => {});
+}
 
 // ---- Ustawienia przeglądarki ----
 const NOTCH_MIN_PX = 40;      // zdarzenie kółka >= tyle px = ząbek myszy (każdy ząbek = rozkładówka)
@@ -90,6 +96,9 @@ function lru(max = Infinity) {
 }
 
 // ---- Kalkulator i tryb dopasowania ----
+const CALC_MIN_W = 320;         // najwęższy sensowny kalkulator
+const PDF_MIN_W = 140;          // tyle miejsca zostawiamy zawsze na PDF
+const clampCalcW = (w) => Math.max(CALC_MIN_W, Math.min(Math.max(CALC_MIN_W, window.innerWidth - PDF_MIN_W), Math.round(w)));
 let calcOpen = false;
 let calcWidth = pref.get('calcWidth', 440);
 let targetPdfWidth = pref.get('targetPdfWidth', null);
@@ -111,6 +120,16 @@ const tlCache = lru(CACHE_MAX);      // klucz -> warstwa tekstowa
 const textCache = lru();             // nr strony -> tekst
 const tcCache = lru();               // nr strony -> Promise<textContent>
 const pending = new Map();           // klucz -> trwające renderowanie
+
+// Gotowe obrazy stron są liczone dla konkretnej skali – po zmianie układu wyrzucamy je
+function clearRenderCaches() { canvasCache.clear(); loCache.clear(); tlCache.clear(); }
+
+// Przerysowanie z krótkim opóźnieniem, żeby seria zmian (przeciąganie, przełączniki) dała jedno
+let resizeTimer;
+function rerenderSoon(ms = 120) {
+  clearTimeout(resizeTimer);
+  resizeTimer = setTimeout(() => { clearRenderCaches(); show(start); }, ms);
+}
 
 function clearCaches() {
   for (const job of pending.values()) job.cancel();
@@ -173,7 +192,7 @@ function getCalcUrl() {
     }
   }
   const sep = base.includes('?') ? '&' : '?';
-  return `${base}${sep}embed=1&side=1&mode=${isDarkNow() ? 'dark' : 'light'}&palette=${palette}&v=50`;
+  return `${base}${sep}embed=1&side=1&mode=${isDarkNow() ? 'dark' : 'light'}&palette=${palette}&v=51`;
 }
 
 let hintTimer;
@@ -223,7 +242,12 @@ async function pageBox(n) {
   const whole = { x: 0, y: 0, w: full.width, h: full.height };
   if (!crop) return whole;
   const k = groupKey(n, full);
-  if (!cropJobs.has(k)) cropJobs.set(k, groupBox(n, full, k));
+  if (!cropJobs.has(k)) {
+    // Szybki start: najpierw kilka najbliższych stron, pełną próbkę liczymy w tle
+    const quick = groupBox(n, full, k, CROP_QUICK);
+    cropJobs.set(k, quick);
+    refineCrop(n, full, k, quick);
+  }
   const common = await cropJobs.get(k);
   if (!common) return whole;
 
@@ -235,6 +259,23 @@ async function pageBox(n) {
   return common;
 }
 
+const CROP_QUICK = 6;           // tyle stron badamy przed pokazaniem pierwszej
+let cropGen = 0;                // rośnie przy każdym czyszczeniu – stare obliczenia w tle wtedy przepadają
+
+// Pełna próbka w tle. Jeśli dała inne cięcie niż szybka, podmieniamy je raz i przerysowujemy.
+async function refineCrop(n, full, k, quick) {
+  const gen = cropGen;
+  const first = await quick;
+  const better = await groupBox(n, full, k, CROP_SAMPLES);
+  if (gen !== cropGen || cropJobs.get(k) !== quick) return;   // w międzyczasie zmienił się plik lub ustawienia
+  const same = (a, b) => (!a && !b) || (a && b && ['x', 'y', 'w', 'h'].every((q) => Math.abs(a[q] - b[q]) < 1));
+  cropJobs.set(k, Promise.resolve(better));
+  if (same(first, better)) return;
+  sizeCache.clear();
+  clearRenderCaches();
+  show(start);
+}
+
 function cutsContent(own, box, full) {
   const tx = full.width * 0.015, ty = full.height * 0.015;   // tolerancja ~1,5%
   const fullBleed = (own.r - own.x) > full.width * 0.96 && (own.bt - own.y) > full.height * 0.96;
@@ -244,6 +285,7 @@ function cutsContent(own, box, full) {
 }
 
 function clearCropCache() {
+  cropGen++;
   cropJobs.clear();
   ownJobs.clear();
 }
@@ -277,7 +319,7 @@ function getCropCandidatePages(n, total, max = CROP_SAMPLES) {
   for (let p = parity || 2; p <= total; p += 2) all.push(p);
   if (all.length <= max) return all;                     // krótki dokument: bierzemy wszystko
   const pages = new Set([n]);
-  for (let d = 2; d <= 24 && pages.size < 8; d += 2) {   // sąsiedztwo bieżącej strony
+  for (let d = 2; d <= 24 && pages.size < Math.min(8, max); d += 2) {   // sąsiedztwo bieżącej strony
     if (n + d <= total) pages.add(n + d);
     if (n - d >= 1) pages.add(n - d);
   }
@@ -289,9 +331,9 @@ function getCropCandidatePages(n, total, max = CROP_SAMPLES) {
 
 // Bierzemy szeroką próbkę stron z tej samej grupy i najszerszy wspólny obszar treści,
 // więc nic się nie urywa, a wszystkie strony wychodzą tej samej wielkości.
-async function groupBox(n, full, k) {
+async function groupBox(n, full, k, samples = CROP_SAMPLES) {
   if (!pdf || !numPages || numPages < 1) return null;
-  const pages = getCropCandidatePages(n, numPages, CROP_SAMPLES);
+  const pages = getCropCandidatePages(n, numPages, samples);
   if (!pages.length) return null;
 
   const scannedBoxes = await mapConcurrent(pages, 6, async (p) => {
@@ -1069,6 +1111,7 @@ pageInput.addEventListener('blur', () => {
 pageInput.addEventListener('input', schedulePageJump);
 menu.querySelector('.page-select').addEventListener('click', () => pageInput.focus());
 
+// ---------- panel kalkulatora: otwieranie, szerokość, rozdzielacz, dopasowanie do wysokości ----------
 async function getOptimalCalcWidthForHeightFit(s = start) {
   if (!pdf) return null;
   const [a, b] = spreadOf(s);
@@ -1101,11 +1144,9 @@ async function getOptimalCalcWidthForHeightFit(s = start) {
     neededPdfWidth = totalPagesW + 2 * MARGIN + 4;
   }
 
-  const minW = 320;
-  const maxW = Math.max(minW, window.innerWidth - 140);
   const desiredCalcW = window.innerWidth - neededPdfWidth - 9;
-  if (desiredCalcW < minW) return null;      // strona w 100% wysokości się nie mieści – nie ruszamy kalkulatora
-  return Math.min(maxW, Math.round(desiredCalcW));
+  if (desiredCalcW < CALC_MIN_W) return null;   // strona w 100% wysokości się nie mieści – nie ruszamy kalkulatora
+  return clampCalcW(desiredCalcW);
 }
 
 // Wysokość 100% z otwartym kalkulatorem: kalkulator dostaje dokładnie tyle miejsca,
@@ -1136,10 +1177,7 @@ function setCalcOpen(open) {
       targetPdfWidth = Math.max(120, window.innerWidth - (calcWidth + 9));
       pref.set('targetPdfWidth', targetPdfWidth);
     } else {
-      const minW = 320;
-      const maxW = Math.max(minW, window.innerWidth - 140);
-      const desiredW = Math.max(minW, Math.min(maxW, window.innerWidth - targetPdfWidth - 9));
-      updateCalcWidth(desiredW, false);
+      updateCalcWidth(window.innerWidth - targetPdfWidth - 9, false);
     }
     if (!calcFrame.src || calcFrame.src === 'about:blank') {
       calcFrame.src = getCalcUrl();
@@ -1148,17 +1186,11 @@ function setCalcOpen(open) {
   window.focus(); // Fokus pozostaje na dokumencie PDF
   updateMenu();
   fitNow();
-  clearTimeout(resizeTimer);
-  resizeTimer = setTimeout(() => {
-    canvasCache.clear(); loCache.clear(); tlCache.clear();
-    show(start);
-  }, 120);
+  rerenderSoon();
 }
 
 function updateCalcWidth(w, updateTargetPdf = true) {
-  const minW = 320;
-  const maxW = Math.max(minW, window.innerWidth - 140);
-  calcWidth = Math.max(minW, Math.min(maxW, Math.round(w)));
+  calcWidth = clampCalcW(w);
   document.documentElement.style.setProperty('--calc-w', calcWidth + 'px');
   pref.set('calcWidth', calcWidth);
   if (updateTargetPdf) {
@@ -1203,11 +1235,7 @@ if (calcResizer) {
     if (calcFrame) calcFrame.style.pointerEvents = '';
     try { calcResizer.releasePointerCapture(ev.pointerId); } catch {}
     fitNow();
-    clearTimeout(resizeTimer);
-    resizeTimer = setTimeout(() => {
-      canvasCache.clear(); loCache.clear(); tlCache.clear();
-      show(start);
-    }, 120);
+    rerenderSoon();
   };
 
   calcResizer.addEventListener('pointermove', onPointerMove);
@@ -1222,6 +1250,10 @@ window.addEventListener('message', (e) => {
   if (!calcFrame || e.source !== calcFrame.contentWindow) return;   // tylko nasz kalkulator
   if (e.data && e.data.type === 'darkpdf_close_calc') {
     setCalcOpen(false);
+  }
+  // skrót naciśnięty, gdy aktywny był kalkulator – obsługujemy go tak, jakby padł tutaj
+  if (e.data && e.data.type === 'darkpdf_key' && typeof e.data.key === 'string') {
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: e.data.key, shiftKey: !!e.data.shiftKey }));
   }
 });
 
@@ -1240,14 +1272,10 @@ async function setFitMode(mode) {
     }
   }
   fitNow();
-
-  clearTimeout(resizeTimer);
-  resizeTimer = setTimeout(() => {
-    canvasCache.clear(); loCache.clear(); tlCache.clear();
-    show(start);
-  }, 120);
+  rerenderSoon();
 }
 
+// ---------- akcje wspólne dla klawiatury, menu i kalkulatora ----------
 function act(k) {
   switch (k) {
     case 'prev': prev(); break;
@@ -1521,25 +1549,21 @@ function fitNow() {
   });
 }
 
-let resizeTimer;
 window.addEventListener('resize', () => {
   if (calcOpen) {
     if (fitMode === 'height' && !userCustomWidth) {
       snapCalcToHeightFit();
     } else if (targetPdfWidth) {
-      const minW = 320;
-      const maxW = Math.max(minW, window.innerWidth - 140);
-      const desiredW = Math.max(minW, Math.min(maxW, window.innerWidth - targetPdfWidth - 9));
-      updateCalcWidth(desiredW, false);
-    } else if (calcWidth > window.innerWidth - 140) {
-      updateCalcWidth(window.innerWidth - 140, true);
+      updateCalcWidth(window.innerWidth - targetPdfWidth - 9, false);
+    } else if (calcWidth > window.innerWidth - PDF_MIN_W) {
+      updateCalcWidth(calcWidth, true);
     }
   }
   if (!pdf) return;
   fitNow();
   clearTimeout(resizeTimer);
   resizeTimer = setTimeout(() => {
-    canvasCache.clear(); loCache.clear(); tlCache.clear();
+    clearRenderCaches();
     document.documentElement.classList.toggle('mobile', isMobile());
     show(spreadStartOf(start));      // po obrocie telefonu mogła się zmienić liczba stron na ekranie
     updateMenu();
