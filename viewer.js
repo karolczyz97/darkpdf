@@ -58,6 +58,7 @@ let calcOpen = false;
 let calcWidth = parseInt(localStorage.getItem('calcWidth'), 10) || 440;
 let targetPdfWidth = parseInt(localStorage.getItem('targetPdfWidth'), 10) || null;
 let fitMode = localStorage.getItem('fitMode') || 'auto'; // 'auto' | 'width' | 'height'
+let userCustomWidth = false;
 
 const calcSidebar = document.getElementById('calc-sidebar');
 const calcFrame = document.getElementById('calc-frame');
@@ -907,6 +908,53 @@ pageInput.addEventListener('blur', () => {
 pageInput.addEventListener('input', schedulePageJump);
 menu.querySelector('.page-select').addEventListener('click', () => pageInput.focus());
 
+async function getOptimalCalcWidthForHeightFit(s = start) {
+  if (!pdf) return null;
+  const [a, b] = spreadOf(s);
+  let sa = a ? sizeCache.get(a) : null;
+  let sb = b ? sizeCache.get(b) : null;
+  if (a && !sa) {
+    try { sa = await pageBox(a); if (sa) sizeCache.set(a, sa); } catch {}
+  }
+  if (b && !sb) {
+    try { sb = await pageBox(b); if (sb) sizeCache.set(b, sb); } catch {}
+  }
+  if (!sa && !sb) return null;
+
+  const H = Math.max(120, window.innerHeight - 2 * MARGIN);
+  let neededPdfWidth;
+
+  if (!two) {
+    const size = sa || sb;
+    const scaleH = H / size.h;
+    const w = Math.floor(size.w * scaleH);
+    neededPdfWidth = w + 2 * MARGIN;
+  } else {
+    const L = sa || sb, R = sb || sa;
+    const maxH = Math.max(L.h, R.h);
+    const scaleH = H / maxH;
+    const hasBoth = Boolean(sa && sb);
+    const totalPagesW = hasBoth
+      ? (Math.floor(L.w * scaleH) + Math.floor(R.w * scaleH) + GAP)
+      : Math.floor(L.w * scaleH);
+    neededPdfWidth = totalPagesW + 2 * MARGIN;
+  }
+
+  const minW = 320;
+  const maxW = Math.max(minW, window.innerWidth - 140);
+  const desiredCalcW = window.innerWidth - neededPdfWidth - 9;
+  return Math.max(minW, Math.min(maxW, Math.round(desiredCalcW)));
+}
+
+async function snapCalcToHeightFit() {
+  if (!calcOpen || !pdf) return;
+  const optimalW = await getOptimalCalcWidthForHeightFit(start);
+  if (optimalW != null) {
+    updateCalcWidth(optimalW, true);
+    fitNow();
+  }
+}
+
 function setCalcOpen(open) {
   if (open && !pdf) return;
   calcOpen = !!open;
@@ -916,7 +964,9 @@ function setCalcOpen(open) {
   document.documentElement.classList.toggle('calc-open', calcOpen);
 
   if (calcOpen) {
-    if (!targetPdfWidth) {
+    if (fitMode === 'height' && !userCustomWidth) {
+      snapCalcToHeightFit();
+    } else if (!targetPdfWidth) {
       targetPdfWidth = Math.max(120, window.innerWidth - (calcWidth + 9));
       localStorage.setItem('targetPdfWidth', String(targetPdfWidth));
     } else {
@@ -970,6 +1020,7 @@ if (calcResizer) {
 
   const onPointerMove = (ev) => {
     if (!isDragging) return;
+    userCustomWidth = true;
     const delta = ev.clientX - startX;
     updateCalcWidth(initialW + delta, true);
     fitNow();
@@ -1005,14 +1056,22 @@ window.addEventListener('message', (e) => {
   }
 });
 
-function setFitMode(mode) {
+async function setFitMode(mode) {
   fitMode = mode;
   localStorage.setItem('fitMode', fitMode);
   document.documentElement.classList.toggle('fit-width', fitMode === 'width');
   document.documentElement.classList.toggle('fit-height', fitMode === 'height');
   flash(fitMode === 'width' ? 'Zablokowano: Szerokość 100%' : (fitMode === 'height' ? 'Zablokowano: Wysokość 100%' : 'Dopasowanie: Auto'));
   updateMenu();
+
+  if (fitMode === 'height') {
+    userCustomWidth = false;
+    if (calcOpen) {
+      await snapCalcToHeightFit();
+    }
+  }
   fitNow();
+
   clearTimeout(resizeTimer);
   resizeTimer = setTimeout(() => {
     canvasCache.clear(); loCache.clear(); tlCache.clear();
@@ -1090,6 +1149,9 @@ function act(k) {
       two = !two;
       pref.set('two', two);
       flash(two ? 'Dwie strony' : 'Jedna strona');
+      if (fitMode === 'height' && calcOpen && !userCustomWidth) {
+        snapCalcToHeightFit();
+      }
       go(spreadStartOf(anchor));
       break;
     }
@@ -1281,7 +1343,9 @@ function fitNow() {
 let resizeTimer;
 window.addEventListener('resize', () => {
   if (calcOpen) {
-    if (targetPdfWidth) {
+    if (fitMode === 'height' && !userCustomWidth) {
+      snapCalcToHeightFit();
+    } else if (targetPdfWidth) {
       const minW = 320;
       const maxW = Math.max(minW, window.innerWidth - 140);
       const desiredW = Math.max(minW, Math.min(maxW, window.innerWidth - targetPdfWidth - 9));
