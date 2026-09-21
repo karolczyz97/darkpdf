@@ -885,10 +885,6 @@ function updateMenu() {
 
   if (toggleBtn) {
     toggleBtn.classList.toggle('open', popoverOpen);
-    const iconMenu = toggleBtn.querySelector('.icon-menu');
-    const iconClose = toggleBtn.querySelector('.icon-close');
-    if (iconMenu) iconMenu.hidden = popoverOpen;
-    if (iconClose) iconClose.hidden = !popoverOpen;
     toggleBtn.dataset.tip = popoverOpen ? 'Zamknij menu opcji (M)' : 'Otwórz menu opcji (M)';
   }
 }
