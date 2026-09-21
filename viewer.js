@@ -753,12 +753,15 @@ window.addEventListener('drop', (e) => {
 
 // ---------- dolny pasek menu ----------
 const menu = document.getElementById('menu');
+const popoverEl = document.getElementById('menu-popover');
 const pinBtn = menu.querySelector('.menu-pin');
+const toggleBtn = menu.querySelector('.menu-toggle');
 const pageInput = menu.querySelector('.page-input');
 const totalSpan = menu.querySelector('.total');
 const tipEl = document.getElementById('menu-tip');
 
 let pinned = pref.get('menuPinned', false);
+let popoverOpen = pref.get('popoverOpen', true);
 let menuTimer = null, tipTimer = null, expandTimer = null, collapseTimer = null;
 
 function hideTip() {
@@ -820,7 +823,24 @@ function showMenu() {
   scheduleHide();
 }
 
-const label = (text, key) => `${text} <span class="k">(${key})</span>`;
+function setBtnLabel(btn, text, key) {
+  if (!btn) return;
+  const labelEl = btn.querySelector('.label-text');
+  if (labelEl) labelEl.textContent = text;
+  const kEl = btn.querySelector('.k');
+  if (kEl && key) kEl.textContent = key;
+}
+
+function setPopoverOpen(open) {
+  popoverOpen = !!open;
+  pref.set('popoverOpen', popoverOpen);
+  if (popoverEl) popoverEl.hidden = !popoverOpen;
+  updateMenu();
+}
+
+function togglePopover(force) {
+  setPopoverOpen(force !== undefined ? force : !popoverOpen);
+}
 
 function updateMenu() {
   const [a, b] = spreadOf(start);
@@ -828,35 +848,48 @@ function updateMenu() {
     pageInput.value = (a && b ? `${a}–${b}` : `${a || b}`);
   }
   if (totalSpan) totalSpan.textContent = `/ ${numPages}`;
+  if (popoverEl) popoverEl.hidden = !popoverOpen;
+
   const calcBtn = menu.querySelector('[data-k="calc"]');
   if (calcBtn) {
     calcBtn.classList.toggle('active', calcOpen);
-    calcBtn.innerHTML = label(calcOpen ? 'Ukryj kalkulator' : 'Kalkulator', 'K');
+    setBtnLabel(calcBtn, calcOpen ? 'Ukryj kalkulator' : 'Kalkulator', 'K');
   }
   const fitWBtn = menu.querySelector('[data-k="fit-w"]');
   if (fitWBtn) {
     fitWBtn.classList.toggle('active', fitMode === 'width');
-    fitWBtn.innerHTML = label(fitMode === 'width' ? 'Szerokość [100%]' : 'Szerokość 100%', 'W');
+    setBtnLabel(fitWBtn, fitMode === 'width' ? 'Szerokość [100%]' : 'Szerokość 100%', 'W');
   }
   const fitHBtn = menu.querySelector('[data-k="fit-h"]');
   if (fitHBtn) {
     fitHBtn.classList.toggle('active', fitMode === 'height');
-    fitHBtn.innerHTML = label(fitMode === 'height' ? 'Wysokość [100%]' : 'Wysokość 100%', 'H');
+    setBtnLabel(fitHBtn, fitMode === 'height' ? 'Wysokość [100%]' : 'Wysokość 100%', 'H');
   }
-  menu.querySelector('[data-k="pages"]').innerHTML = label(two ? 'Jedna strona' : 'Dwie strony', 'P');
+  setBtnLabel(menu.querySelector('[data-k="pages"]'), two ? 'Jedna strona' : 'Dwie strony', 'P');
   const pr = menu.querySelector('[data-k="pairing"]');
-  pr.innerHTML = label(pairing === 'odd' ? 'Pary 1–2' : 'Pary 1, 2–3', 'O');
-  pr.hidden = !two;
-  menu.querySelector('[data-k="theme"]').innerHTML = label(theme === 'gemini' ? 'Motyw Gemini' : 'Motyw zwykły', 'T');
-  menu.querySelector('[data-k="dark"]').innerHTML = label(dark ? 'Ciemny' : 'Jasny', 'D');
-  menu.querySelector('[data-k="crop"]').innerHTML = label(crop ? 'Z marginesami' : 'Przytnij marginesy', 'C');
-  menu.querySelector('[data-k="rotate"]').innerHTML = label('Obróć', 'R');
+  if (pr) {
+    setBtnLabel(pr, pairing === 'odd' ? 'Pary 1–2' : 'Pary 1, 2–3', 'O');
+    pr.hidden = !two;
+  }
+  setBtnLabel(menu.querySelector('[data-k="theme"]'), theme === 'gemini' ? 'Motyw Gemini' : 'Motyw zwykły', 'T');
+  setBtnLabel(menu.querySelector('[data-k="dark"]'), dark ? 'Jasny motyw' : 'Ciemny motyw', 'D');
+  setBtnLabel(menu.querySelector('[data-k="crop"]'), crop ? 'Z marginesami' : 'Przytnij marginesy', 'C');
+  setBtnLabel(menu.querySelector('[data-k="rotate"]'), 'Obróć o 90°', 'R');
 
   if (pinBtn) {
     pinBtn.classList.toggle('pinned', pinned);
     pinBtn.querySelector('.icon-unlocked').hidden = pinned;
     pinBtn.querySelector('.icon-locked').hidden = !pinned;
-    pinBtn.dataset.tip = pinned ? 'Odblokuj dymek (auto-ukrywanie)' : 'Zablokuj dymek strony na stałe';
+    pinBtn.dataset.tip = pinned ? 'Odblokuj pasek (auto-ukrywanie)' : 'Zablokuj pasek na stałe';
+  }
+
+  if (toggleBtn) {
+    toggleBtn.classList.toggle('open', popoverOpen);
+    const iconMenu = toggleBtn.querySelector('.icon-menu');
+    const iconClose = toggleBtn.querySelector('.icon-close');
+    if (iconMenu) iconMenu.hidden = popoverOpen;
+    if (iconClose) iconClose.hidden = !popoverOpen;
+    toggleBtn.dataset.tip = popoverOpen ? 'Zamknij menu opcji (M)' : 'Otwórz menu opcji (M)';
   }
 }
 
@@ -1102,11 +1135,14 @@ function act(k) {
       updateMenu();
       if (pinned) {
         clearTimeout(menuTimer);
-        flash('Dymek strony zablokowany (na stałe)', 1200);
+        flash('Pasek zablokowany (na stałe)', 1200);
       } else {
         if (!menu.matches(':hover')) menuTimer = setTimeout(hideMenu, 2000);
-        flash('Auto-ukrywanie dymka włączone', 1200);
+        flash('Auto-ukrywanie paska włączone', 1200);
       }
+      break;
+    case 'toggle-menu':
+      togglePopover();
       break;
     case 'full':
       document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen();
@@ -1189,7 +1225,10 @@ window.addEventListener('click', (e) => {
   if (!pdf) return;
   if (String(getSelection())) return;
   if (e.target.closest('#menu, #calc-sidebar, #calc-resizer')) return;
-  if (pinned) return;
+  if (pinned) {
+    if (popoverOpen) setPopoverOpen(false);
+    return;
+  }
   menu.hidden ? showMenu() : hideMenu();
 });
 
@@ -1294,6 +1333,12 @@ window.addEventListener('keydown', (e) => {
     return;
   }
 
+  if (k === 'Escape' && popoverOpen) {
+    setPopoverOpen(false);
+    e.preventDefault();
+    return;
+  }
+
   if (!menu.hidden && !pinned) scheduleHide();
 
   const keyActions = {
@@ -1302,7 +1347,8 @@ window.addEventListener('keydown', (e) => {
     f: 'full', F: 'full', c: 'crop', C: 'crop', r: 'rotate', R: 'rotate',
     k: 'calc', K: 'calc',
     w: 'fit-w', W: 'fit-w',
-    h: 'fit-h', H: 'fit-h'
+    h: 'fit-h', H: 'fit-h',
+    m: 'toggle-menu', M: 'toggle-menu'
   };
   if (keyActions[k]) { act(keyActions[k]); e.preventDefault(); return; }
 
@@ -1316,7 +1362,7 @@ window.addEventListener('keydown', (e) => {
   if (k === '?') {
     flash('→ ↓ Spacja PgDn  następne\n← ↑ PgUp  poprzednie\nHome / End  początek / koniec\n' +
           'numer (lub Enter)  skok do strony\nShift + strzałka / scroll  skok o 10\nB  zakładka na tej stronie\n' +
-          'K  kalkulator z boku\nW  zablokuj szerokość 100%\nH  zablokuj wysokość 100%\n' +
+          'M  menu opcji\nK  kalkulator z boku\nW  zablokuj szerokość 100%\nH  zablokuj wysokość 100%\n' +
           'C  przycinanie marginesów\nR  obrót o 90°\n' +
           'P  jedna / dwie strony\nD  tryb ciemny\nT  motyw zwykły / Gemini\nO  pary nieparzyste / parzyste\n' +
           'F  pełny ekran\ndwuklik  pełny ekran\nCtrl+O  otwórz plik\nkliknięcie  pasek z przyciskami', 6000);
