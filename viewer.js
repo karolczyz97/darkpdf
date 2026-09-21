@@ -179,7 +179,7 @@ function getCalcUrl() {
     }
   }
   const sep = base.includes('?') ? '&' : '?';
-  return `${base}${sep}embed=1&side=1&theme=${themeParam}&v=47`;
+  return `${base}${sep}embed=1&side=1&theme=${themeParam}&v=48`;
 }
 
 let hintTimer;
@@ -275,49 +275,22 @@ async function mapConcurrent(items, limit, fn) {
 
 // Generuje reprezentatywną próbkę stron do wyznaczenia idealnego przycięcia:
 // Bezpieczne dla dowolnej liczby stron (od 1 strony do tysięcy)
-function getCropCandidatePages(n, totalPages, maxSamples = 28) {
-  if (!totalPages || totalPages < 1) return [];
-  const safeN = Math.max(1, Math.min(totalPages, n || 1));
-  const parity = safeN % 2;
-
-  // Dla małych dokumentów (mniej lub równo maxSamples stron) bierzemy po prostu wszystkie strony o danej parzystości
-  if (totalPages <= maxSamples) {
-    const list = [];
-    for (let p = 1; p <= totalPages; p++) {
-      if (p % 2 === parity) list.push(p);
-    }
-    return list.length ? list : [safeN];
+function getCropCandidatePages(n, total, max = CROP_SAMPLES) {
+  if (!total) return [];
+  n = Math.max(1, Math.min(total, n || 1));
+  const parity = n % 2;
+  const all = [];
+  for (let p = parity || 2; p <= total; p += 2) all.push(p);
+  if (all.length <= max) return all;                     // krótki dokument: bierzemy wszystko
+  const pages = new Set([n]);
+  for (let d = 2; d <= 24 && pages.size < 8; d += 2) {   // sąsiedztwo bieżącej strony
+    if (n + d <= total) pages.add(n + d);
+    if (n - d >= 1) pages.add(n - d);
   }
-
-  const pageSet = new Set();
-  pageSet.add(safeN);
-
-  // 1. Lokalne otoczenie wokół n (ta sama parzystość)
-  for (let d = 2; d <= 24 && pageSet.size < 8; d += 2) {
-    if (safeN + d <= totalPages) pageSet.add(safeN + d);
-    if (safeN - d >= 1) pageSet.add(safeN - d);
-  }
-
-  // 2. Równomierny rozkład po całym dokumencie
-  const targetGlobal = Math.max(16, maxSamples - pageSet.size);
-  for (let i = 0; i < targetGlobal; i++) {
-    const ratio = (i + 0.5) / targetGlobal;
-    let p = Math.round(1 + ratio * (totalPages - 1));
-    if (p % 2 !== parity) {
-      p = (p + 1 <= totalPages) ? p + 1 : p - 1;
-    }
-    p = Math.max(1, Math.min(totalPages, p));
-    if (p % 2 === parity) pageSet.add(p);
-  }
-
-  // 3. Wypełnienie jeśli zostały wolne sloty
-  for (let p = (parity === 1 ? 1 : 2); p <= totalPages && pageSet.size < maxSamples; p += 2) {
-    pageSet.add(p);
-  }
-
-  return Array.from(pageSet)
-    .filter(p => Number.isInteger(p) && p >= 1 && p <= totalPages)
-    .sort((a, b) => a - b);
+  const rest = max - pages.size;                         // reszta równo po całym dokumencie
+  for (let i = 0; i < rest; i++) pages.add(all[Math.floor(((i + 0.5) / rest) * all.length)]);
+  for (const p of all) { if (pages.size >= max) break; pages.add(p); }   // dopełnienie po kolizjach
+  return [...pages].sort((x, y) => x - y);
 }
 
 // Bierzemy szeroką próbkę stron z tej samej grupy i najszerszy wspólny obszar treści,
@@ -1037,43 +1010,38 @@ function updateMenu() {
   if (totalSpan) totalSpan.textContent = `/ ${numPages}`;
   if (popoverEl) popoverEl.hidden = !popoverOpen;
 
-  const calcBtn = menu.querySelector('[data-k="calc"]');
-  if (calcBtn) {
-    calcBtn.classList.toggle('active', calcOpen);
-    setBtnLabel(calcBtn, calcOpen ? 'Ukryj kalkulator' : 'Kalkulator', 'K');
+  // [klucz przycisku, etykieta, skrót, czy podświetlony]
+  const buttons = [
+    ['calc', calcOpen ? 'Ukryj kalkulator' : 'Kalkulator', 'K', calcOpen],
+    ['fit-w', fitMode === 'width' ? 'Szerokość [100%]' : 'Szerokość 100%', 'W', fitMode === 'width'],
+    ['fit-h', fitMode === 'height' ? 'Wysokość [100%]' : 'Wysokość 100%', 'H', fitMode === 'height'],
+    ['pages', two ? 'Jedna strona' : 'Dwie strony', 'P'],
+    ['pairing', pairing === 'odd' ? 'Pary 1–2' : 'Pary 1, 2–3', 'O'],
+    ['dark', COLOR_LABELS[colorMode] || 'Tryb: Ciemny', 'D'],
+    ['theme', palette === 'gemini' ? 'Motyw: Gemini' : 'Motyw: Systemowy', 'T'],
+    ['crop', crop ? 'Z marginesami' : 'Przytnij marginesy', 'C'],
+    ['rotate', 'Obróć o 90°', 'R']
+  ];
+  for (const [k, text, key, active] of buttons) {
+    const btn = menu.querySelector(`[data-k="${k}"]`);
+    if (!btn) continue;
+    setBtnLabel(btn, text, key);
+    if (active !== undefined) btn.classList.toggle('active', active);
   }
-  const fitWBtn = menu.querySelector('[data-k="fit-w"]');
-  if (fitWBtn) {
-    fitWBtn.classList.toggle('active', fitMode === 'width');
-    setBtnLabel(fitWBtn, fitMode === 'width' ? 'Szerokość [100%]' : 'Szerokość 100%', 'W');
-  }
-  const fitHBtn = menu.querySelector('[data-k="fit-h"]');
-  if (fitHBtn) {
-    fitHBtn.classList.toggle('active', fitMode === 'height');
-    setBtnLabel(fitHBtn, fitMode === 'height' ? 'Wysokość [100%]' : 'Wysokość 100%', 'H');
-  }
-  setBtnLabel(menu.querySelector('[data-k="pages"]'), two ? 'Jedna strona' : 'Dwie strony', 'P');
   const pr = menu.querySelector('[data-k="pairing"]');
-  if (pr) {
-    setBtnLabel(pr, pairing === 'odd' ? 'Pary 1–2' : 'Pary 1, 2–3', 'O');
-    pr.hidden = !two;
-  }
+  if (pr) pr.hidden = !two;
   const darkBtn = menu.querySelector('[data-k="dark"]');
   if (darkBtn) {
     const iconEl = darkBtn.querySelector('.icon');
     if (iconEl && DARK_ICONS[colorMode]) iconEl.innerHTML = DARK_ICONS[colorMode];
-    setBtnLabel(darkBtn, COLOR_LABELS[colorMode] || 'Tryb: Ciemny', 'D');
     darkBtn.dataset.tip = `Przełącz tryb: Ciemny / Jasny / Auto (${COLOR_LABELS[colorMode]})`;
   }
   const themeBtn = menu.querySelector('[data-k="theme"]');
   if (themeBtn) {
     const iconEl = themeBtn.querySelector('.icon');
     if (iconEl && THEME_ICONS[palette]) iconEl.innerHTML = THEME_ICONS[palette];
-    setBtnLabel(themeBtn, palette === 'gemini' ? 'Motyw: Gemini' : 'Motyw: Systemowy', 'T');
-    themeBtn.dataset.tip = `Przełącz motyw: Gemini / Systemowy`;
+    themeBtn.dataset.tip = 'Przełącz motyw: Gemini / Systemowy';
   }
-  setBtnLabel(menu.querySelector('[data-k="crop"]'), crop ? 'Z marginesami' : 'Przytnij marginesy', 'C');
-  setBtnLabel(menu.querySelector('[data-k="rotate"]'), 'Obróć o 90°', 'R');
 
   if (pinBtn) {
     pinBtn.classList.toggle('pinned', pinned);
