@@ -3,6 +3,19 @@ const PDFJS = new URL('lib/pdfjs/', import.meta.url).href;
 const pdfjsLib = await import(PDFJS + 'build/pdf.min.mjs');
 pdfjsLib.GlobalWorkerOptions.workerSrc = PDFJS + 'build/pdf.worker.min.mjs';
 
+import {
+  initCalcPanel,
+  isCalcOpen,
+  setCalcOpen,
+  toggleCalc,
+  getCalcStageWidth,
+  resetUserCustomWidth,
+  isUserCustomWidth,
+  snapCalcToHeightFit,
+  handleCalcResize,
+  sendThemeToCalc
+} from './calc-panel.js';
+
 // Pamięć podręczna aplikacji: po pierwszej wizycie czytnik otwiera się też offline
 if ('serviceWorker' in navigator && location.protocol === 'https:') {
   navigator.serviceWorker.register(new URL('sw.js', import.meta.url)).catch(() => {});
@@ -95,21 +108,7 @@ function lru(max = Infinity) {
   };
 }
 
-// ---- Kalkulator i tryb dopasowania ----
-const CALC_MIN_W = 320;         // najwęższy sensowny kalkulator
-const PDF_MIN_W = 140;          // tyle miejsca zostawiamy zawsze na PDF
-const clampCalcW = (w) => Math.max(CALC_MIN_W, Math.min(Math.max(CALC_MIN_W, window.innerWidth - PDF_MIN_W), Math.round(w)));
-let calcOpen = false;
-let calcWidth = pref.get('calcWidth', 440);
-let targetPdfWidth = pref.get('targetPdfWidth', null);
 let fitMode = pref.get('fitMode', 'auto'); // 'auto' | 'width' | 'height'
-let userCustomWidth = false;
-
-const calcSidebar = document.getElementById('calc-sidebar');
-const calcFrame = document.getElementById('calc-frame');
-const calcResizer = document.getElementById('calc-resizer');
-
-document.documentElement.style.setProperty('--calc-w', calcWidth + 'px');
 document.documentElement.classList.toggle('fit-width', fitMode === 'width');
 document.documentElement.classList.toggle('fit-height', fitMode === 'height');
 
@@ -146,11 +145,7 @@ function applyTheme() {
   const isDark = isDarkNow();
   document.documentElement.classList.toggle('dark', isDark);
   document.documentElement.classList.toggle('gemini', isDark && palette === 'gemini');
-  if (calcFrame && calcFrame.src && calcFrame.src !== 'about:blank') {
-    // Wysyłamy tryb już rozstrzygnięty (ciemny/jasny): ramka dziedziczy color-scheme czytnika,
-    // więc „auto” liczone wewnątrz kalkulatora mogłoby wyjść inaczej niż tutaj.
-    try { calcFrame.contentWindow?.postMessage({ type: 'darkpdf_theme', mode: isDark ? 'dark' : 'light', palette }, calcOrigin()); } catch {}
-  }
+  sendThemeToCalc(isDark, palette);
   if (menuReady) updateMenu();
 }
 
@@ -174,27 +169,6 @@ function togglePalette() {
 applyTheme();
 document.documentElement.classList.add('empty');
 
-function calcOrigin() {
-  try { return new URL(calcFrame.src, location.href).origin; } catch { return '*'; }
-}
-
-function getCalcUrl() {
-  const custom = pref.get('calcUrl', null) || window.DARKPDF_CALC_URL;
-  let base = custom;
-  if (!base) {
-    if (location.hostname === 'localhost' || location.hostname === '127.0.0.1') {
-      base = '/calc/index.html';
-    } else if (location.hostname.endsWith('github.io')) {
-      const user = location.hostname.split('.')[0];
-      base = `https://${user}.github.io/calc/`;
-    } else {
-      base = '../calc/index.html';
-    }
-  }
-  const sep = base.includes('?') ? '&' : '?';
-  return `${base}${sep}embed=1&side=1&mode=${isDarkNow() ? 'dark' : 'light'}&palette=${palette}&v=51`;
-}
-
 let hintTimer;
 function flash(text, ms = 1200) {
   hint.textContent = text;
@@ -202,6 +176,27 @@ function flash(text, ms = 1200) {
   clearTimeout(hintTimer);
   if (ms) hintTimer = setTimeout(() => { hint.hidden = true; }, ms);
 }
+
+initCalcPanel({
+  pref,
+  stage,
+  isMobile,
+  isPdfLoaded: () => Boolean(pdf),
+  getStartPage: () => start,
+  getPageBox: (n) => pageBox(n),
+  getPageSize: (n) => sizeCache.get(n),
+  setPageSize: (n, b) => sizeCache.set(n, b),
+  spreadOf: (s) => spreadOf(s),
+  showTwo: () => showTwo(),
+  getFitMode: () => fitMode,
+  MARGIN,
+  GAP,
+  fitNow,
+  rerenderSoon,
+  updateMenu,
+  getTheme: () => ({ isDark: isDarkNow(), palette }),
+  flash
+});
 
 // ---------- rozkład stron ----------
 function spreadStartOf(p) {
@@ -426,7 +421,7 @@ async function detectContent(page, full) {
 }
 
 function getStageDimensions() {
-  const calcW = calcOpen && !isMobile() ? (calcWidth + 9) : 0;
+  const calcW = getCalcStageWidth();
   const W = Math.max(120, (window.innerWidth - calcW) - 2 * MARGIN - (showTwo() ? GAP : 0));
   const H = Math.max(120, window.innerHeight - 2 * MARGIN);
   return { W, H };
@@ -929,9 +924,8 @@ async function renderRecent() {
 function setEmpty(v) {
   document.documentElement.classList.toggle('empty', v);
   if (v) {
-    if (calcOpen) {
-      calcOpen = false;
-      document.documentElement.classList.remove('calc-open');
+    if (isCalcOpen()) {
+      setCalcOpen(false);
     }
     renderRecent(); renderBookmarks();
   }
@@ -1022,7 +1016,7 @@ function updateMenu() {
 
   // [klucz przycisku, etykieta, skrót, czy podświetlony]
   const buttons = [
-    ['calc', calcOpen ? 'Ukryj kalkulator' : 'Kalkulator', 'K', calcOpen],
+    ['calc', isCalcOpen() ? 'Ukryj kalkulator' : 'Kalkulator', 'K', isCalcOpen()],
     ['fit-w', fitMode === 'width' ? 'Szerokość [100%]' : 'Szerokość 100%', 'W', fitMode === 'width'],
     ['fit-h', fitMode === 'height' ? 'Wysokość [100%]' : 'Wysokość 100%', 'H', fitMode === 'height'],
     ['pages', two ? 'Jedna strona' : 'Dwie strony', 'P'],
@@ -1111,152 +1105,6 @@ pageInput.addEventListener('blur', () => {
 pageInput.addEventListener('input', schedulePageJump);
 menu.querySelector('.page-select').addEventListener('click', () => pageInput.focus());
 
-// ---------- panel kalkulatora: otwieranie, szerokość, rozdzielacz, dopasowanie do wysokości ----------
-async function getOptimalCalcWidthForHeightFit(s = start) {
-  if (!pdf) return null;
-  const [a, b] = spreadOf(s);
-  let sa = a ? sizeCache.get(a) : null;
-  let sb = b ? sizeCache.get(b) : null;
-  if (a && !sa) {
-    try { sa = await pageBox(a); if (sa) sizeCache.set(a, sa); } catch {}
-  }
-  if (b && !sb) {
-    try { sb = await pageBox(b); if (sb) sizeCache.set(b, sb); } catch {}
-  }
-  if (!sa && !sb) return null;
-
-  const H = Math.max(120, window.innerHeight - 2 * MARGIN);
-  let neededPdfWidth;
-
-  if (!showTwo()) {
-    const size = sa || sb;
-    const scaleH = H / size.h;
-    const w = Math.floor(size.w * scaleH);
-    neededPdfWidth = w + 2 * MARGIN + 4;
-  } else {
-    const L = sa || sb, R = sb || sa;
-    const maxH = Math.max(L.h, R.h);
-    const scaleH = H / maxH;
-    const hasBoth = Boolean(sa && sb);
-    const totalPagesW = hasBoth
-      ? (Math.floor(L.w * scaleH) + Math.floor(R.w * scaleH) + GAP)
-      : Math.floor(L.w * scaleH);
-    neededPdfWidth = totalPagesW + 2 * MARGIN + 4;
-  }
-
-  const desiredCalcW = window.innerWidth - neededPdfWidth - 9;
-  if (desiredCalcW < CALC_MIN_W) return null;   // strona w 100% wysokości się nie mieści – nie ruszamy kalkulatora
-  return clampCalcW(desiredCalcW);
-}
-
-// Wysokość 100% z otwartym kalkulatorem: kalkulator dostaje dokładnie tyle miejsca,
-// ile zostaje obok strony. Jeśli strona w pełnej wysokości się nie mieści, nie zmieniamy nic.
-async function snapCalcToHeightFit(announce = false) {
-  if (!calcOpen || !pdf) return;
-  const optimalW = await getOptimalCalcWidthForHeightFit(start);
-  if (optimalW != null) {
-    updateCalcWidth(optimalW, true);
-    fitNow();
-  } else if (announce) {
-    flash('Strona w 100% wysokości nie zmieści się obok kalkulatora – szerokość bez zmian', 2500);
-  }
-}
-
-function setCalcOpen(open) {
-  if (open && !pdf) return;
-  calcOpen = !!open;
-  pref.set('calcOpen', calcOpen);
-  document.documentElement.classList.add('calc-animating');
-  setTimeout(() => document.documentElement.classList.remove('calc-animating'), 250);
-  document.documentElement.classList.toggle('calc-open', calcOpen);
-
-  if (calcOpen) {
-    if (fitMode === 'height' && !userCustomWidth) {
-      snapCalcToHeightFit();
-    } else if (!targetPdfWidth) {
-      targetPdfWidth = Math.max(120, window.innerWidth - (calcWidth + 9));
-      pref.set('targetPdfWidth', targetPdfWidth);
-    } else {
-      updateCalcWidth(window.innerWidth - targetPdfWidth - 9, false);
-    }
-    if (!calcFrame.src || calcFrame.src === 'about:blank') {
-      calcFrame.src = getCalcUrl();
-    }
-  }
-  window.focus(); // Fokus pozostaje na dokumencie PDF
-  updateMenu();
-  fitNow();
-  rerenderSoon();
-}
-
-function updateCalcWidth(w, updateTargetPdf = true) {
-  calcWidth = clampCalcW(w);
-  document.documentElement.style.setProperty('--calc-w', calcWidth + 'px');
-  pref.set('calcWidth', calcWidth);
-  if (updateTargetPdf) {
-    targetPdfWidth = Math.max(120, window.innerWidth - (calcWidth + 9));
-    pref.set('targetPdfWidth', targetPdfWidth);
-  }
-}
-
-// Przeciąganie krawędzi kalkulatora (resizer)
-if (calcResizer) {
-  let startX = 0, initialW = 0, isDragging = false;
-  calcResizer.addEventListener('pointerdown', (e) => {
-    if (e.button !== 0) return;
-    startX = e.clientX;
-    initialW = calcWidth;
-    calcResizer.classList.add('dragging');
-    calcSidebar.style.transition = 'none';
-    stage.style.transition = 'none';
-    document.body.style.userSelect = 'none';
-    document.body.style.cursor = 'ew-resize';
-    if (calcFrame) calcFrame.style.pointerEvents = 'none';
-    try { calcResizer.setPointerCapture(e.pointerId); } catch {}
-    isDragging = true;
-  });
-
-  const onPointerMove = (ev) => {
-    if (!isDragging) return;
-    userCustomWidth = true;
-    const delta = ev.clientX - startX;
-    updateCalcWidth(initialW + delta, true);
-    fitNow();
-  };
-
-  const onPointerUp = (ev) => {
-    if (!isDragging) return;
-    isDragging = false;
-    calcResizer.classList.remove('dragging');
-    calcSidebar.style.transition = '';
-    stage.style.transition = '';
-    document.body.style.userSelect = '';
-    document.body.style.cursor = '';
-    if (calcFrame) calcFrame.style.pointerEvents = '';
-    try { calcResizer.releasePointerCapture(ev.pointerId); } catch {}
-    fitNow();
-    rerenderSoon();
-  };
-
-  calcResizer.addEventListener('pointermove', onPointerMove);
-  calcResizer.addEventListener('pointerup', onPointerUp);
-  calcResizer.addEventListener('pointercancel', onPointerUp);
-}
-
-// Nasłuchiwanie komunikatów z ramki kalkulatora
-document.getElementById('calc-close')?.addEventListener('click', () => setCalcOpen(false));
-
-window.addEventListener('message', (e) => {
-  if (!calcFrame || e.source !== calcFrame.contentWindow) return;   // tylko nasz kalkulator
-  if (e.data && e.data.type === 'darkpdf_close_calc') {
-    setCalcOpen(false);
-  }
-  // skrót naciśnięty, gdy aktywny był kalkulator – obsługujemy go tak, jakby padł tutaj
-  if (e.data && e.data.type === 'darkpdf_key' && typeof e.data.key === 'string') {
-    window.dispatchEvent(new KeyboardEvent('keydown', { key: e.data.key, shiftKey: !!e.data.shiftKey }));
-  }
-});
-
 async function setFitMode(mode) {
   fitMode = mode;
   pref.set('fitMode', fitMode);
@@ -1266,8 +1114,8 @@ async function setFitMode(mode) {
   updateMenu();
 
   if (fitMode === 'height') {
-    userCustomWidth = false;
-    if (calcOpen) {
+    resetUserCustomWidth();
+    if (isCalcOpen()) {
       await snapCalcToHeightFit(true);
     }
   }
@@ -1283,7 +1131,7 @@ function act(k) {
     case 'open': pickFile(); break;
     case 'calc':
       if (!pdf) break;
-      setCalcOpen(!calcOpen);
+      toggleCalc();
       break;
     case 'fit-w':
       if (!pdf) break;
@@ -1342,7 +1190,7 @@ function act(k) {
       two = !two;
       pref.set('two', two);
       flash(two ? 'Dwie strony' : 'Jedna strona');
-      if (fitMode === 'height' && calcOpen && !userCustomWidth) {
+      if (fitMode === 'height' && isCalcOpen() && !isUserCustomWidth()) {
         snapCalcToHeightFit();
       }
       go(spreadStartOf(anchor));
@@ -1478,7 +1326,7 @@ window.addEventListener('keydown', (e) => {
       e.preventDefault();
       return;
     }
-    if (calcOpen) {
+    if (isCalcOpen()) {
       setCalcOpen(false);
       e.preventDefault();
       return;
@@ -1550,15 +1398,7 @@ function fitNow() {
 }
 
 window.addEventListener('resize', () => {
-  if (calcOpen) {
-    if (fitMode === 'height' && !userCustomWidth) {
-      snapCalcToHeightFit();
-    } else if (targetPdfWidth) {
-      updateCalcWidth(window.innerWidth - targetPdfWidth - 9, false);
-    } else if (calcWidth > window.innerWidth - PDF_MIN_W) {
-      updateCalcWidth(calcWidth, true);
-    }
-  }
+  handleCalcResize();
   if (!pdf) return;
   fitNow();
   clearTimeout(resizeTimer);
