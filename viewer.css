@@ -1,15 +1,15 @@
 :root {
   color-scheme: dark;
-  --ui-bg: rgba(27, 28, 30, .96);      /* ciemniejsze tło z palety dark */
-  --ui-bg-solid: #1b1c1e;
+  --ui-bg: rgba(19, 20, 22, .97);      /* jeszcze ciemniejsze tło menu */
+  --ui-bg-solid: #131416;
   --ui-stage-bg: #0b0c0d;
-  --ui-resizer-bg: #2c2c2c;
+  --ui-resizer-bg: #202124;
   --ui-text: #e6e6e6;
   --ui-text-strong: #fff;
   --ui-text-dim: #8a8a8a;
-  --ui-line: #2c2c2c;
-  --ui-hover: #242628;
-  --ui-fill: #151617;
+  --ui-line: rgba(255, 255, 255, .08);
+  --ui-hover: rgba(255, 255, 255, .08);
+  --ui-fill: rgba(255, 255, 255, .05);
   --ui-accent: #8ab4f8;
   --ui-accent-soft: rgba(138, 180, 248, .14);
   --ui-font: system-ui, sans-serif;
@@ -17,16 +17,16 @@
 }
 html.gemini {
   color-scheme: dark;
-  --ui-bg: #1f2022;                    /* ciemniejszy kolor kontenera z palety Gemini */
-  --ui-bg-solid: #1f2022;
+  --ui-bg: rgba(19, 20, 22, .97);
+  --ui-bg-solid: #131416;
   --ui-stage-bg: #0b0c0d;
-  --ui-resizer-bg: #2c2c2c;
+  --ui-resizer-bg: #202124;
   --ui-text: #e3e3e3;
   --ui-text-strong: #fff;
   --ui-text-dim: #9a9b9c;
-  --ui-line: #2c2c2c;                  /* subtelna linia z palety */
-  --ui-hover: #282a2c;                 /* kolor przycisków z palety */
-  --ui-fill: #171819;
+  --ui-line: rgba(255, 255, 255, .08);
+  --ui-hover: rgba(255, 255, 255, .08);
+  --ui-fill: rgba(255, 255, 255, .05);
   --ui-accent: #a8c7fa;
   --ui-accent-soft: rgba(168, 199, 250, .14);
   --ui-font: "Google Sans Flex", "Google Sans", "Helvetica Neue", system-ui, sans-serif;
