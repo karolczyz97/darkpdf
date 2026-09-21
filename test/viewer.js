@@ -128,8 +128,9 @@ function applyTheme() {
   document.documentElement.classList.toggle('dark', isDark);
   document.documentElement.classList.toggle('gemini', isDark && palette === 'gemini');
   if (calcFrame && calcFrame.src && calcFrame.src !== 'about:blank') {
-    // kalkulator ma ten sam model: tryb (ciemny / jasny / auto) × paleta (system / gemini)
-    try { calcFrame.contentWindow?.postMessage({ type: 'darkpdf_theme', mode: colorMode, palette }, calcOrigin()); } catch {}
+    // Wysyłamy tryb już rozstrzygnięty (ciemny/jasny): ramka dziedziczy color-scheme czytnika,
+    // więc „auto” liczone wewnątrz kalkulatora mogłoby wyjść inaczej niż tutaj.
+    try { calcFrame.contentWindow?.postMessage({ type: 'darkpdf_theme', mode: isDark ? 'dark' : 'light', palette }, calcOrigin()); } catch {}
   }
   if (menuReady) updateMenu();
 }
@@ -172,7 +173,7 @@ function getCalcUrl() {
     }
   }
   const sep = base.includes('?') ? '&' : '?';
-  return `${base}${sep}embed=1&side=1&mode=${colorMode}&palette=${palette}&v=50`;
+  return `${base}${sep}embed=1&side=1&mode=${isDarkNow() ? 'dark' : 'light'}&palette=${palette}&v=50`;
 }
 
 let hintTimer;
