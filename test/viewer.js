@@ -998,6 +998,9 @@ function updateMenu() {
   }
   const pr = menu.querySelector('[data-k="pairing"]');
   if (pr) pr.hidden = !showTwo();
+  // telefon w pionie zawsze pokazuje jedną stronę – przełącznik nic by nie zmienił
+  const pagesBtn = menu.querySelector('[data-k="pages"]');
+  if (pagesBtn) pagesBtn.hidden = isMobile() && window.innerWidth < window.innerHeight;
   const darkBtn = menu.querySelector('[data-k="dark"]');
   if (darkBtn) {
     darkBtn.querySelector('use')?.setAttribute('href', `#i-mode-${colorMode}`);

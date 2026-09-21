@@ -227,6 +227,8 @@ html.gemini #hint { background: var(--ui-bg); color: var(--ui-text); font-family
 .menu-popover:not(:popover-open) { opacity: 0; transform: translateY(6px); }
 @starting-style { .menu-popover:popover-open { opacity: 0; transform: translateY(6px); } }
 
+.menu-item[hidden] { display: none; }   /* np. parowanie przy jednej stronie */
+
 .menu-section {
   display: flex;
   flex-direction: column;
