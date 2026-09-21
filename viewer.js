@@ -961,7 +961,7 @@ async function getOptimalCalcWidthForHeightFit(s = start) {
     const size = sa || sb;
     const scaleH = H / size.h;
     const w = Math.floor(size.w * scaleH);
-    neededPdfWidth = w + 2 * MARGIN;
+    neededPdfWidth = w + 2 * MARGIN + 4;
   } else {
     const L = sa || sb, R = sb || sa;
     const maxH = Math.max(L.h, R.h);
@@ -970,7 +970,7 @@ async function getOptimalCalcWidthForHeightFit(s = start) {
     const totalPagesW = hasBoth
       ? (Math.floor(L.w * scaleH) + Math.floor(R.w * scaleH) + GAP)
       : Math.floor(L.w * scaleH);
-    neededPdfWidth = totalPagesW + 2 * MARGIN;
+    neededPdfWidth = totalPagesW + 2 * MARGIN + 4;
   }
 
   const minW = 320;

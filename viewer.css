@@ -1,11 +1,12 @@
 :root {
-  --ui-bg: rgba(24, 24, 24, .94);      /* tło paska i kart interfejsu */
-  --ui-bg-solid: rgba(20, 20, 20, .96);
+  color-scheme: dark;
+  --ui-bg: rgba(18, 19, 20, .96);      /* tło paska i kart interfejsu */
+  --ui-bg-solid: #131314;
   --ui-text: #e6e6e6;
   --ui-text-strong: #fff;
-  --ui-text-dim: #8a8a8a;
-  --ui-line: rgba(255, 255, 255, .10);
-  --ui-hover: rgba(255, 255, 255, .12);
+  --ui-text-dim: #8e918f;
+  --ui-line: rgba(255, 255, 255, .06);
+  --ui-hover: rgba(255, 255, 255, .08);
   --ui-fill: rgba(255, 255, 255, .06);
   --ui-accent: #8ab4f8;
   --ui-accent-soft: rgba(138, 180, 248, .16);
@@ -13,12 +14,14 @@
   --calc-w: 440px;
 }
 html.gemini {
-  --ui-bg: #282a2c;
-  --ui-bg-solid: #282a2c;
+  color-scheme: dark;
+  --ui-bg: rgba(19, 19, 20, .98);
+  --ui-bg-solid: #131314;
   --ui-text: #e3e3e3;
-  --ui-text-dim: #9a9b9c;
-  --ui-line: #444746;
+  --ui-text-dim: #8e918f;
+  --ui-line: rgba(255, 255, 255, .06);
   --ui-accent: #a8c7fa;
+  --ui-accent-soft: rgba(168, 199, 250, .14);
   --ui-font: "Google Sans Flex", "Google Sans", "Helvetica Neue", system-ui, sans-serif;
 }
 html, body {
@@ -57,10 +60,10 @@ html.calc-open,
 html.calc-open body,
 html.gemini.calc-open body,
 html.dark.calc-open body {
-  background: #2c2c2c !important;
+  background: Canvas !important;
 }
-html:not(.dark).calc-open,
-html:not(.dark).calc-open body {
+html:not(.dark):not(.gemini).calc-open,
+html:not(.dark):not(.gemini).calc-open body {
   background: #e0e0e0 !important;
 }
 html.calc-open #stage {
@@ -91,8 +94,12 @@ html.fit-height #stage {
   overflow-x: auto;
   overflow-y: hidden;
   align-items: center;
-  padding: 0 10px;
+  padding: 0;
   box-sizing: border-box;
+  scrollbar-width: none;
+}
+html.fit-height #stage::-webkit-scrollbar {
+  display: none;
 }
 #stage .page, #stage .blank { display: block; flex: none; position: relative; overflow: hidden; }
 #stage canvas { display: block; background: #fff; box-shadow: 0 0 6px rgba(0, 0, 0, .45); }
@@ -181,9 +188,9 @@ html.gemini #hint { background: var(--ui-bg); color: var(--ui-text); font-family
   box-sizing: border-box;
   padding: 6px;
   border-radius: 16px;
-  background: var(--ui-bg-solid, #1e1f20);
-  border: 1px solid var(--ui-line);
-  box-shadow: 0 12px 36px rgba(0, 0, 0, .55), 0 2px 8px rgba(0, 0, 0, .35);
+  background: var(--ui-bg-solid, #131314);
+  border: 1px solid rgba(255, 255, 255, .05);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, .7), 0 1px 3px rgba(0, 0, 0, .4);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
   display: flex;
@@ -202,8 +209,9 @@ html.gemini #hint { background: var(--ui-bg); color: var(--ui-text); font-family
 
 .menu-divider {
   height: 1px;
-  background: var(--ui-line);
+  background: rgba(255, 255, 255, .06);
   margin: 4px 6px;
+  border: 0;
 }
 
 .menu-item {
@@ -223,7 +231,7 @@ html.gemini #hint { background: var(--ui-bg); color: var(--ui-text); font-family
   transition: background .12s, color .12s;
 }
 .menu-item:hover {
-  background: var(--ui-hover);
+  background: rgba(255, 255, 255, .08);
   color: var(--ui-text-strong);
 }
 .menu-item.active {
@@ -256,8 +264,8 @@ html.gemini #hint { background: var(--ui-bg); color: var(--ui-text); font-family
   font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
   font-size: 11px;
   color: var(--ui-text-dim);
-  background: var(--ui-fill);
-  border: 1px solid var(--ui-line);
+  background: rgba(255, 255, 255, .06);
+  border: 0;
   border-radius: 4px;
   padding: 1px 5px;
   line-height: 1.3;
@@ -272,9 +280,9 @@ html.gemini #hint { background: var(--ui-bg); color: var(--ui-text); font-family
   gap: 4px;
   padding: 4px 6px;
   border-radius: 24px;
-  background: var(--ui-bg-solid, #1e1f20);
-  border: 1px solid var(--ui-line);
-  box-shadow: 0 4px 20px rgba(0, 0, 0, .45);
+  background: var(--ui-bg-solid, #131314);
+  border: 1px solid rgba(255, 255, 255, .05);
+  box-shadow: 0 6px 24px rgba(0, 0, 0, .6);
   backdrop-filter: blur(14px);
   -webkit-backdrop-filter: blur(14px);
   font: 13px var(--ui-font);
@@ -297,7 +305,7 @@ html.gemini #hint { background: var(--ui-bg); color: var(--ui-text); font-family
   justify-content: center;
 }
 .menu-nav button:hover {
-  background: var(--ui-hover);
+  background: rgba(255, 255, 255, .08);
   color: var(--ui-text-strong);
 }
 
@@ -317,7 +325,7 @@ html.gemini #hint { background: var(--ui-bg); color: var(--ui-text); font-family
 }
 .menu-pin:hover, .menu-toggle:hover {
   color: var(--ui-text-strong) !important;
-  background: var(--ui-hover) !important;
+  background: rgba(255, 255, 255, .08) !important;
 }
 .menu-pin.pinned, .menu-toggle.open {
   color: var(--ui-accent) !important;
@@ -341,9 +349,9 @@ html.gemini #hint { background: var(--ui-bg); color: var(--ui-text); font-family
   padding: 0 4px;
 }
 .page-input {
-  background: var(--ui-fill);
-  border: 1px solid var(--ui-line);
-  border-radius: 6px;
+  background: rgba(255, 255, 255, .06);
+  border: 0;
+  border-radius: 12px;
   color: var(--ui-text-strong);
   font: inherit;
   font-size: 13px;
@@ -353,11 +361,10 @@ html.gemini #hint { background: var(--ui-bg); color: var(--ui-text); font-family
   width: 56px;
   padding: 2px 4px;
   outline: none;
-  transition: border-color .15s, background .15s;
+  transition: background .15s, box-shadow .15s;
 }
 .page-input:focus {
-  background: rgba(0, 0, 0, .6);
-  border-color: var(--ui-accent);
+  background: rgba(255, 255, 255, .12);
   box-shadow: 0 0 0 1px var(--ui-accent);
   color: var(--ui-text-strong);
 }
@@ -532,7 +539,7 @@ html:not(.dark) #calc-frame {
   bottom: 0;
   left: var(--calc-w, 440px);
   width: 9px;
-  background: #2c2c2c;
+  background: Canvas;
   cursor: ew-resize;
   z-index: 10;
   display: none;
@@ -562,7 +569,7 @@ html.calc-animating #calc-resizer {
 #calc-resizer.dragging::after {
   opacity: 1;
 }
-html:not(.dark) #calc-resizer {
+html:not(.dark):not(.gemini) #calc-resizer {
   background: #e0e0e0;
 }
 html:not(.dark) #calc-resizer::after {
