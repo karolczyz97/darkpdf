@@ -154,6 +154,7 @@ const cropJobs = new Map();    // klucz grupy stron -> Promise<box>
 const groupKey = (n, full) => `${n % 2}|${Math.round(full.width)}x${Math.round(full.height)}|${rot}`;
 
 async function pageBox(n) {
+  if (!pdf || !numPages || !n || n < 1 || n > numPages) return null;
   const page = await pdf.getPage(n);
   const full = page.getViewport({ scale: 1, rotation: rotationOf(page) });
   const whole = { x: 0, y: 0, w: full.width, h: full.height };
@@ -183,50 +184,68 @@ async function mapConcurrent(items, limit, fn) {
 }
 
 // Generuje reprezentatywną próbkę stron do wyznaczenia idealnego przycięcia:
-// łączy lokalne otoczenie bieżącej strony z równomiernym próbkowaniem całego dokumentu
+// Bezpieczne dla dowolnej liczby stron (od 1 strony do tysięcy)
 function getCropCandidatePages(n, totalPages, maxSamples = 28) {
-  const parity = n % 2;
+  if (!totalPages || totalPages < 1) return [];
+  const safeN = Math.max(1, Math.min(totalPages, n || 1));
+  const parity = safeN % 2;
+
+  // Dla małych dokumentów (mniej lub równo maxSamples stron) bierzemy po prostu wszystkie strony o danej parzystości
+  if (totalPages <= maxSamples) {
+    const list = [];
+    for (let p = 1; p <= totalPages; p++) {
+      if (p % 2 === parity) list.push(p);
+    }
+    return list.length ? list : [safeN];
+  }
+
   const pageSet = new Set();
-  pageSet.add(n);
+  pageSet.add(safeN);
 
   // 1. Lokalne otoczenie wokół n (ta sama parzystość)
   for (let d = 2; d <= 24 && pageSet.size < 8; d += 2) {
-    if (n + d <= totalPages) pageSet.add(n + d);
-    if (n - d >= 1) pageSet.add(n - d);
+    if (safeN + d <= totalPages) pageSet.add(safeN + d);
+    if (safeN - d >= 1) pageSet.add(safeN - d);
   }
 
   // 2. Równomierny rozkład po całym dokumencie
-  if (totalPages > 1) {
-    const targetGlobal = Math.max(16, maxSamples - pageSet.size);
-    for (let i = 0; i < targetGlobal; i++) {
-      const ratio = (i + 0.5) / targetGlobal;
-      let p = Math.round(1 + ratio * (totalPages - 1));
-      if (p % 2 !== parity) {
-        p = (p + 1 <= totalPages) ? p + 1 : p - 1;
-      }
-      p = Math.max(1, Math.min(totalPages, p));
-      if (p % 2 === parity) pageSet.add(p);
+  const targetGlobal = Math.max(16, maxSamples - pageSet.size);
+  for (let i = 0; i < targetGlobal; i++) {
+    const ratio = (i + 0.5) / targetGlobal;
+    let p = Math.round(1 + ratio * (totalPages - 1));
+    if (p % 2 !== parity) {
+      p = (p + 1 <= totalPages) ? p + 1 : p - 1;
     }
+    p = Math.max(1, Math.min(totalPages, p));
+    if (p % 2 === parity) pageSet.add(p);
   }
 
-  // 3. Wypełnienie jeśli mały dokument lub zostały wolne sloty
+  // 3. Wypełnienie jeśli zostały wolne sloty
   for (let p = (parity === 1 ? 1 : 2); p <= totalPages && pageSet.size < maxSamples; p += 2) {
     pageSet.add(p);
   }
 
-  return Array.from(pageSet).sort((a, b) => a - b);
+  return Array.from(pageSet)
+    .filter(p => Number.isInteger(p) && p >= 1 && p <= totalPages)
+    .sort((a, b) => a - b);
 }
 
 // Bierzemy szeroką próbkę stron z tej samej grupy i najszerszy wspólny obszar treści,
 // więc nic się nie urywa, a wszystkie strony wychodzą tej samej wielkości.
 async function groupBox(n, full, k) {
+  if (!pdf || !numPages || numPages < 1) return null;
   const pages = getCropCandidatePages(n, numPages, CROP_SAMPLES);
+  if (!pages.length) return null;
 
   const scannedBoxes = await mapConcurrent(pages, 6, async (p) => {
-    const page = await pdf.getPage(p);
-    const vp = page.getViewport({ scale: 1, rotation: rotationOf(page) });
-    if (groupKey(p, vp) !== k) return null;
-    return await detectContent(page, vp);
+    try {
+      const page = await pdf.getPage(p);
+      const vp = page.getViewport({ scale: 1, rotation: rotationOf(page) });
+      if (groupKey(p, vp) !== k) return null;
+      return await detectContent(page, vp);
+    } catch {
+      return null;
+    }
   });
 
   const valid = scannedBoxes.filter(Boolean);
