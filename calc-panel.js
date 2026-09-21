@@ -1,6 +1,6 @@
 // calc-panel.js – panel boczny kalkulatora w DarkPDF (rozmiar, rozdzielacz, montowanie komponentu DOM)
 
-import { mountCalculator } from './calc-app.js';
+import { mountCalculator } from '../calc/calc-app.js?v=3';   // jedno źródło: repo calc
 
 export const CALC_MIN_W = 320;         // najwęższy sensowny kalkulator
 export const PDF_MIN_W = 140;          // tyle miejsca zostawiamy zawsze na PDF
@@ -18,7 +18,19 @@ let calcContainer = null;
 let calcResizer = null;
 let calcInstance = null;
 
+// KaTeX (ładne wzory w drugiej linii) ładujemy dopiero przy pierwszym otwarciu kalkulatora,
+// żeby nie spowalniał otwierania samego PDF-a
+const KATEX = 'https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/';
+function loadKatex() {
+  if (window.katex || document.getElementById('katex-js')) return;
+  const css = Object.assign(document.createElement('link'), { rel: 'stylesheet', href: KATEX + 'katex.min.css', crossOrigin: 'anonymous' });
+  const js = Object.assign(document.createElement('script'), { id: 'katex-js', src: KATEX + 'katex.min.js', crossOrigin: 'anonymous', defer: true });
+  js.onload = () => window.onKatexLoaded?.();
+  document.head.append(css, js);
+}
+
 function ensureCalcMounted() {
+  loadKatex();
   if (!calcInstance && calcContainer) {
     calcInstance = mountCalculator(calcContainer, {
       isEmbedded: true,
@@ -35,10 +47,6 @@ export function getCalcStageWidth() {
 }
 export function resetUserCustomWidth() { userCustomWidth = false; }
 export function isUserCustomWidth() { return userCustomWidth; }
-
-export function sendThemeToCalc() {
-  // Motywy synchronizują się automatycznie przez klasy .dark i .gemini na <html>
-}
 
 export function updateCalcWidth(w, updateTargetPdf = true) {
   calcWidth = clampCalcW(w);

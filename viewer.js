@@ -13,7 +13,7 @@ import {
   isUserCustomWidth,
   snapCalcToHeightFit,
   handleCalcResize
-} from './calc-panel.js';
+} from './calc-panel.js?v=2';
 
 // Pamięć podręczna aplikacji: po pierwszej wizycie czytnik otwiera się też offline
 if ('serviceWorker' in navigator && location.protocol === 'https:') {
