@@ -1408,8 +1408,10 @@ window.addEventListener('resize', () => {
     const wasMob = document.documentElement.classList.contains('mobile');
     document.documentElement.classList.toggle('mobile', isMob);
     const l = layoutSync(start);
+    const dpr = window.devicePixelRatio || 1;
+    const dprChanged = Math.abs(dpr - lastRenderedDpr) > 1e-3;
     const scaleChanged = !l || Math.abs((l.scale || 0) - (lastRenderedScale || 0)) > 1e-4;
-    if (scaleChanged || isMob !== wasMob) {
+    if (scaleChanged || isMob !== wasMob || dprChanged) {
       clearRenderCaches();
       show(spreadStartOf(start));
     }
