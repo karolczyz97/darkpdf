@@ -509,11 +509,14 @@ function blank(size, scale) {
   return d;
 }
 
+let lastRenderedScale = null;
+
 async function show(s) {
   const token = ++showToken;
   start = s;
   const { a, b, scale, L, R, single } = await layout(s);
   if (token !== showToken) return;
+  lastRenderedScale = scale;
 
   const pages = [a, b];
   const need = new Set();
@@ -1401,9 +1404,15 @@ window.addEventListener('resize', () => {
   fitNow();
   clearTimeout(resizeTimer);
   resizeTimer = setTimeout(() => {
-    clearRenderCaches();
-    document.documentElement.classList.toggle('mobile', isMobile());
-    show(spreadStartOf(start));      // po obrocie telefonu mogła się zmienić liczba stron na ekranie
+    const isMob = isMobile();
+    const wasMob = document.documentElement.classList.contains('mobile');
+    document.documentElement.classList.toggle('mobile', isMob);
+    const l = layoutSync(start);
+    const scaleChanged = !l || Math.abs((l.scale || 0) - (lastRenderedScale || 0)) > 1e-4;
+    if (scaleChanged || isMob !== wasMob) {
+      clearRenderCaches();
+      show(spreadStartOf(start));
+    }
     updateMenu();
   }, 180);
 });

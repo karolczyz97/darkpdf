@@ -136,16 +136,31 @@ export function toggleCalc() {
   setCalcOpen(!calcOpen);
 }
 
+let lastWindowHeight = typeof window !== 'undefined' ? window.innerHeight : 0;
+
 export function handleCalcResize() {
-  if (calcOpen) {
-    if (ctx.getFitMode() === 'height' && !userCustomWidth) {
-      snapCalcToHeightFit();
-    } else if (targetPdfWidth) {
-      updateCalcWidth(window.innerWidth - targetPdfWidth - 9, false);
-    } else if (calcWidth > window.innerWidth - PDF_MIN_W) {
-      updateCalcWidth(calcWidth, true);
-    }
+  if (!calcOpen || ctx?.isMobile?.()) return;
+
+  const currentH = window.innerHeight;
+  const heightChanged = Math.abs(currentH - lastWindowHeight) > 1;
+  lastWindowHeight = currentH;
+
+  // Gdy zmienia się wysokość okna w trybie 100% wysokości bez ręcznie ustalonej szerokości,
+  // dopasowujemy kalkulator do nowej wysokości strony:
+  if (heightChanged && ctx.getFitMode() === 'height' && !userCustomWidth) {
+    snapCalcToHeightFit();
+    return;
   }
+
+  // Przy zmianie szerokości okna: karta z PDF-em zachowuje stałą szerokość,
+  // a kalkulator rozciąga się lub kurczy absorbując zmianę szerokości:
+  if (!targetPdfWidth) {
+    targetPdfWidth = Math.max(120, window.innerWidth - (calcWidth + 9));
+    ctx.pref.set('targetPdfWidth', targetPdfWidth);
+  }
+
+  const desiredCalcW = window.innerWidth - targetPdfWidth - 9;
+  updateCalcWidth(desiredCalcW, false);
 }
 
 export function initCalcPanel(context) {
@@ -157,6 +172,11 @@ export function initCalcPanel(context) {
   calcContainer = document.getElementById('calc-container');
   calcResizer = document.getElementById('calc-resizer');
 
+  if (!targetPdfWidth) {
+    targetPdfWidth = Math.max(120, window.innerWidth - (calcWidth + 9));
+  }
+
+  lastWindowHeight = window.innerHeight;
   document.documentElement.style.setProperty('--calc-w', calcWidth + 'px');
 
   if (calcResizer) {
