@@ -32,33 +32,43 @@ const pref = {
   setJson(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} }
 };
 
-const THEMES = ['gemini', 'dark', 'light', 'auto'];
-const THEME_LABELS = {
-  gemini: 'Motyw: Gemini',
-  dark: 'Motyw: Ciemny',
-  light: 'Motyw: Jasny',
-  auto: 'Motyw: Systemowy'
+const COLOR_MODES = ['dark', 'light', 'auto'];
+const COLOR_LABELS = {
+  dark: 'Tryb: Ciemny',
+  light: 'Tryb: Jasny',
+  auto: 'Tryb: Auto'
 };
-const THEME_ICONS = {
-  gemini: `<svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M12 2L14.4 9.6L22 12L14.4 14.4L12 22L9.6 14.4L2 12L9.6 9.6L12 2Z"/></svg>`,
+const DARK_ICONS = {
   dark: `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>`,
   light: `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>`,
   auto: `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 0 1 0 18z" fill="currentColor"/></svg>`
 };
 
-let storedTheme = pref.get('themeMode', null);
-if (!storedTheme) {
+const THEME_ICONS = {
+  gemini: `<svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M12 2L14.4 9.6L22 12L14.4 14.4L12 22L9.6 14.4L2 12L9.6 9.6L12 2Z"/></svg>`,
+  system: `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>`
+};
+
+let colorMode = pref.get('colorMode', null);
+if (!colorMode) {
   const oldDark = pref.get('dark', true);
-  const oldTheme = pref.get('theme', 'gemini');
-  storedTheme = oldDark ? (oldTheme === 'normal' ? 'dark' : 'gemini') : 'light';
+  colorMode = oldDark ? 'dark' : 'light';
 }
-let themeMode = THEMES.includes(storedTheme) ? storedTheme : 'gemini';
-let dark = themeMode !== 'light';
-let theme = themeMode === 'gemini' ? 'gemini' : 'normal';
+if (!COLOR_MODES.includes(colorMode)) colorMode = 'dark';
+
+let palette = pref.get('palette', null);
+if (!palette) {
+  const oldTheme = pref.get('theme', 'gemini');
+  palette = oldTheme === 'gemini' ? 'gemini' : 'system';
+}
+if (!['gemini', 'system'].includes(palette)) palette = 'gemini';
+
+let dark = colorMode !== 'light';
+let theme = palette === 'gemini' ? 'gemini' : 'normal';
 
 const systemDark = window.matchMedia('(prefers-color-scheme: dark)');
 systemDark.addEventListener('change', () => {
-  if (themeMode === 'auto') applyTheme();
+  if (colorMode === 'auto') applyTheme();
 });
 
 let two = pref.get('two', true);           // dwie strony obok siebie czy jedna
@@ -110,8 +120,8 @@ function clearCaches() {
 }
 
 function applyTheme() {
-  const isDark = themeMode === 'auto' ? systemDark.matches : (themeMode !== 'light');
-  const isGemini = themeMode === 'gemini' || (themeMode === 'auto' && systemDark.matches);
+  const isDark = colorMode === 'auto' ? systemDark.matches : (colorMode === 'dark');
+  const isGemini = palette === 'gemini';
 
   dark = isDark;
   theme = isGemini ? 'gemini' : 'normal';
@@ -119,7 +129,15 @@ function applyTheme() {
   document.documentElement.classList.toggle('dark', isDark);
   document.documentElement.classList.toggle('gemini', isDark && isGemini);
 
-  const targetCalcTheme = themeMode === 'auto' ? 'auto' : (isGemini ? 'gemini' : (isDark ? 'dark' : 'auto'));
+  let targetCalcTheme;
+  if (colorMode === 'auto') {
+    targetCalcTheme = isGemini ? 'gemini' : 'auto';
+  } else if (!isDark) {
+    targetCalcTheme = 'auto';
+  } else {
+    targetCalcTheme = isGemini ? 'gemini' : 'dark';
+  }
+
   if (calcFrame && calcFrame.src && calcFrame.src !== 'about:blank') {
     try {
       calcFrame.contentWindow?.postMessage({ type: 'darkpdf_theme', theme: targetCalcTheme }, '*');
@@ -129,21 +147,37 @@ function applyTheme() {
 }
 const applyDark = applyTheme;
 
-function cycleTheme() {
-  const idx = (THEMES.indexOf(themeMode) + 1) % THEMES.length;
-  themeMode = THEMES[idx];
-  pref.set('themeMode', themeMode);
+function cycleColorMode() {
+  const nextIdx = (COLOR_MODES.indexOf(colorMode) + 1) % COLOR_MODES.length;
+  colorMode = COLOR_MODES[nextIdx];
+  pref.set('colorMode', colorMode);
+  pref.set('dark', colorMode !== 'light');
   applyTheme();
-  flash(THEME_LABELS[themeMode]);
+  flash(COLOR_LABELS[colorMode]);
+}
+
+function togglePalette() {
+  palette = palette === 'gemini' ? 'system' : 'gemini';
+  pref.set('palette', palette);
+  pref.set('theme', palette === 'gemini' ? 'gemini' : 'normal');
+  applyTheme();
+  flash(palette === 'gemini' ? 'Motyw: Gemini' : 'Motyw: Systemowy');
 }
 
 applyTheme();
 document.documentElement.classList.add('empty');
 
 function getCalcUrl() {
-  const isDark = themeMode === 'auto' ? systemDark.matches : (themeMode !== 'light');
-  const isGemini = themeMode === 'gemini' || (themeMode === 'auto' && systemDark.matches);
-  const themeParam = themeMode === 'auto' ? 'auto' : (isGemini ? 'gemini' : (isDark ? 'dark' : 'auto'));
+  const isDark = colorMode === 'auto' ? systemDark.matches : (colorMode === 'dark');
+  const isGemini = palette === 'gemini';
+  let themeParam;
+  if (colorMode === 'auto') {
+    themeParam = isGemini ? 'gemini' : 'auto';
+  } else if (!isDark) {
+    themeParam = 'auto';
+  } else {
+    themeParam = isGemini ? 'gemini' : 'dark';
+  }
   const custom = localStorage.getItem('calcUrl') || window.DARKPDF_CALC_URL;
   let base = custom;
   if (!base) {
@@ -157,7 +191,7 @@ function getCalcUrl() {
     }
   }
   const sep = base.includes('?') ? '&' : '?';
-  return `${base}${sep}embed=1&side=1&theme=${themeParam}&v=43`;
+  return `${base}${sep}embed=1&side=1&theme=${themeParam}&v=45`;
 }
 
 let hintTimer;
@@ -1008,15 +1042,20 @@ function updateMenu() {
     setBtnLabel(pr, pairing === 'odd' ? 'Pary 1–2' : 'Pary 1, 2–3', 'O');
     pr.hidden = !two;
   }
+  const darkBtn = menu.querySelector('[data-k="dark"]');
+  if (darkBtn) {
+    const iconEl = darkBtn.querySelector('.icon');
+    if (iconEl && DARK_ICONS[colorMode]) iconEl.innerHTML = DARK_ICONS[colorMode];
+    setBtnLabel(darkBtn, COLOR_LABELS[colorMode] || 'Tryb: Ciemny', 'D');
+    darkBtn.dataset.tip = `Przełącz tryb: Ciemny / Jasny / Auto (${COLOR_LABELS[colorMode]})`;
+  }
   const themeBtn = menu.querySelector('[data-k="theme"]');
   if (themeBtn) {
     const iconEl = themeBtn.querySelector('.icon');
-    if (iconEl && THEME_ICONS[themeMode]) iconEl.innerHTML = THEME_ICONS[themeMode];
-    setBtnLabel(themeBtn, THEME_LABELS[themeMode] || 'Motyw: Gemini', 'T');
-    themeBtn.dataset.tip = `Przełącz motyw: ${THEME_LABELS[themeMode]} (T lub D)`;
+    if (iconEl && THEME_ICONS[palette]) iconEl.innerHTML = THEME_ICONS[palette];
+    setBtnLabel(themeBtn, palette === 'gemini' ? 'Motyw: Gemini' : 'Motyw: Systemowy', 'T');
+    themeBtn.dataset.tip = `Przełącz motyw: Gemini / Systemowy`;
   }
-  const darkBtn = menu.querySelector('[data-k="dark"]');
-  if (darkBtn) setBtnLabel(darkBtn, dark ? 'Jasny motyw' : 'Ciemny motyw', 'D');
   setBtnLabel(menu.querySelector('[data-k="crop"]'), crop ? 'Z marginesami' : 'Przytnij marginesy', 'C');
   setBtnLabel(menu.querySelector('[data-k="rotate"]'), 'Obróć o 90°', 'R');
 
@@ -1307,8 +1346,10 @@ function act(k) {
       break;
     }
     case 'dark':
+      cycleColorMode();
+      break;
     case 'theme':
-      cycleTheme();
+      togglePalette();
       break;
     case 'pages': {
       if (!pdf) break;
@@ -1495,7 +1536,7 @@ window.addEventListener('keydown', (e) => {
           'numer (lub Enter)  skok do strony\nShift + strzałka / scroll  skok o 10\nB  zakładka na tej stronie\n' +
           'M  menu opcji\nK  kalkulator z boku\nW  zablokuj szerokość 100%\nH  zablokuj wysokość 100%\n' +
           'C  przycinanie marginesów\nR  obrót o 90°\n' +
-          'P  jedna / dwie strony\nT / D  przełącz motyw (Gemini / Ciemny / Jasny / Systemowy)\nO  pary nieparzyste / parzyste\n' +
+          'P  jedna / dwie strony\nD  tryb: ciemny / jasny / auto\nT  motyw: Gemini / systemowy\nO  pary nieparzyste / parzyste\n' +
           'F  pełny ekran\ndwuklik  pełny ekran\nCtrl+O  otwórz plik\nkliknięcie  pasek z przyciskami', 6000);
     e.preventDefault();
   }
