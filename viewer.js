@@ -13,7 +13,7 @@ import {
   isUserCustomWidth,
   snapCalcToHeightFit,
   handleCalcResize
-} from './calc-panel.js?v=3';
+} from './calc-panel.js?v=4';
 
 // Pamięć podręczna aplikacji: po pierwszej wizycie czytnik otwiera się też offline
 if ('serviceWorker' in navigator && location.protocol === 'https:') {
@@ -249,7 +249,7 @@ async function pageBox(n) {
   // okładka, rysunek wchodzący w margines. Taka strona idzie w całości.
   if (!ownJobs.has(n)) ownJobs.set(n, detectContent(page, full));
   const own = await ownJobs.get(n);
-  if (own && cutsContent(own, common, full)) return whole;
+  if (own && cutsContent(own, common, full)) return { ...whole, ref: common };
   return common;
 }
 
@@ -1149,7 +1149,14 @@ function act(k) {
       break;
     case 'fit-h':
       if (!pdf) break;
-      setFitMode(fitMode === 'height' ? 'auto' : 'height');
+      // Ręczna szerokość kalkulatora? H najpierw wraca do automatu (tryb wysokości zostaje / włącza się).
+      // Dopiero H bez ręcznej szerokości wyłącza tryb wysokości.
+      if (fitMode === 'height' && isCalcOpen() && isUserCustomWidth()) {
+        snapCalcToHeightFit();
+        flash('Szerokość kalkulatora: automatycznie');
+      } else {
+        setFitMode(fitMode === 'height' ? 'auto' : 'height');
+      }
       break;
     case 'pin':
       pinned = !pinned;
