@@ -118,28 +118,26 @@ function clearCaches() {
   cropJobs.clear();
 }
 
+const isDarkNow = () => (colorMode === 'auto' ? systemDark.matches : colorMode === 'dark');
+
+// Motyw, który przekazujemy kalkulatorowi – liczony w jednym miejscu
+function calcTheme() {
+  const gemini = palette === 'gemini';
+  if (colorMode === 'auto') return gemini ? 'gemini' : 'auto';
+  if (!isDarkNow()) return 'light';
+  return gemini ? 'gemini' : 'dark';
+}
+
+let menuReady = false;   // pasek jest budowany niżej w pliku; do tego czasu go nie odświeżamy
+
 function applyTheme() {
-  const isDark = colorMode === 'auto' ? systemDark.matches : (colorMode === 'dark');
-  const isGemini = palette === 'gemini';
-
+  const isDark = isDarkNow();
   document.documentElement.classList.toggle('dark', isDark);
-  document.documentElement.classList.toggle('gemini', isDark && isGemini);
-
-  let targetCalcTheme;
-  if (colorMode === 'auto') {
-    targetCalcTheme = isGemini ? 'gemini' : 'auto';
-  } else if (!isDark) {
-    targetCalcTheme = 'light';
-  } else {
-    targetCalcTheme = isGemini ? 'gemini' : 'dark';
-  }
-
+  document.documentElement.classList.toggle('gemini', isDark && palette === 'gemini');
   if (calcFrame && calcFrame.src && calcFrame.src !== 'about:blank') {
-    try {
-      calcFrame.contentWindow?.postMessage({ type: 'darkpdf_theme', theme: targetCalcTheme }, '*');
-    } catch {}
+    try { calcFrame.contentWindow?.postMessage({ type: 'darkpdf_theme', theme: calcTheme() }, calcOrigin()); } catch {}
   }
-  try { if (typeof updateMenu === 'function') updateMenu(); } catch {}
+  if (menuReady) updateMenu();
 }
 
 function cycleColorMode() {
@@ -162,17 +160,12 @@ function togglePalette() {
 applyTheme();
 document.documentElement.classList.add('empty');
 
+function calcOrigin() {
+  try { return new URL(calcFrame.src, location.href).origin; } catch { return '*'; }
+}
+
 function getCalcUrl() {
-  const isDark = colorMode === 'auto' ? systemDark.matches : (colorMode === 'dark');
-  const isGemini = palette === 'gemini';
-  let themeParam;
-  if (colorMode === 'auto') {
-    themeParam = isGemini ? 'gemini' : 'auto';
-  } else if (!isDark) {
-    themeParam = 'light';
-  } else {
-    themeParam = isGemini ? 'gemini' : 'dark';
-  }
+  const themeParam = calcTheme();
   const custom = pref.get('calcUrl', null) || window.DARKPDF_CALC_URL;
   let base = custom;
   if (!base) {
@@ -186,7 +179,7 @@ function getCalcUrl() {
     }
   }
   const sep = base.includes('?') ? '&' : '?';
-  return `${base}${sep}embed=1&side=1&theme=${themeParam}&v=46`;
+  return `${base}${sep}embed=1&side=1&theme=${themeParam}&v=47`;
 }
 
 let hintTimer;
@@ -337,16 +330,21 @@ async function groupBox(n, full, k) {
     }
   }
 
-  let box = null;
-  for (const found of usable) {
-    box = box ? {
-      x: Math.min(box.x, found.x),
-      y: Math.min(box.y, found.y),
-      r: Math.max(box.r, found.r),
-      bt: Math.max(box.bt, found.bt)
-    } : { ...found };
-  }
-  if (!box) return null;
+  // Brzeg bierzemy „prawie najszerszy”: przy dużej próbce pomijamy po jednej skrajnej
+  // stronie z każdej strony (np. pieczątkę albo rysunek wystający w margines),
+  // przy małej – bierzemy pełną sumę, żeby nic nie uciąć.
+  const edge = (vals, low) => {
+    const v = [...vals].sort((a, b) => a - b);
+    const skip = v.length >= 10 ? 1 : 0;
+    return low ? v[skip] : v[v.length - 1 - skip];
+  };
+  if (!usable.length) return null;
+  const box = {
+    x: edge(usable.map((b) => b.x), true),
+    y: edge(usable.map((b) => b.y), true),
+    r: edge(usable.map((b) => b.r), false),
+    bt: edge(usable.map((b) => b.bt), false)
+  };
   const w = box.r - box.x, h = box.bt - box.y;
   if (w < full.width * 0.3 || h < full.height * 0.3) return null;  // podejrzanie mało treści
   return { x: box.x, y: box.y, w, h };
@@ -930,6 +928,7 @@ const tipEl = document.getElementById('menu-tip');
 let pinned = pref.get('menuPinned', false);
 let popoverOpen = pref.get('popoverOpen', true);
 let menuTimer = null, tipTimer = null;
+menuReady = true;     // od teraz applyTheme() może odświeżać pasek
 
 function hideTip() {
   clearTimeout(tipTimer);
@@ -1255,6 +1254,7 @@ if (calcResizer) {
 
 // Nasłuchiwanie komunikatów z ramki kalkulatora
 window.addEventListener('message', (e) => {
+  if (!calcFrame || e.source !== calcFrame.contentWindow) return;   // tylko nasz kalkulator
   if (e.data && e.data.type === 'darkpdf_close_calc') {
     setCalcOpen(false);
   }
