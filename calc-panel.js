@@ -4,7 +4,6 @@ import { mountCalculator } from '../calc/calc-app.js?v=3';   // jedno źródło:
 
 export const CALC_MIN_W = 320;         // najwęższy sensowny kalkulator
 export const PDF_MIN_W = 400;          // tyle miejsca zostawiamy zawsze na PDF (żeby tekst był czytelny)
-export const COLLAPSE_W = 800;         // poniżej tej szerokości zwijamy kalkulator do paska
 
 export const clampCalcW = (w) => {
   const max = Math.max(CALC_MIN_W, window.innerWidth - PDF_MIN_W - 9);
@@ -16,8 +15,9 @@ let calcOpen = false;
 let calcWidth = 440;
 let targetPdfWidth = null;
 let userCustomWidth = false;
+let userCalcW = null;                 // szerokość z rozdzielacza (bez przycinania do okna – żeby nie „zjadało” jej zwężanie)
 let autoCollapsed = false;
-let lastWindowWidth = typeof window !== 'undefined' ? window.innerWidth : 1024;
+let lastNarrow = false;               // czy przy poprzednim sprawdzeniu okno było „mobilne”
 
 let calcSidebar = null;
 let calcContainer = null;
@@ -51,7 +51,7 @@ export function getCalcWidth() { return calcWidth; }
 export function getCalcStageWidth() {
   return (calcOpen && !ctx?.isMobile?.()) ? (calcWidth + 9) : 0;
 }
-export function resetUserCustomWidth() { userCustomWidth = false; }
+export function resetUserCustomWidth() { userCustomWidth = false; userCalcW = null; }
 export function isUserCustomWidth() { return userCustomWidth; }
 
 export function updateCalcWidth(w, updateTargetPdf = true) {
@@ -66,8 +66,10 @@ export function updateCalcWidth(w, updateTargetPdf = true) {
 export function getNeededPdfWidth() {
   if (!ctx?.isPdfLoaded?.()) return null;
   const [a, b] = ctx.spreadOf(ctx.getStartPage());
-  const sa = a ? ctx.getPageSize(a) : null;
-  const sb = b ? ctx.getPageSize(b) : null;
+  // ref = wspólne przycięcie grupy; strona-wyjątek (pełnoekranowy obrazek) nie zmienia szerokości panelu
+  const ref = (s) => s?.ref || s;
+  const sa = a ? ref(ctx.getPageSize(a)) : null;
+  const sb = b ? ref(ctx.getPageSize(b)) : null;
   if (!sa && !sb) return null;
 
   const H = Math.max(120, window.innerHeight - 2 * ctx.MARGIN);
@@ -82,10 +84,8 @@ export function getNeededPdfWidth() {
     if (!L || !L.h || !L.w) return null;
     const maxH = Math.max(L.h, R?.h || L.h);
     const scaleH = H / maxH;
-    const hasBoth = Boolean(sa && sb);
-    const totalPagesW = hasBoth
-      ? (Math.ceil(L.w * scaleH) + Math.ceil((R?.w || 0) * scaleH) + ctx.GAP)
-      : Math.ceil(L.w * scaleH);
+    // Zawsze dwie strony + odstęp: samotna strona (okładka, ostatnia) ma obok pusty placeholder, tak jak w fit()
+    const totalPagesW = Math.ceil(L.w * scaleH) + Math.ceil(R.w * scaleH) + ctx.GAP;
     return totalPagesW + 2 * ctx.MARGIN + 4;
   }
 }
@@ -97,6 +97,7 @@ export async function getOptimalCalcWidthForHeightFit() {
 }
 
 export async function snapCalcToHeightFit() {
+  resetUserCustomWidth();
   handleCalcResize();
   ctx?.fitNow?.();
 }
@@ -104,7 +105,7 @@ export async function snapCalcToHeightFit() {
 export function setCalcOpen(open, fromUser = false) {
   if (fromUser) {
     autoCollapsed = false;
-    lastWindowWidth = typeof window !== 'undefined' ? window.innerWidth : 1024;
+    lastNarrow = Boolean(ctx?.isMobile?.());
   }
   if (open && !ctx?.isPdfLoaded?.()) return;
   calcOpen = !!open;
@@ -130,38 +131,37 @@ export function toggleCalc(fromUser = true) {
   setCalcOpen(!calcOpen, fromUser);
 }
 
+// Ręczna szerokość z rozdzielacza zostaje (przewijanie, zmiana okna) aż do H – wtedy resetUserCustomWidth().
 export function handleCalcResize() {
-  const prevW = lastWindowWidth;
-  const curW = typeof window !== 'undefined' ? window.innerWidth : 1024;
-  lastWindowWidth = curW;
+  const narrow = Boolean(ctx?.isMobile?.());
+  const wasNarrow = lastNarrow;
+  lastNarrow = narrow;
 
-  // Automatyczne zwijanie kalkulatora przy zwężaniu okna poniżej COLLAPSE_W
-  if (calcOpen && !autoCollapsed && prevW >= COLLAPSE_W && curW < COLLAPSE_W) {
+  // Zwijanie/przywracanie po tym samym warunku co klasa .mobile – bez rozjazdu przy 800 px
+  if (calcOpen && !autoCollapsed && !wasNarrow && narrow) {
     autoCollapsed = true;
     setCalcOpen(false, false);
     return;
   }
-
-  // Automatyczne przywracanie kalkulatora przy ponownym rozszerzeniu okna
-  if (!calcOpen && autoCollapsed && prevW < COLLAPSE_W && curW >= COLLAPSE_W) {
+  if (!calcOpen && autoCollapsed && wasNarrow && !narrow) {
     autoCollapsed = false;
     setCalcOpen(true, false);
     return;
   }
 
-  if (!calcOpen || ctx?.isMobile?.()) return;
-
-  const neededW = getNeededPdfWidth();
-  if (neededW != null) {
-    const desiredCalcW = curW - neededW - 9;
-    calcWidth = clampCalcW(desiredCalcW);
-    document.documentElement.style.setProperty('--calc-w', calcWidth + 'px');
+  if (!calcOpen || narrow) return;
+  let w = userCalcW ?? calcWidth;
+  if (!userCustomWidth) {
+    const neededW = getNeededPdfWidth();
+    if (neededW != null) w = window.innerWidth - neededW - 9;
   }
+  calcWidth = clampCalcW(w);
+  document.documentElement.style.setProperty('--calc-w', calcWidth + 'px');
 }
 
 export function initCalcPanel(context) {
   ctx = context;
-  lastWindowWidth = typeof window !== 'undefined' ? window.innerWidth : 1024;
+  lastNarrow = Boolean(ctx.isMobile());
   calcWidth = clampCalcW(ctx.pref.get('calcWidth', 440));
   targetPdfWidth = null;
 
@@ -192,6 +192,7 @@ export function initCalcPanel(context) {
       userCustomWidth = true;
       const delta = ev.clientX - startX;
       updateCalcWidth(initialW + delta, true);
+      userCalcW = calcWidth;
       ctx.fitNow();
     };
 
