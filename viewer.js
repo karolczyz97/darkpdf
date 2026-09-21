@@ -63,9 +63,6 @@ if (!palette) {
 }
 if (!['gemini', 'system'].includes(palette)) palette = 'gemini';
 
-let dark = colorMode !== 'light';
-let theme = palette === 'gemini' ? 'gemini' : 'normal';
-
 const systemDark = window.matchMedia('(prefers-color-scheme: dark)');
 systemDark.addEventListener('change', () => {
   if (colorMode === 'auto') applyTheme();
@@ -123,9 +120,6 @@ function applyTheme() {
   const isDark = colorMode === 'auto' ? systemDark.matches : (colorMode === 'dark');
   const isGemini = palette === 'gemini';
 
-  dark = isDark;
-  theme = isGemini ? 'gemini' : 'normal';
-
   document.documentElement.classList.toggle('dark', isDark);
   document.documentElement.classList.toggle('gemini', isDark && isGemini);
 
@@ -133,7 +127,7 @@ function applyTheme() {
   if (colorMode === 'auto') {
     targetCalcTheme = isGemini ? 'gemini' : 'auto';
   } else if (!isDark) {
-    targetCalcTheme = 'auto';
+    targetCalcTheme = 'light';
   } else {
     targetCalcTheme = isGemini ? 'gemini' : 'dark';
   }
@@ -147,7 +141,6 @@ function applyTheme() {
     try { updateMenu(); } catch {}
   }
 }
-const applyDark = applyTheme;
 
 function cycleColorMode() {
   const nextIdx = (COLOR_MODES.indexOf(colorMode) + 1) % COLOR_MODES.length;
@@ -176,7 +169,7 @@ function getCalcUrl() {
   if (colorMode === 'auto') {
     themeParam = isGemini ? 'gemini' : 'auto';
   } else if (!isDark) {
-    themeParam = 'auto';
+    themeParam = 'light';
   } else {
     themeParam = isGemini ? 'gemini' : 'dark';
   }
@@ -193,7 +186,7 @@ function getCalcUrl() {
     }
   }
   const sep = base.includes('?') ? '&' : '?';
-  return `${base}${sep}embed=1&side=1&theme=${themeParam}&v=45`;
+  return `${base}${sep}embed=1&side=1&theme=${themeParam}&v=46`;
 }
 
 let hintTimer;
@@ -451,7 +444,7 @@ function layoutSync(s) {
 }
 
 // ---------- renderowanie ----------
-function cacheKey(n, scale, q = 1) { return `${n}|${scale.toFixed(5)}|${q === 1 ? devicePixelRatio : 'lo'}|${rot}|${crop ? 1 : 0}`; }
+function cacheKey(n, scale, q = 1) { return `${n}|${scale.toFixed(5)}|${q === 1 ? (window.devicePixelRatio || 1) : 'lo'}|${rot}|${crop ? 1 : 0}`; }
 function cancelled() { const e = new Error('cancelled'); e.name = 'RenderingCancelledException'; return e; }
 
 function renderPage(n, scale, q = 1) {
@@ -465,7 +458,7 @@ function renderPage(n, scale, q = 1) {
   const promise = (async () => {
     const page = await pdf.getPage(n);
     if (stop) throw cancelled();
-    const dpr = q === 1 ? (devicePixelRatio || 1) : q;
+    const dpr = q === 1 ? (window.devicePixelRatio || 1) : q;
     const b = await pageBox(n);
     if (stop) throw cancelled();
     const vp = page.getViewport({
@@ -808,6 +801,7 @@ async function openLocal(f) {
 }
 function pickFile() { picker.value = ''; picker.click(); }
 picker.addEventListener('change', () => openLocal(picker.files[0]));
+const welcome = document.getElementById('welcome');
 const welcomePickBtn = document.querySelector('#welcome .pick');
 if (welcomePickBtn) welcomePickBtn.addEventListener('click', (e) => { e.stopPropagation(); pickFile(); });
 
@@ -916,11 +910,11 @@ function setEmpty(v) {
     renderRecent(); renderBookmarks();
   }
 }
-window.addEventListener('dragover', (e) => { e.preventDefault(); welcome.classList.add('drag'); });
-window.addEventListener('dragleave', () => welcome.classList.remove('drag'));
+window.addEventListener('dragover', (e) => { e.preventDefault(); welcome?.classList.add('drag'); });
+window.addEventListener('dragleave', () => welcome?.classList.remove('drag'));
 window.addEventListener('drop', (e) => {
   e.preventDefault();
-  welcome.classList.remove('drag');
+  welcome?.classList.remove('drag');
   openLocal(e.dataTransfer.files[0]);
 });
 
@@ -935,7 +929,7 @@ const tipEl = document.getElementById('menu-tip');
 
 let pinned = pref.get('menuPinned', false);
 let popoverOpen = pref.get('popoverOpen', true);
-let menuTimer = null, tipTimer = null, expandTimer = null, collapseTimer = null;
+let menuTimer = null, tipTimer = null;
 
 function hideTip() {
   clearTimeout(tipTimer);
@@ -961,9 +955,6 @@ function showTipFor(el) {
     tipEl.classList.add('show');
   }, 100);
 }
-
-function expandMenu() { clearTimeout(collapseTimer); menu.classList.add('expanded'); }
-function collapseMenu() { clearTimeout(expandTimer); menu.classList.remove('expanded'); hideTip(); }
 
 // Pasek chowa się po 3.5 s bezczynności, jeśli nie jest najechany ani zablokowany kłódką
 function scheduleHide() {
@@ -1092,7 +1083,6 @@ function schedulePageJump() {
 
 pageInput.addEventListener('focus', () => {
   clearTimeout(menuTimer);
-  clearTimeout(collapseTimer);
   if (digitTriggeredFocus) { digitTriggeredFocus = false; return; }
   setTimeout(() => { if (document.activeElement === pageInput) pageInput.select(); }, 10);
 });
@@ -1116,7 +1106,7 @@ pageInput.addEventListener('keydown', (e) => {
 // są pomijane, gdy piszesz w polu – dlatego wystarczy tyle:
 pageInput.addEventListener('blur', () => {
   applyPageInput(true);
-  if (!menu.matches(':hover')) collapseMenu();
+  hideTip();
   scheduleHide();
 });
 pageInput.addEventListener('input', schedulePageJump);
@@ -1390,14 +1380,14 @@ menu.addEventListener('click', (e) => {
 });
 
 window.addEventListener('dblclick', (e) => {
-  if (!pdf || String(getSelection())) return;   // dwuklik w tekst zaznacza słowo
+  if (!pdf || String(window.getSelection())) return;   // dwuklik w tekst zaznacza słowo
   if (e.target.closest('#menu, #calc-sidebar')) return;
   act('full');
 });
 
 window.addEventListener('click', (e) => {
   if (!pdf) return;
-  if (String(getSelection())) return;
+  if (String(window.getSelection())) return;
   if (e.target.closest('#menu, #calc-sidebar, #calc-resizer')) return;
   if (pinned) {
     if (popoverOpen) setPopoverOpen(false);
@@ -1425,7 +1415,7 @@ window.addEventListener('touchstart', (e) => {
   touchAt = Date.now();
 }, { passive: true });
 window.addEventListener('touchend', (e) => {
-  if (!pdf || !touchAt || String(getSelection())) return;
+  if (!pdf || !touchAt || String(window.getSelection())) return;
   const t = e.changedTouches[0];
   const dx = t.clientX - touchX, dy = t.clientY - touchY;
   const ms = Date.now() - touchAt;
@@ -1483,6 +1473,11 @@ window.addEventListener('keydown', (e) => {
   const k = e.key;
 
   if (k === 'Escape') {
+    if (popoverOpen) {
+      setPopoverOpen(false);
+      e.preventDefault();
+      return;
+    }
     if (calcOpen) {
       setCalcOpen(false);
       e.preventDefault();
@@ -1504,12 +1499,6 @@ window.addEventListener('keydown', (e) => {
     pageInput.focus();
     pageInput.value = k;
     schedulePageJump();
-    return;
-  }
-
-  if (k === 'Escape' && popoverOpen) {
-    setPopoverOpen(false);
-    e.preventDefault();
     return;
   }
 
