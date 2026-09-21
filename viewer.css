@@ -397,26 +397,40 @@ html:not(.dark) #calc-frame {
   left: var(--calc-w, 440px);
   width: 9px;
   background: #2c2c2c;
-  cursor: col-resize;
+  cursor: ew-resize;
   z-index: 10;
   display: none;
   box-sizing: border-box;
-  transition: background-color .15s ease;
 }
 html.calc-open #calc-resizer {
   display: block;
 }
 html.calc-animating #calc-resizer {
-  transition: left .22s cubic-bezier(0.16, 1, 0.3, 1), background-color .15s ease;
+  transition: left .22s cubic-bezier(0.16, 1, 0.3, 1);
 }
-#calc-resizer:hover, #calc-resizer.dragging {
-  background: #3c4043;
+#calc-resizer::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 4px;
+  height: 24px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, .55);
+  opacity: 0;
+  transition: opacity .12s ease;
+  pointer-events: none;
+}
+#calc-resizer:hover::after,
+#calc-resizer.dragging::after {
+  opacity: 1;
 }
 html:not(.dark) #calc-resizer {
   background: #e0e0e0;
 }
-html:not(.dark) #calc-resizer:hover, html:not(.dark) #calc-resizer.dragging {
-  background: #d0d0d0;
+html:not(.dark) #calc-resizer::after {
+  background: rgba(0, 0, 0, .45);
 }
 html.empty #calc-resizer {
   display: none !important;

@@ -940,6 +940,7 @@ if (calcResizer) {
     calcSidebar.style.transition = 'none';
     stage.style.transition = 'none';
     document.body.style.userSelect = 'none';
+    document.body.style.cursor = 'ew-resize';
     if (calcFrame) calcFrame.style.pointerEvents = 'none';
     try { calcResizer.setPointerCapture(e.pointerId); } catch {}
     isDragging = true;
@@ -959,6 +960,7 @@ if (calcResizer) {
     calcSidebar.style.transition = '';
     stage.style.transition = '';
     document.body.style.userSelect = '';
+    document.body.style.cursor = '';
     if (calcFrame) calcFrame.style.pointerEvents = '';
     try { calcResizer.releasePointerCapture(ev.pointerId); } catch {}
     fitNow();
