@@ -143,7 +143,9 @@ function applyTheme() {
       calcFrame.contentWindow?.postMessage({ type: 'darkpdf_theme', theme: targetCalcTheme }, '*');
     } catch {}
   }
-  updateMenuState();
+  if (typeof updateMenu === 'function' && typeof menu !== 'undefined' && menu) {
+    try { updateMenu(); } catch {}
+  }
 }
 const applyDark = applyTheme;
 
