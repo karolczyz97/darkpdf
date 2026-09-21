@@ -395,10 +395,8 @@ function fit(a, b, sa, sb) {
   if (!two) {
     const scaleW = W / sa.w;
     const scaleH = H / sa.h;
-    let scale;
-    if (fitMode === 'width') scale = scaleW;
-    else if (fitMode === 'height') scale = scaleH;
-    else scale = Math.min(scaleW, scaleH);
+    // Wysokość 100% nie może wypchnąć strony poza ekran – wtedy zostaje dopasowanie całości
+    const scale = fitMode === 'width' ? scaleW : Math.min(scaleW, scaleH);
     return { a, b: null, scale, L: sa, R: sa, single: true };
   }
   const L = sa || sb, R = sb || sa;
@@ -406,10 +404,7 @@ function fit(a, b, sa, sb) {
   const maxH = Math.max(L.h, R.h);
   const scaleW = W / totalW;
   const scaleH = H / maxH;
-  let scale;
-  if (fitMode === 'width') scale = scaleW;
-  else if (fitMode === 'height') scale = scaleH;
-  else scale = Math.min(scaleW, scaleH);
+  const scale = fitMode === 'width' ? scaleW : Math.min(scaleW, scaleH);
   return { a, b, scale, L, R, single: false };
 }
 
@@ -1108,15 +1103,20 @@ async function getOptimalCalcWidthForHeightFit(s = start) {
   const minW = 320;
   const maxW = Math.max(minW, window.innerWidth - 140);
   const desiredCalcW = window.innerWidth - neededPdfWidth - 9;
-  return Math.max(minW, Math.min(maxW, Math.round(desiredCalcW)));
+  if (desiredCalcW < minW) return null;      // strona w 100% wysokości się nie mieści – nie ruszamy kalkulatora
+  return Math.min(maxW, Math.round(desiredCalcW));
 }
 
-async function snapCalcToHeightFit() {
+// Wysokość 100% z otwartym kalkulatorem: kalkulator dostaje dokładnie tyle miejsca,
+// ile zostaje obok strony. Jeśli strona w pełnej wysokości się nie mieści, nie zmieniamy nic.
+async function snapCalcToHeightFit(announce = false) {
   if (!calcOpen || !pdf) return;
   const optimalW = await getOptimalCalcWidthForHeightFit(start);
   if (optimalW != null) {
     updateCalcWidth(optimalW, true);
     fitNow();
+  } else if (announce) {
+    flash('Strona w 100% wysokości nie zmieści się obok kalkulatora – szerokość bez zmian', 2500);
   }
 }
 
@@ -1233,7 +1233,7 @@ async function setFitMode(mode) {
   if (fitMode === 'height') {
     userCustomWidth = false;
     if (calcOpen) {
-      await snapCalcToHeightFit();
+      await snapCalcToHeightFit(true);
     }
   }
   fitNow();
