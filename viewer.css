@@ -1,33 +1,33 @@
 :root {
   color-scheme: dark;
-  --ui-bg: rgba(19, 20, 22, .97);      /* jeszcze ciemniejsze tło menu */
-  --ui-bg-solid: #131416;
-  --ui-stage-bg: #0b0c0d;
-  --ui-resizer-bg: #202124;
-  --ui-text: #e6e6e6;
+  --ui-bg: rgba(11, 12, 13, .96);      /* bazowy kolor tła --bg z motywu kalkulatora */
+  --ui-bg-solid: #0b0c0d;              /* --bg: #0b0c0d */
+  --ui-stage-bg: #0b0c0d;              /* --panel: #0b0c0d */
+  --ui-resizer-bg: #2c2c2c;            /* --line: #2c2c2c */
+  --ui-text: #e6e6e6;                  /* --text: #e6e6e6 */
   --ui-text-strong: #fff;
-  --ui-text-dim: #8a8a8a;
-  --ui-line: rgba(255, 255, 255, .08);
-  --ui-hover: rgba(255, 255, 255, .08);
-  --ui-fill: rgba(255, 255, 255, .05);
-  --ui-accent: #8ab4f8;
+  --ui-text-dim: #8a8a8a;              /* --faint: #6f6f6f */
+  --ui-line: #2c2c2c;                  /* --line: #2c2c2c */
+  --ui-hover: #1b1c1e;                 /* --key-fn: #1b1c1e */
+  --ui-fill: #161719;
+  --ui-accent: #8ab4f8;                /* --eq-text */
   --ui-accent-soft: rgba(138, 180, 248, .14);
   --ui-font: system-ui, sans-serif;
   --calc-w: 440px;
 }
 html.gemini {
   color-scheme: dark;
-  --ui-bg: rgba(19, 20, 22, .97);
-  --ui-bg-solid: #131416;
-  --ui-stage-bg: #0b0c0d;
-  --ui-resizer-bg: #202124;
-  --ui-text: #e3e3e3;
+  --ui-bg: rgba(11, 12, 13, .96);      /* bazowy kolor tła --bg z motywu Gemini */
+  --ui-bg-solid: #0b0c0d;              /* --bg / --panel: #0b0c0d */
+  --ui-stage-bg: #0b0c0d;              /* --bg / --panel: #0b0c0d */
+  --ui-resizer-bg: #2c2c2c;            /* --line: #2c2c2c */
+  --ui-text: #e3e3e3;                  /* --text: #e3e3e3 */
   --ui-text-strong: #fff;
-  --ui-text-dim: #9a9b9c;
-  --ui-line: rgba(255, 255, 255, .08);
-  --ui-hover: rgba(255, 255, 255, .08);
-  --ui-fill: rgba(255, 255, 255, .05);
-  --ui-accent: #a8c7fa;
+  --ui-text-dim: #9a9b9c;              /* --faint: #9a9b9c */
+  --ui-line: #2c2c2c;                  /* --line: #2c2c2c */
+  --ui-hover: #1f2022;                 /* --key-fn: #1f2022 */
+  --ui-fill: #1e1f20;                  /* --hint: #1e1f20 */
+  --ui-accent: #a8c7fa;                /* --eq-text: #a8c7fa */
   --ui-accent-soft: rgba(168, 199, 250, .14);
   --ui-font: "Google Sans Flex", "Google Sans", "Helvetica Neue", system-ui, sans-serif;
 }
