@@ -114,6 +114,7 @@ html.fit-height #stage {
   overflow-x: auto;
   overflow-y: hidden;
   align-items: center;
+  justify-content: safe center;   /* gdy strony wystają w bok, lewa krawędź zostaje osiągalna */
   padding: 0;
   box-sizing: border-box;
   scrollbar-width: none;
