@@ -1,4 +1,6 @@
-// calc-panel.js – panel boczny kalkulatora w DarkPDF (rozmiar, rozdzielacz, synchronizacja)
+// calc-panel.js – panel boczny kalkulatora w DarkPDF (rozmiar, rozdzielacz, montowanie komponentu DOM)
+
+import { mountCalculator } from './calc-app.js';
 
 export const CALC_MIN_W = 320;         // najwęższy sensowny kalkulator
 export const PDF_MIN_W = 140;          // tyle miejsca zostawiamy zawsze na PDF
@@ -12,29 +14,18 @@ let targetPdfWidth = null;
 let userCustomWidth = false;
 
 let calcSidebar = null;
-let calcFrame = null;
+let calcContainer = null;
 let calcResizer = null;
+let calcInstance = null;
 
-function calcOrigin() {
-  try { return new URL(calcFrame.src, location.href).origin; } catch { return '*'; }
-}
-
-function getCalcUrl() {
-  const { isDark, palette } = ctx.getTheme();
-  const custom = ctx.pref.get('calcUrl', null) || window.DARKPDF_CALC_URL;
-  let base = custom;
-  if (!base) {
-    if (location.hostname === 'localhost' || location.hostname === '127.0.0.1') {
-      base = '/calc/index.html';
-    } else if (location.hostname.endsWith('github.io')) {
-      const user = location.hostname.split('.')[0];
-      base = `https://${user}.github.io/calc/`;
-    } else {
-      base = '../calc/index.html';
-    }
+function ensureCalcMounted() {
+  if (!calcInstance && calcContainer) {
+    calcInstance = mountCalculator(calcContainer, {
+      isEmbedded: true,
+      onClose: () => setCalcOpen(false),
+      onFlash: (text, ms) => ctx?.flash?.(text, ms)
+    });
   }
-  const sep = base.includes('?') ? '&' : '?';
-  return `${base}${sep}embed=1&side=1&mode=${isDark ? 'dark' : 'light'}&palette=${palette}&v=51`;
 }
 
 export function isCalcOpen() { return calcOpen; }
@@ -45,16 +36,8 @@ export function getCalcStageWidth() {
 export function resetUserCustomWidth() { userCustomWidth = false; }
 export function isUserCustomWidth() { return userCustomWidth; }
 
-export function sendThemeToCalc(isDark, palette) {
-  if (calcFrame && calcFrame.src && calcFrame.src !== 'about:blank') {
-    try {
-      calcFrame.contentWindow?.postMessage({
-        type: 'darkpdf_theme',
-        mode: isDark ? 'dark' : 'light',
-        palette
-      }, calcOrigin());
-    } catch {}
-  }
+export function sendThemeToCalc() {
+  // Motywy synchronizują się automatycznie przez klasy .dark i .gemini na <html>
 }
 
 export function updateCalcWidth(w, updateTargetPdf = true) {
@@ -132,9 +115,8 @@ export function setCalcOpen(open) {
     } else {
       updateCalcWidth(window.innerWidth - targetPdfWidth - 9, false);
     }
-    if (!calcFrame.src || calcFrame.src === 'about:blank') {
-      calcFrame.src = getCalcUrl();
-    }
+    ensureCalcMounted();
+    setTimeout(() => calcInstance?.focus(), 50);
   }
   window.focus();
   ctx.updateMenu();
@@ -164,7 +146,7 @@ export function initCalcPanel(context) {
   targetPdfWidth = ctx.pref.get('targetPdfWidth', null);
 
   calcSidebar = document.getElementById('calc-sidebar');
-  calcFrame = document.getElementById('calc-frame');
+  calcContainer = document.getElementById('calc-container');
   calcResizer = document.getElementById('calc-resizer');
 
   document.documentElement.style.setProperty('--calc-w', calcWidth + 'px');
@@ -180,7 +162,7 @@ export function initCalcPanel(context) {
       ctx.stage.style.transition = 'none';
       document.body.style.userSelect = 'none';
       document.body.style.cursor = 'ew-resize';
-      if (calcFrame) calcFrame.style.pointerEvents = 'none';
+      if (calcContainer) calcContainer.style.pointerEvents = 'none';
       try { calcResizer.setPointerCapture(e.pointerId); } catch {}
       isDragging = true;
     });
@@ -201,7 +183,7 @@ export function initCalcPanel(context) {
       ctx.stage.style.transition = '';
       document.body.style.userSelect = '';
       document.body.style.cursor = '';
-      if (calcFrame) calcFrame.style.pointerEvents = '';
+      if (calcContainer) calcContainer.style.pointerEvents = '';
       try { calcResizer.releasePointerCapture(ev.pointerId); } catch {}
       ctx.fitNow();
       ctx.rerenderSoon();
@@ -213,14 +195,4 @@ export function initCalcPanel(context) {
   }
 
   document.getElementById('calc-close')?.addEventListener('click', () => setCalcOpen(false));
-
-  window.addEventListener('message', (e) => {
-    if (!calcFrame || e.source !== calcFrame.contentWindow) return;
-    if (e.data && e.data.type === 'darkpdf_close_calc') {
-      setCalcOpen(false);
-    }
-    if (e.data && e.data.type === 'darkpdf_key' && typeof e.data.key === 'string') {
-      window.dispatchEvent(new KeyboardEvent('keydown', { key: e.data.key, shiftKey: !!e.data.shiftKey }));
-    }
-  });
 }

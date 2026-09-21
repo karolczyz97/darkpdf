@@ -4,9 +4,12 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="robots" content="noindex">
-  <title>DarkPDF</title>
   <link rel="stylesheet" href="theme.css?v=1">
-  <link rel="stylesheet" href="viewer.css?v=66">
+  <link rel="stylesheet" href="viewer.css?v=67">
+  <!-- KaTeX LaTeX math rendering dla kalkulatora -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css" crossorigin="anonymous">
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js" crossorigin="anonymous" onload="window.onKatexLoaded && window.onKatexLoaded()"></script>
+  <link rel="stylesheet" href="calc.css?v=1">
 </head>
 <body>
   <svg width="0" height="0" style="position:absolute" aria-hidden="true">
@@ -52,7 +55,7 @@
   <!-- Boczny panel kalkulatora -->
   <aside id="calc-sidebar" aria-label="Kalkulator naukowy">
     <button id="calc-close" class="mobile-only" type="button" aria-label="Wróć do PDF"><svg class="ic"><use href="#i-close"/></svg><span>Wróć do PDF</span></button>
-    <iframe id="calc-frame" title="Kalkulator naukowy" allow="clipboard-read; clipboard-write"></iframe>
+    <div id="calc-container"></div>
   </aside>
   <div id="calc-resizer" class="calc-resizer" title="Przeciągnij, aby zmienić szerokość"></div>
 
@@ -234,6 +237,6 @@
     </div>
   </div>
   <main id="text" class="sr-only" aria-label="Tekst dokumentu" hidden></main>
-  <script type="module" src="viewer.js?v=71"></script>
+  <script type="module" src="viewer.js?v=72"></script>
 </body>
 </html>

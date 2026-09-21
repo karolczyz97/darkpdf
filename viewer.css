@@ -549,18 +549,18 @@ html.calc-open #calc-sidebar {
 html.empty #calc-sidebar {
   display: none !important;
 }
-#calc-frame {
+#calc-container {
   flex: 1;
+  min-height: 0;
   width: 100%;
   height: 100%;
   border: 0;
   border-top-right-radius: 10px;
   border-bottom-right-radius: 10px;
-  background: var(--ui-stage-bg);
-  display: block;
-}
-html:not(.dark):not(.gemini) #calc-frame {
-  background: #f1f3f4;
+  background: transparent;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 #calc-resizer {
   position: fixed;

@@ -1,8 +1,18 @@
 // DarkPDF – pamięć podręczna aplikacji, dzięki której czytnik działa bez internetu.
 // Pliki aplikacji: najpierw z sieci (zawsze świeże), bez sieci – ostatnia zapisana wersja.
 // pdf.js w lib/pdfjs się nie zmienia, więc bierzemy go od razu z pamięci.
-const CACHE = 'darkpdf-v2';
-const CORE = ['./', 'index.html', 'theme.css', 'calc-panel.js', 'lib/pdfjs/build/pdf.min.mjs', 'lib/pdfjs/build/pdf.worker.min.mjs'];
+const CACHE = 'darkpdf-v3';
+const CORE = [
+  './',
+  'index.html',
+  'theme.css',
+  'viewer.css',
+  'calc.css',
+  'calc-app.js',
+  'calc-panel.js',
+  'lib/pdfjs/build/pdf.min.mjs',
+  'lib/pdfjs/build/pdf.worker.min.mjs'
+];
 
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(CORE)).then(() => self.skipWaiting()));
@@ -17,10 +27,20 @@ self.addEventListener('activate', (e) => {
 
 self.addEventListener('fetch', (e) => {
   const req = e.request;
+  if (req.method !== 'GET') return;
   const url = new URL(req.url);
-  if (req.method !== 'GET' || url.origin !== location.origin) return;   // tylko nasze pliki
+  const katex = url.hostname === 'cdn.jsdelivr.net' && url.pathname.startsWith('/npm/katex@');
+  if (url.origin !== location.origin && !katex) return;
+
   e.respondWith((async () => {
     const cache = await caches.open(CACHE);
+    if (katex) {
+      const hit = await cache.match(req);
+      if (hit) return hit;
+      const res = await fetch(req);
+      if (res.ok || res.type === 'opaque') cache.put(req, res.clone());
+      return res;
+    }
     if (url.pathname.includes('/lib/pdfjs/')) {
       const hit = await cache.match(req);
       if (hit) return hit;

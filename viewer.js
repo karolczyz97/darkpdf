@@ -12,8 +12,7 @@ import {
   resetUserCustomWidth,
   isUserCustomWidth,
   snapCalcToHeightFit,
-  handleCalcResize,
-  sendThemeToCalc
+  handleCalcResize
 } from './calc-panel.js';
 
 // Pamięć podręczna aplikacji: po pierwszej wizycie czytnik otwiera się też offline
@@ -145,7 +144,6 @@ function applyTheme() {
   const isDark = isDarkNow();
   document.documentElement.classList.toggle('dark', isDark);
   document.documentElement.classList.toggle('gemini', isDark && palette === 'gemini');
-  sendThemeToCalc(isDark, palette);
   if (menuReady) updateMenu();
 }
 
