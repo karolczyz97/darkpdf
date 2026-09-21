@@ -139,9 +139,7 @@ function applyTheme() {
       calcFrame.contentWindow?.postMessage({ type: 'darkpdf_theme', theme: targetCalcTheme }, '*');
     } catch {}
   }
-  if (typeof updateMenu === 'function' && typeof menu !== 'undefined' && menu) {
-    try { updateMenu(); } catch {}
-  }
+  try { if (typeof updateMenu === 'function') updateMenu(); } catch {}
 }
 
 function cycleColorMode() {
