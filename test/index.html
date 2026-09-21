@@ -1,0 +1,234 @@
+<!doctype html>
+<html lang="pl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex">
+  <title>DarkPDF</title>
+  <link rel="stylesheet" href="theme.css?v=1">
+  <link rel="stylesheet" href="viewer.css?v=62">
+</head>
+<body>
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <filter id="gemini-colors" color-interpolation-filters="sRGB">
+      <!-- czerń → #0f0f0f, biel → #e3e3e3 (kolory Gemini: tło body, --gem-sys-color--on-surface) -->
+      <feComponentTransfer>
+        <feFuncR type="linear" slope="0.8314" intercept="0.0588"/>
+        <feFuncG type="linear" slope="0.8314" intercept="0.0588"/>
+        <feFuncB type="linear" slope="0.8314" intercept="0.0588"/>
+      </feComponentTransfer>
+    </filter>
+  </svg>
+  <!-- Boczny panel kalkulatora -->
+  <aside id="calc-sidebar" aria-label="Kalkulator naukowy">
+    <iframe id="calc-frame" title="Kalkulator naukowy" allow="clipboard-read; clipboard-write"></iframe>
+  </aside>
+  <div id="calc-resizer" class="calc-resizer" title="Przeciągnij, aby zmienić szerokość"></div>
+
+  <div id="stage"></div>
+  <div id="hint" hidden></div>
+  <div id="prog"><span></span></div>
+
+  <div id="welcome">
+    <div class="card">
+      <div class="logo">DarkPDF</div>
+      <p class="lead">Przeciągnij plik PDF tutaj albo kliknij przycisk poniżej.</p>
+      <button class="pick" type="button">Wybierz plik PDF</button>
+      <div id="recent" hidden></div>
+      <p class="foot" id="recentHint" hidden>Enter otwiera ostatni plik.</p>
+      <div id="marks" hidden></div>
+      <div class="keys-sections">
+        <div class="keys-col">
+          <div class="keys-group">
+            <div class="keys-title">Nawigacja</div>
+            <div class="keys-grid">
+              <kbd>← →</kbd><span>przewijanie stron</span>
+              <kbd>Shift + scroll</kbd><span>skok o 10 stron</span>
+              <kbd>1 2 3 ⏎</kbd><span>skok do strony</span>
+              <kbd>B</kbd><span>zakładka na stronie</span>
+            </div>
+          </div>
+          <div class="keys-group">
+            <div class="keys-title">Narzędzia i wygląd</div>
+            <div class="keys-grid">
+              <kbd>K</kbd><span>kalkulator z boku</span>
+              <kbd>D</kbd><span>tryb ciemny / jasny</span>
+              <kbd>T</kbd><span>motyw zwykły / Gemini</span>
+              <kbd>F</kbd><span>pełny ekran</span>
+              <kbd>Ctrl+O</kbd><span>otwórz plik</span>
+            </div>
+          </div>
+        </div>
+        <div class="keys-col">
+          <div class="keys-group">
+            <div class="keys-title">Widok i układ</div>
+            <div class="keys-grid">
+              <kbd>P</kbd><span>jedna albo dwie strony</span>
+              <kbd>O</kbd><span>parowanie stron</span>
+              <kbd>W</kbd><span>zablokuj szerokość 100%</span>
+              <kbd>H</kbd><span>zablokuj wysokość 100%</span>
+              <kbd>C</kbd><span>przycinanie marginesów</span>
+              <kbd>R</kbd><span>obrót o 90°</span>
+              <kbd>?</kbd><span>wszystkie skróty</span>
+            </div>
+          </div>
+        </div>
+      </div>
+      <p class="foot">Kliknięcie w stronę otwiera pasek z przyciskami. Plik nie jest nigdzie wysyłany.</p>
+    </div>
+  </div>
+
+  <div id="menu" hidden>
+    <div id="menu-popover" class="menu-popover" popover="manual">
+      <div class="menu-section">
+        <button class="menu-item" data-k="pages">
+          <span class="icon">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="2" y="4" width="9" height="16" rx="2"/>
+              <rect x="13" y="4" width="9" height="16" rx="2"/>
+            </svg>
+          </span>
+          <span class="label-text">Dwie strony</span>
+          <span class="k">P</span>
+        </button>
+        <button class="menu-item" data-k="pairing">
+          <span class="icon">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M4 6h16M4 12h16M4 18h16"/>
+            </svg>
+          </span>
+          <span class="label-text">Pary 1–2</span>
+          <span class="k">O</span>
+        </button>
+        <button class="menu-item" data-k="fit-w">
+          <span class="icon">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 12H3m0 0l4-4m-4 4l4 4m14-4l-4-4m4 4l-4 4"/>
+            </svg>
+          </span>
+          <span class="label-text">Szerokość 100%</span>
+          <span class="k">W</span>
+        </button>
+        <button class="menu-item" data-k="fit-h">
+          <span class="icon">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 3v18m0-18l-4 4m4-4l4 4m-4 14l-4-4m4 4l4-4"/>
+            </svg>
+          </span>
+          <span class="label-text">Wysokość 100%</span>
+          <span class="k">H</span>
+        </button>
+      </div>
+
+      <div class="menu-divider"></div>
+
+      <div class="menu-section">
+        <button class="menu-item" data-k="crop">
+          <span class="icon">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M6 2v14a2 2 0 0 0 2 2h14M18 22V8a2 2 0 0 0-2-2H2"/>
+            </svg>
+          </span>
+          <span class="label-text">Przytnij marginesy</span>
+          <span class="k">C</span>
+        </button>
+        <button class="menu-item" data-k="rotate">
+          <span class="icon">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/>
+            </svg>
+          </span>
+          <span class="label-text">Obróć o 90°</span>
+          <span class="k">R</span>
+        </button>
+      </div>
+
+      <div class="menu-divider"></div>
+
+      <div class="menu-section">
+        <button class="menu-item" data-k="dark">
+          <span class="icon">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+            </svg>
+          </span>
+          <span class="label-text">Tryb: Ciemny</span>
+          <span class="k">D</span>
+        </button>
+        <button class="menu-item" data-k="theme">
+          <span class="icon">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
+              <path d="M12 2L14.4 9.6L22 12L14.4 14.4L12 22L9.6 14.4L2 12L9.6 9.6L12 2Z"/>
+            </svg>
+          </span>
+          <span class="label-text">Motyw: Gemini</span>
+          <span class="k">T</span>
+        </button>
+      </div>
+
+      <div class="menu-divider"></div>
+
+      <div class="menu-section">
+        <button class="menu-item" data-k="calc">
+          <span class="icon">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="4" y="2" width="16" height="20" rx="2"/>
+              <line x1="8" y1="6" x2="16" y2="6"/>
+              <line x1="16" y1="14" x2="16" y2="18"/>
+              <path d="M8 10h.01M12 10h.01M16 10h.01M8 14h.01M12 14h.01M8 18h.01M12 18h.01"/>
+            </svg>
+          </span>
+          <span class="label-text">Kalkulator</span>
+          <span class="k">K</span>
+        </button>
+        <button class="menu-item" data-k="full">
+          <span class="icon">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/>
+            </svg>
+          </span>
+          <span class="label-text">Pełny ekran</span>
+          <span class="k">F</span>
+        </button>
+        <button class="menu-item" data-k="open">
+          <span class="icon">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+            </svg>
+          </span>
+          <span class="label-text">Otwórz plik</span>
+          <span class="k">Ctrl+O</span>
+        </button>
+      </div>
+    </div>
+
+    <div class="menu-nav">
+      <button data-k="prev" data-tip="Poprzednia strona" data-key="←" aria-label="Poprzednia strona">◀</button>
+      <div class="page-select" data-tip="Wpisz numer strony (skok po 1s lub Enter)">
+        <input type="text" class="page-input" inputmode="numeric" pattern="[0-9]*" aria-label="Numer strony">
+        <span class="total"></span>
+      </div>
+      <button data-k="next" data-tip="Następna strona" data-key="→" aria-label="Następna strona">▶</button>
+      <button class="menu-pin" data-k="pin" data-tip="Zablokuj dymek strony na stałe" aria-label="Zablokuj dymek strony">
+        <svg class="icon-unlocked" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+          <path d="M7 11V7a5 5 0 0 1 9.9-1"/>
+        </svg>
+        <svg class="icon-locked" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+          <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+        </svg>
+      </button>
+      <button class="menu-toggle" data-k="toggle-menu" data-tip="Menu opcji (M)" aria-label="Menu opcji">
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="3" y1="6" x2="21" y2="6"/>
+          <line x1="3" y1="12" x2="21" y2="12"/>
+          <line x1="3" y1="18" x2="21" y2="18"/>
+        </svg>
+      </button>
+    </div>
+  </div>
+  <main id="text" class="sr-only" aria-label="Tekst dokumentu" hidden></main>
+  <script type="module" src="viewer.js?v=63"></script>
+</body>
+</html>
