@@ -1,34 +1,37 @@
+/* MOTYW SYSTEMOWY: Kolory z systemu / Chrome PDF Viewer */
 :root {
   color-scheme: dark;
-  --ui-bg: rgba(11, 12, 13, .96);      /* bazowy kolor tła --bg z motywu kalkulatora */
-  --ui-bg-solid: #0b0c0d;              /* --bg: #0b0c0d */
-  --ui-stage-bg: #0b0c0d;              /* --panel: #0b0c0d */
-  --ui-resizer-bg: #2c2c2c;            /* --line: #2c2c2c */
-  --ui-text: #e6e6e6;                  /* --text: #e6e6e6 */
-  --ui-text-strong: #fff;
-  --ui-text-dim: #8a8a8a;              /* --faint: #6f6f6f */
-  --ui-line: #2c2c2c;                  /* --line: #2c2c2c */
-  --ui-hover: #1b1c1e;                 /* --key-fn: #1b1c1e */
-  --ui-fill: #161719;
-  --ui-accent: #8ab4f8;                /* --eq-text */
+  --ui-bg: rgba(24, 24, 24, .95);
+  --ui-bg-solid: Canvas, #1b1c1e;              /* systemowy kolor powierzchni */
+  --ui-stage-bg: #0b0c0d;
+  --ui-resizer-bg: Canvas, #2c2c2c;            /* systemowy kolor separatora */
+  --ui-text: CanvasText, #e6e6e6;              /* systemowy kolor tekstu */
+  --ui-text-strong: #ffffff;
+  --ui-text-dim: GrayText, #8a8a8a;            /* systemowy kolor wygaszonego tekstu */
+  --ui-line: rgba(255, 255, 255, .10);
+  --ui-hover: rgba(255, 255, 255, .10);
+  --ui-fill: rgba(255, 255, 255, .06);
+  --ui-accent: AccentColor, #8ab4f8;           /* systemowy kolor akcentu */
   --ui-accent-soft: rgba(138, 180, 248, .14);
-  --ui-font: system-ui, sans-serif;
+  --ui-font: system-ui, -apple-system, sans-serif;
   --calc-w: 440px;
 }
+
+/* MOTYW GEMINI: Oficjalne tokeny projektowe Google Gemini (gemini.google.com i panel boczny Chrome) */
 html.gemini {
   color-scheme: dark;
-  --ui-bg: rgba(11, 12, 13, .96);      /* bazowy kolor tła --bg z motywu Gemini */
-  --ui-bg-solid: #0b0c0d;              /* --bg / --panel: #0b0c0d */
-  --ui-stage-bg: #0b0c0d;              /* --bg / --panel: #0b0c0d */
-  --ui-resizer-bg: #2c2c2c;            /* --line: #2c2c2c */
-  --ui-text: #e3e3e3;                  /* --text: #e3e3e3 */
-  --ui-text-strong: #fff;
-  --ui-text-dim: #9a9b9c;              /* --faint: #9a9b9c */
-  --ui-line: #2c2c2c;                  /* --line: #2c2c2c */
-  --ui-hover: #1f2022;                 /* --key-fn: #1f2022 */
-  --ui-fill: #1e1f20;                  /* --hint: #1e1f20 */
-  --ui-accent: #a8c7fa;                /* --eq-text: #a8c7fa */
-  --ui-accent-soft: rgba(168, 199, 250, .14);
+  --ui-bg: rgba(19, 19, 20, .96);             /* --gem-sys-color--surface (#131314) */
+  --ui-bg-solid: #131314;                      /* --gem-sys-color--surface */
+  --ui-stage-bg: #0b0c0d;                      /* tło panelu bocznego Gemini w Chrome */
+  --ui-resizer-bg: #2c2c2c;                    /* separator z panelu Gemini */
+  --ui-text: #e3e3e3;                          /* --gem-sys-color--on-surface */
+  --ui-text-strong: #ffffff;
+  --ui-text-dim: #9a9b9c;                      /* --gem-sys-color--on-surface-variant */
+  --ui-line: rgba(255, 255, 255, .08);         /* --gem-sys-color--outline-variant subtelny */
+  --ui-hover: #282a2c;                         /* --gem-sys-color--surface-container-high */
+  --ui-fill: #1e1f20;                          /* --gem-sys-color--surface-container */
+  --ui-accent: #a8c7fa;                        /* --gem-sys-color--primary */
+  --ui-accent-soft: rgba(168, 199, 250, .14);  /* --gem-sys-color--primary z przezroczystością */
   --ui-font: "Google Sans Flex", "Google Sans", "Helvetica Neue", system-ui, sans-serif;
 }
 html, body {
