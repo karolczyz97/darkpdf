@@ -115,7 +115,7 @@ const pending = new Map();           // klucz -> trwające renderowanie
 function clearCaches() {
   for (const job of pending.values()) job.cancel();
   for (const c of [sizeCache, canvasCache, loCache, tlCache, textCache, tcCache]) c.clear();
-  cropJobs.clear();
+  clearCropCache();
 }
 
 const isDarkNow = () => (colorMode === 'auto' ? systemDark.matches : colorMode === 'dark');
@@ -220,6 +220,8 @@ const cropJobs = new Map();    // klucz grupy stron -> Promise<box>
 // strony dostają to samo obcięcie, żeby tekst nie skakał przy przewracaniu.
 const groupKey = (n, full) => `${n % 2}|${Math.round(full.width)}x${Math.round(full.height)}|${rot}`;
 
+const ownJobs = new Map();     // nr strony -> Promise<ramka treści tej jednej strony>
+
 async function pageBox(n) {
   if (!pdf || !numPages || !n || n < 1 || n > numPages) return null;
   const page = await pdf.getPage(n);
@@ -228,7 +230,28 @@ async function pageBox(n) {
   if (!crop) return whole;
   const k = groupKey(n, full);
   if (!cropJobs.has(k)) cropJobs.set(k, groupBox(n, full, k));
-  return (await cropJobs.get(k)) || whole;
+  const common = await cropJobs.get(k);
+  if (!common) return whole;
+
+  // Wyjątek dla stron, na których wspólne cięcie coś by ucięło: zdjęcie na całą stronę,
+  // okładka, rysunek wchodzący w margines. Taka strona idzie w całości.
+  if (!ownJobs.has(n)) ownJobs.set(n, detectContent(page, full));
+  const own = await ownJobs.get(n);
+  if (own && cutsContent(own, common, full)) return whole;
+  return common;
+}
+
+function cutsContent(own, box, full) {
+  const tx = full.width * 0.015, ty = full.height * 0.015;   // tolerancja ~1,5%
+  const fullBleed = (own.r - own.x) > full.width * 0.96 && (own.bt - own.y) > full.height * 0.96;
+  return fullBleed ||
+    own.x < box.x - tx || own.y < box.y - ty ||
+    own.r > box.x + box.w + tx || own.bt > box.y + box.h + ty;
+}
+
+function clearCropCache() {
+  cropJobs.clear();
+  ownJobs.clear();
 }
 
 // Pomocnik do równoległego przetwarzania z limitem równoczesnych zadań
@@ -309,7 +332,8 @@ async function groupBox(n, full, k) {
       const page = await pdf.getPage(p);
       const vp = page.getViewport({ scale: 1, rotation: rotationOf(page) });
       if (groupKey(p, vp) !== k) return null;
-      return await detectContent(page, vp);
+      if (!ownJobs.has(p)) ownJobs.set(p, detectContent(page, vp));   // wynik przyda się też przy wyświetlaniu
+      return await ownJobs.get(p);
     } catch {
       return null;
     }
@@ -1323,7 +1347,7 @@ function act(k) {
       crop = !crop;
       pref.set('crop', crop);
       sizeCache.clear();
-      cropJobs.clear();
+      clearCropCache();
       flash(crop ? 'Marginesy przycięte' : 'Pełne strony');
       show(start);
       break;
@@ -1332,7 +1356,7 @@ function act(k) {
       rot = (rot + 90) % 360;
       if (fileKey) pref.set('rot:' + fileKey, rot);
       sizeCache.clear();
-      cropJobs.clear();
+      clearCropCache();
       flash(`Obrót ${rot}°`);
       show(start);
       break;
