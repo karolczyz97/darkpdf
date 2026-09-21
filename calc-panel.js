@@ -96,8 +96,8 @@ export async function snapCalcToHeightFit() {
   ctx?.fitNow?.();
 }
 
-export async function setCalcOpen(open) {
-  if (open && !ctx.isPdfLoaded()) return;
+export function setCalcOpen(open) {
+  if (open && !ctx?.isPdfLoaded?.()) return;
   calcOpen = !!open;
   ctx.pref.set('calcOpen', calcOpen);
   document.documentElement.classList.add('calc-animating');
@@ -111,8 +111,10 @@ export async function setCalcOpen(open) {
   }
   window.focus();
   ctx.updateMenu();
-  ctx.fitNow();
-  ctx.rerenderSoon();
+  if (ctx.isPdfLoaded()) {
+    ctx.fitNow();
+    ctx.rerenderSoon();
+  }
 }
 
 export function toggleCalc() {
@@ -139,7 +141,6 @@ export function initCalcPanel(context) {
   calcContainer = document.getElementById('calc-container');
   calcResizer = document.getElementById('calc-resizer');
 
-  lastWindowHeight = window.innerHeight;
   document.documentElement.style.setProperty('--calc-w', calcWidth + 'px');
 
   if (calcResizer) {

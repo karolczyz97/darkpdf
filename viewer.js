@@ -511,6 +511,7 @@ function blank(size, scale) {
 }
 
 let lastRenderedScale = null;
+let lastRenderedDpr = typeof window !== 'undefined' ? (window.devicePixelRatio || 1) : 1;
 
 async function show(s) {
   const token = ++showToken;
@@ -518,6 +519,7 @@ async function show(s) {
   const { a, b, scale, L, R, single } = await layout(s);
   if (token !== showToken) return;
   lastRenderedScale = scale;
+  lastRenderedDpr = window.devicePixelRatio || 1;
 
   const pages = [a, b];
   const need = new Set();
