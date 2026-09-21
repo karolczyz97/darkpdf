@@ -1,12 +1,14 @@
 :root {
   color-scheme: dark;
-  --ui-bg: rgba(18, 19, 20, .96);      /* tło paska i kart interfejsu */
-  --ui-bg-solid: #131314;
+  --ui-bg: rgba(24, 24, 24, .94);      /* tło paska i kart interfejsu */
+  --ui-bg-solid: rgba(20, 20, 20, .96);
+  --ui-stage-bg: #0b0c0d;
+  --ui-resizer-bg: #2c2c2c;
   --ui-text: #e6e6e6;
   --ui-text-strong: #fff;
-  --ui-text-dim: #8e918f;
-  --ui-line: rgba(255, 255, 255, .06);
-  --ui-hover: rgba(255, 255, 255, .08);
+  --ui-text-dim: #8a8a8a;
+  --ui-line: rgba(255, 255, 255, .10);
+  --ui-hover: rgba(255, 255, 255, .12);
   --ui-fill: rgba(255, 255, 255, .06);
   --ui-accent: #8ab4f8;
   --ui-accent-soft: rgba(138, 180, 248, .16);
@@ -15,13 +17,18 @@
 }
 html.gemini {
   color-scheme: dark;
-  --ui-bg: rgba(19, 19, 20, .98);
-  --ui-bg-solid: #131314;
+  --ui-bg: #282a2c;
+  --ui-bg-solid: #282a2c;
+  --ui-stage-bg: #0b0c0d;
+  --ui-resizer-bg: #2c2c2c;
   --ui-text: #e3e3e3;
-  --ui-text-dim: #8e918f;
-  --ui-line: rgba(255, 255, 255, .06);
+  --ui-text-strong: #fff;
+  --ui-text-dim: #9a9b9c;
+  --ui-line: #444746;
+  --ui-hover: rgba(255, 255, 255, .08);
+  --ui-fill: rgba(255, 255, 255, .06);
   --ui-accent: #a8c7fa;
-  --ui-accent-soft: rgba(168, 199, 250, .14);
+  --ui-accent-soft: rgba(168, 199, 250, .16);
   --ui-font: "Google Sans Flex", "Google Sans", "Helvetica Neue", system-ui, sans-serif;
 }
 html, body {
@@ -31,7 +38,7 @@ html, body {
   background: #525659;
   user-select: none;
 }
-html.dark, html.dark body { background: #0b0c0d; }
+html.dark, html.dark body { background: var(--ui-stage-bg); }
 
 #stage {
   position: fixed;
@@ -45,7 +52,7 @@ html.dark, html.dark body { background: #0b0c0d; }
   overflow: hidden;
 }
 html.dark #stage, html.gemini #stage {
-  background: #0b0c0d;
+  background: var(--ui-stage-bg);
 }
 html.calc-animating #stage {
   transition: left .22s cubic-bezier(0.16, 1, 0.3, 1), border-radius .22s cubic-bezier(0.16, 1, 0.3, 1);
@@ -60,7 +67,7 @@ html.calc-open,
 html.calc-open body,
 html.gemini.calc-open body,
 html.dark.calc-open body {
-  background: Canvas !important;
+  background: var(--ui-resizer-bg) !important;
 }
 html:not(.dark):not(.gemini).calc-open,
 html:not(.dark):not(.gemini).calc-open body {
@@ -70,7 +77,7 @@ html.calc-open #stage {
   left: calc(var(--calc-w, 440px) + 9px);
   border-top-left-radius: 10px;
   border-bottom-left-radius: 10px;
-  background: #0b0c0d;
+  background: var(--ui-stage-bg);
 }
 html:not(.dark).calc-open #stage {
   background: #f1f3f4;
@@ -190,9 +197,9 @@ html.gemini #hint { background: var(--ui-bg); color: var(--ui-text); font-family
   box-sizing: border-box;
   padding: 6px;
   border-radius: 16px;
-  background: var(--ui-bg-solid, #131314);
-  border: 1px solid rgba(255, 255, 255, .05);
-  box-shadow: 0 12px 40px rgba(0, 0, 0, .7), 0 1px 3px rgba(0, 0, 0, .4);
+  background: var(--ui-bg-solid);
+  border: 1px solid var(--ui-line);
+  box-shadow: 0 12px 36px rgba(0, 0, 0, .55), 0 2px 8px rgba(0, 0, 0, .35);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
   display: flex;
@@ -211,7 +218,7 @@ html.gemini #hint { background: var(--ui-bg); color: var(--ui-text); font-family
 
 .menu-divider {
   height: 1px;
-  background: rgba(255, 255, 255, .06);
+  background: var(--ui-line);
   margin: 4px 6px;
   border: 0;
 }
@@ -233,7 +240,7 @@ html.gemini #hint { background: var(--ui-bg); color: var(--ui-text); font-family
   transition: background .12s, color .12s;
 }
 .menu-item:hover {
-  background: rgba(255, 255, 255, .08);
+  background: var(--ui-hover);
   color: var(--ui-text-strong);
 }
 .menu-item.active {
@@ -266,8 +273,8 @@ html.gemini #hint { background: var(--ui-bg); color: var(--ui-text); font-family
   font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
   font-size: 11px;
   color: var(--ui-text-dim);
-  background: rgba(255, 255, 255, .06);
-  border: 0;
+  background: var(--ui-fill);
+  border: 1px solid var(--ui-line);
   border-radius: 4px;
   padding: 1px 5px;
   line-height: 1.3;
@@ -282,9 +289,9 @@ html.gemini #hint { background: var(--ui-bg); color: var(--ui-text); font-family
   gap: 4px;
   padding: 4px 6px;
   border-radius: 24px;
-  background: var(--ui-bg-solid, #131314);
-  border: 1px solid rgba(255, 255, 255, .05);
-  box-shadow: 0 6px 24px rgba(0, 0, 0, .6);
+  background: var(--ui-bg-solid);
+  border: 1px solid var(--ui-line);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, .45);
   backdrop-filter: blur(14px);
   -webkit-backdrop-filter: blur(14px);
   font: 13px var(--ui-font);
@@ -307,7 +314,7 @@ html.gemini #hint { background: var(--ui-bg); color: var(--ui-text); font-family
   justify-content: center;
 }
 .menu-nav button:hover {
-  background: rgba(255, 255, 255, .08);
+  background: var(--ui-hover);
   color: var(--ui-text-strong);
 }
 
@@ -315,6 +322,7 @@ html.gemini #hint { background: var(--ui-bg); color: var(--ui-text); font-family
   width: 28px;
   height: 28px;
   min-width: 28px;
+  max-width: 28px;
   padding: 0 !important;
   border-radius: 14px;
   color: var(--ui-text-dim);
@@ -324,10 +332,11 @@ html.gemini #hint { background: var(--ui-bg); color: var(--ui-text); font-family
   justify-content: center;
   transition: color .15s, background .15s;
   flex-shrink: 0;
+  box-sizing: border-box;
 }
 .menu-pin:hover, .menu-toggle:hover {
   color: var(--ui-text-strong) !important;
-  background: rgba(255, 255, 255, .08) !important;
+  background: var(--ui-hover) !important;
 }
 .menu-pin.pinned, .menu-toggle.open {
   color: var(--ui-accent) !important;
@@ -344,16 +353,16 @@ html.gemini #hint { background: var(--ui-bg); color: var(--ui-text); font-family
   align-items: center;
   justify-content: center;
   gap: 5px;
-  color: #b0b0b0;
+  color: var(--ui-text);
   font-variant-numeric: tabular-nums;
   font-weight: 500;
   user-select: none;
   padding: 0 4px;
 }
 .page-input {
-  background: rgba(255, 255, 255, .06);
-  border: 0;
-  border-radius: 12px;
+  background: var(--ui-fill);
+  border: 1px solid var(--ui-line);
+  border-radius: 6px;
   color: var(--ui-text-strong);
   font: inherit;
   font-size: 13px;
@@ -363,10 +372,11 @@ html.gemini #hint { background: var(--ui-bg); color: var(--ui-text); font-family
   width: 56px;
   padding: 2px 4px;
   outline: none;
-  transition: background .15s, box-shadow .15s;
+  transition: border-color .15s, background .15s;
 }
 .page-input:focus {
-  background: rgba(255, 255, 255, .12);
+  background: var(--ui-hover);
+  border-color: var(--ui-accent);
   box-shadow: 0 0 0 1px var(--ui-accent);
   color: var(--ui-text-strong);
 }
@@ -499,7 +509,7 @@ html.nocursor .textLayer :is(span, br) { cursor: none; }
   width: var(--calc-w, 440px);
   min-width: 320px;
   max-width: calc(100vw - 140px);
-  background: #0b0c0d;
+  background: var(--ui-stage-bg);
   border-top-right-radius: 10px;
   border-bottom-right-radius: 10px;
   z-index: 8;
@@ -511,9 +521,9 @@ html.nocursor .textLayer :is(span, br) { cursor: none; }
   overflow: hidden;
 }
 html.gemini #calc-sidebar {
-  background: #0b0c0d;
+  background: var(--ui-stage-bg);
 }
-html:not(.dark) #calc-sidebar {
+html:not(.dark):not(.gemini) #calc-sidebar {
   background: #f1f3f4;
 }
 html.calc-open #calc-sidebar {
@@ -529,10 +539,10 @@ html.empty #calc-sidebar {
   border: 0;
   border-top-right-radius: 10px;
   border-bottom-right-radius: 10px;
-  background: #0b0c0d;
+  background: var(--ui-stage-bg);
   display: block;
 }
-html:not(.dark) #calc-frame {
+html:not(.dark):not(.gemini) #calc-frame {
   background: #f1f3f4;
 }
 #calc-resizer {
@@ -541,7 +551,7 @@ html:not(.dark) #calc-frame {
   bottom: 0;
   left: var(--calc-w, 440px);
   width: 9px;
-  background: Canvas;
+  background: var(--ui-resizer-bg);
   cursor: ew-resize;
   z-index: 10;
   display: none;
@@ -562,7 +572,7 @@ html.calc-animating #calc-resizer {
   width: 4px;
   height: 24px;
   border-radius: 2px;
-  background: rgba(255, 255, 255, .55);
+  background: var(--ui-text-dim);
   opacity: 0;
   transition: opacity .12s ease;
   pointer-events: none;
