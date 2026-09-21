@@ -120,13 +120,6 @@ function clearCaches() {
 
 const isDarkNow = () => (colorMode === 'auto' ? systemDark.matches : colorMode === 'dark');
 
-// Motyw, który przekazujemy kalkulatorowi – liczony w jednym miejscu
-function calcTheme() {
-  const gemini = palette === 'gemini';
-  if (colorMode === 'auto') return gemini ? 'gemini' : 'auto';
-  if (!isDarkNow()) return 'light';
-  return gemini ? 'gemini' : 'dark';
-}
 
 let menuReady = false;   // pasek jest budowany niżej w pliku; do tego czasu go nie odświeżamy
 
@@ -135,7 +128,9 @@ function applyTheme() {
   document.documentElement.classList.toggle('dark', isDark);
   document.documentElement.classList.toggle('gemini', isDark && palette === 'gemini');
   if (calcFrame && calcFrame.src && calcFrame.src !== 'about:blank') {
-    try { calcFrame.contentWindow?.postMessage({ type: 'darkpdf_theme', theme: calcTheme() }, calcOrigin()); } catch {}
+    // Wysyłamy tryb już rozstrzygnięty (ciemny/jasny): ramka dziedziczy color-scheme czytnika,
+    // więc „auto” liczone wewnątrz kalkulatora mogłoby wyjść inaczej niż tutaj.
+    try { calcFrame.contentWindow?.postMessage({ type: 'darkpdf_theme', mode: isDark ? 'dark' : 'light', palette }, calcOrigin()); } catch {}
   }
   if (menuReady) updateMenu();
 }
@@ -165,7 +160,6 @@ function calcOrigin() {
 }
 
 function getCalcUrl() {
-  const themeParam = calcTheme();
   const custom = pref.get('calcUrl', null) || window.DARKPDF_CALC_URL;
   let base = custom;
   if (!base) {
@@ -179,7 +173,7 @@ function getCalcUrl() {
     }
   }
   const sep = base.includes('?') ? '&' : '?';
-  return `${base}${sep}embed=1&side=1&theme=${themeParam}&v=49`;
+  return `${base}${sep}embed=1&side=1&mode=${isDarkNow() ? 'dark' : 'light'}&palette=${palette}&v=50`;
 }
 
 let hintTimer;
