@@ -1181,16 +1181,17 @@ window.addEventListener('wheel', (e) => {
   lastWheel = now;
   const ad = Math.abs(d);
 
+  const jumpMult = e.shiftKey ? 10 : 1;
   if (ad >= NOTCH_MIN_PX) {
     if (gap > 120) notch = ad;
     acc = 0;
-    flip(Math.sign(d) * Math.max(1, Math.round(ad / notch)));
+    flip(Math.sign(d) * Math.max(1, Math.round(ad / notch)) * jumpMult);
     return;
   }
   if (Math.sign(d) !== Math.sign(acc)) acc = 0;
   acc += d;
   const n = Math.trunc(acc / TOUCHPAD_PX);
-  if (n) { acc -= n * TOUCHPAD_PX; flip(n); }
+  if (n) { acc -= n * TOUCHPAD_PX; flip(n * jumpMult); }
 }, { passive: false });
 
 // ---------- klawisze ----------
@@ -1247,7 +1248,7 @@ window.addEventListener('keydown', (e) => {
   if (k === 'End') { if (pdf) go(spreadStartOf(numPages)); e.preventDefault(); return; }
   if (k === '?') {
     flash('→ ↓ Spacja PgDn  następne\n← ↑ PgUp  poprzednie\nHome / End  początek / koniec\n' +
-          'numer (lub Enter)  skok do strony\nShift + strzałka  skok o 10\nB  zakładka na tej stronie\n' +
+          'numer (lub Enter)  skok do strony\nShift + strzałka / scroll  skok o 10\nB  zakładka na tej stronie\n' +
           'K  kalkulator z boku\nW  zablokuj szerokość 100%\nH  zablokuj wysokość 100%\n' +
           'C  przycinanie marginesów\nR  obrót o 90°\n' +
           'P  jedna / dwie strony\nD  tryb ciemny\nT  motyw zwykły / Gemini\nO  pary nieparzyste / parzyste\n' +
