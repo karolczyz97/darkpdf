@@ -142,7 +142,7 @@ function nextStart(s) {
 function prevStart(s) { return s <= 1 ? null : spreadStartOf(s - 1); }
 
 const rotationOf = (page) => (page.rotate + rot + 360) % 360;
-const CROP_SAMPLES = 5;        // ile stron badamy, żeby ustalić wspólne obcięcie
+const CROP_SAMPLES = 28;        // ile stron badamy, żeby ustalić wspólne idealne obcięcie
 const CROP_THRESHOLD = 235;    // jaśniejsze piksele uznajemy za pusty margines
 const CROP_STEP = 2;           // co który piksel miniatury sprawdzamy
 
@@ -163,27 +163,95 @@ async function pageBox(n) {
   return (await cropJobs.get(k)) || whole;
 }
 
-// Bierzemy kilka stron z tej samej grupy i najszerszy wspólny obszar treści,
+// Pomocnik do równoległego przetwarzania z limitem równoczesnych zadań
+async function mapConcurrent(items, limit, fn) {
+  const results = new Array(items.length);
+  let index = 0;
+  const worker = async () => {
+    while (index < items.length) {
+      const cur = index++;
+      try {
+        results[cur] = await fn(items[cur]);
+      } catch {
+        results[cur] = null;
+      }
+    }
+  };
+  const pool = Array.from({ length: Math.min(limit, items.length) }, () => worker());
+  await Promise.all(pool);
+  return results;
+}
+
+// Generuje reprezentatywną próbkę stron do wyznaczenia idealnego przycięcia:
+// łączy lokalne otoczenie bieżącej strony z równomiernym próbkowaniem całego dokumentu
+function getCropCandidatePages(n, totalPages, maxSamples = 28) {
+  const parity = n % 2;
+  const pageSet = new Set();
+  pageSet.add(n);
+
+  // 1. Lokalne otoczenie wokół n (ta sama parzystość)
+  for (let d = 2; d <= 24 && pageSet.size < 8; d += 2) {
+    if (n + d <= totalPages) pageSet.add(n + d);
+    if (n - d >= 1) pageSet.add(n - d);
+  }
+
+  // 2. Równomierny rozkład po całym dokumencie
+  if (totalPages > 1) {
+    const targetGlobal = Math.max(16, maxSamples - pageSet.size);
+    for (let i = 0; i < targetGlobal; i++) {
+      const ratio = (i + 0.5) / targetGlobal;
+      let p = Math.round(1 + ratio * (totalPages - 1));
+      if (p % 2 !== parity) {
+        p = (p + 1 <= totalPages) ? p + 1 : p - 1;
+      }
+      p = Math.max(1, Math.min(totalPages, p));
+      if (p % 2 === parity) pageSet.add(p);
+    }
+  }
+
+  // 3. Wypełnienie jeśli mały dokument lub zostały wolne sloty
+  for (let p = (parity === 1 ? 1 : 2); p <= totalPages && pageSet.size < maxSamples; p += 2) {
+    pageSet.add(p);
+  }
+
+  return Array.from(pageSet).sort((a, b) => a - b);
+}
+
+// Bierzemy szeroką próbkę stron z tej samej grupy i najszerszy wspólny obszar treści,
 // więc nic się nie urywa, a wszystkie strony wychodzą tej samej wielkości.
 async function groupBox(n, full, k) {
-  const pages = [n];
-  for (let d = 2; pages.length < CROP_SAMPLES && d <= 2 * CROP_SAMPLES; d += 2) {
-    if (n + d <= numPages) pages.push(n + d);
-    if (pages.length < CROP_SAMPLES && n - d >= 1) pages.push(n - d);
-  }
-  let box = null;
-  for (const p of pages) {
+  const pages = getCropCandidatePages(n, numPages, CROP_SAMPLES);
+
+  const scannedBoxes = await mapConcurrent(pages, 6, async (p) => {
     const page = await pdf.getPage(p);
     const vp = page.getViewport({ scale: 1, rotation: rotationOf(page) });
-    if (groupKey(p, vp) !== k) continue;
-    const found = await detectContent(page, vp);
-    if (!found) continue;
+    if (groupKey(p, vp) !== k) return null;
+    return await detectContent(page, vp);
+  });
+
+  const valid = scannedBoxes.filter(Boolean);
+  if (!valid.length) return null;
+
+  // Sprawdzamy czy strona to full-bleed (np. okładka lub zdjęcie na całą stronę)
+  const isFullBleed = (b) => (b.r - b.x) > full.width * 0.96 && (b.bt - b.y) > full.height * 0.96;
+  let usable = valid;
+  if (valid.length >= 3) {
+    const normalPages = valid.filter(b => !isFullBleed(b));
+    // Jeśli większość stron ma normalne marginesy, odrzucamy sporadyczne strony full-bleed,
+    // aby okładka nie psuła idealnego przycięcia tekstu dla reszty książki
+    if (normalPages.length >= Math.ceil(valid.length * 0.5)) {
+      usable = normalPages;
+    }
+  }
+
+  let box = null;
+  for (const found of usable) {
     box = box ? {
       x: Math.min(box.x, found.x),
       y: Math.min(box.y, found.y),
       r: Math.max(box.r, found.r),
       bt: Math.max(box.bt, found.bt)
-    } : found;
+    } : { ...found };
   }
   if (!box) return null;
   const w = box.r - box.x, h = box.bt - box.y;
@@ -220,6 +288,8 @@ async function detectContent(page, full) {
       return a <= b ? [a, b] : null;
     };
     const ys = span(rows, c.width), xs = span(cols, c.height);
+    c.width = 0;
+    c.height = 0;
     if (!ys || !xs) return null;
     const pad = 8 / s;                       // niewielki oddech wokół treści
     return {
@@ -263,7 +333,10 @@ function fit(a, b, sa, sb) {
 
 async function layout(s) {
   const [a, b] = spreadOf(s);
-  const sa = a ? await pageBox(a) : null, sb = b ? await pageBox(b) : null;
+  const [sa, sb] = await Promise.all([
+    a ? pageBox(a) : Promise.resolve(null),
+    b ? pageBox(b) : Promise.resolve(null)
+  ]);
   if (a) sizeCache.set(a, sa);
   if (b) sizeCache.set(b, sb);
   return fit(a, b, sa, sb);
