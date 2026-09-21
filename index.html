@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="robots" content="noindex">
   <title>DarkPDF</title>
-  <link rel="stylesheet" href="viewer.css?v=37">
+  <link rel="stylesheet" href="viewer.css?v=38">
 </head>
 <body>
   <svg width="0" height="0" style="position:absolute" aria-hidden="true">
@@ -36,21 +36,42 @@
       <div id="recent" hidden></div>
       <p class="foot" id="recentHint" hidden>Enter otwiera ostatni plik.</p>
       <div id="marks" hidden></div>
-      <div class="keys">
-        <kbd>← →</kbd><span>przewijanie stron</span>
-        <kbd>K</kbd><span>kalkulator naukowy z boku</span>
-        <kbd>W</kbd><span>zablokuj szerokość 100%</span>
-        <kbd>H</kbd><span>zablokuj wysokość 100%</span>
-        <kbd>P</kbd><span>jedna albo dwie strony</span>
-        <kbd>D</kbd><span>tryb ciemny</span>
-        <kbd>T</kbd><span>motyw zwykły albo Gemini</span>
-        <kbd>O</kbd><span>parowanie stron</span>
-        <kbd>Shift + ← → / scroll</kbd><span>skok o 10 stron</span>
-        <kbd>B</kbd><span>zakładka na stronie</span>
-        <kbd>C</kbd><span>przycinanie marginesów</span>
-        <kbd>R</kbd><span>obrót o 90°</span>
-        <kbd>F</kbd><span>pełny ekran</span>
-        <kbd>1 2 3 ⏎</kbd><span>skok do strony</span>
+      <div class="keys-sections">
+        <div class="keys-col">
+          <div class="keys-group">
+            <div class="keys-title">Nawigacja</div>
+            <div class="keys-grid">
+              <kbd>← →</kbd><span>przewijanie stron</span>
+              <kbd>Shift + scroll</kbd><span>skok o 10 stron</span>
+              <kbd>1 2 3 ⏎</kbd><span>skok do strony</span>
+              <kbd>B</kbd><span>zakładka na stronie</span>
+            </div>
+          </div>
+          <div class="keys-group">
+            <div class="keys-title">Narzędzia i wygląd</div>
+            <div class="keys-grid">
+              <kbd>K</kbd><span>kalkulator z boku</span>
+              <kbd>D</kbd><span>tryb ciemny / jasny</span>
+              <kbd>T</kbd><span>motyw zwykły / Gemini</span>
+              <kbd>F</kbd><span>pełny ekran</span>
+              <kbd>Ctrl+O</kbd><span>otwórz plik</span>
+            </div>
+          </div>
+        </div>
+        <div class="keys-col">
+          <div class="keys-group">
+            <div class="keys-title">Widok i układ</div>
+            <div class="keys-grid">
+              <kbd>P</kbd><span>jedna albo dwie strony</span>
+              <kbd>O</kbd><span>parowanie stron</span>
+              <kbd>W</kbd><span>zablokuj szerokość 100%</span>
+              <kbd>H</kbd><span>zablokuj wysokość 100%</span>
+              <kbd>C</kbd><span>przycinanie marginesów</span>
+              <kbd>R</kbd><span>obrót o 90°</span>
+              <kbd>?</kbd><span>wszystkie skróty</span>
+            </div>
+          </div>
+        </div>
       </div>
       <p class="foot">Kliknięcie w stronę otwiera pasek z przyciskami. Plik nie jest nigdzie wysyłany.</p>
     </div>
@@ -58,17 +79,25 @@
 
   <div id="menu" hidden>
     <div class="menu-actions">
-      <button data-k="calc" data-tip="Przełącz kalkulator naukowy z boku" data-key="K">Kalkulator <span class="k">(K)</span></button>
-      <button data-k="fit-w" data-tip="Zablokuj szerokość strony 100% lub auto" data-key="W">Szerokość 100% <span class="k">(W)</span></button>
-      <button data-k="fit-h" data-tip="Zablokuj wysokość strony 100% lub auto" data-key="H">Wysokość 100% <span class="k">(H)</span></button>
-      <button data-k="pages" data-tip="Zmień widok stron" data-key="P"></button>
-      <button data-k="pairing" data-tip="Zmień parowanie stron" data-key="O"></button>
-      <button data-k="dark" data-tip="Przełącz tryb ciemny / jasny" data-key="D"></button>
-      <button data-k="crop" data-tip="Przytnij białe marginesy stron" data-key="C"></button>
-      <button data-k="rotate" data-tip="Obróć strony o 90°" data-key="R"></button>
-      <button data-k="theme" data-tip="Przełącz motyw" data-key="T"></button>
-      <button data-k="full" data-tip="Pełny ekran" data-key="F">Pełny ekran <span class="k">(F)</span></button>
-      <button data-k="open" data-tip="Wybierz plik z dysku" data-key="Ctrl+O">Otwórz plik <span class="k">(Ctrl+O)</span></button>
+      <div class="menu-group" data-grp="view" title="Układ stron">
+        <button data-k="pages" data-tip="Zmień widok stron" data-key="P"></button>
+        <button data-k="pairing" data-tip="Zmień parowanie stron" data-key="O"></button>
+        <button data-k="fit-w" data-tip="Zablokuj szerokość strony 100% lub auto" data-key="W">Szerokość 100% <span class="k">(W)</span></button>
+        <button data-k="fit-h" data-tip="Zablokuj wysokość strony 100% lub auto" data-key="H">Wysokość 100% <span class="k">(H)</span></button>
+      </div>
+      <div class="menu-group" data-grp="page" title="Korekta strony">
+        <button data-k="crop" data-tip="Przytnij białe marginesy stron" data-key="C"></button>
+        <button data-k="rotate" data-tip="Obróć strony o 90°" data-key="R"></button>
+      </div>
+      <div class="menu-group" data-grp="style" title="Wygląd i motyw">
+        <button data-k="dark" data-tip="Przełącz tryb ciemny / jasny" data-key="D"></button>
+        <button data-k="theme" data-tip="Przełącz motyw" data-key="T"></button>
+      </div>
+      <div class="menu-group" data-grp="tools" title="Narzędzia">
+        <button data-k="calc" data-tip="Przełącz kalkulator naukowy z boku" data-key="K">Kalkulator <span class="k">(K)</span></button>
+        <button data-k="full" data-tip="Pełny ekran" data-key="F">Pełny ekran <span class="k">(F)</span></button>
+        <button data-k="open" data-tip="Wybierz plik z dysku" data-key="Ctrl+O">Otwórz plik <span class="k">(Ctrl+O)</span></button>
+      </div>
     </div>
     <div class="menu-nav">
       <button data-k="prev" data-tip="Poprzednia strona" data-key="←">◀</button>
@@ -90,6 +119,6 @@
     </div>
   </div>
   <div id="menu-tip" hidden></div>
-  <script type="module" src="viewer.js?v=43"></script>
+  <script type="module" src="viewer.js?v=44"></script>
 </body>
 </html>
