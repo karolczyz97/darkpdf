@@ -395,10 +395,8 @@ function fit(a, b, sa, sb) {
   if (!two) {
     const scaleW = W / sa.w;
     const scaleH = H / sa.h;
-    let scale;
-    if (fitMode === 'width') scale = scaleW;
-    else if (fitMode === 'height') scale = scaleH;
-    else scale = Math.min(scaleW, scaleH);
+    // Wysokość 100% nie może wypchnąć strony poza ekran – wtedy zostaje dopasowanie całości
+    const scale = fitMode === 'width' ? scaleW : Math.min(scaleW, scaleH);
     return { a, b: null, scale, L: sa, R: sa, single: true };
   }
   const L = sa || sb, R = sb || sa;
@@ -406,10 +404,7 @@ function fit(a, b, sa, sb) {
   const maxH = Math.max(L.h, R.h);
   const scaleW = W / totalW;
   const scaleH = H / maxH;
-  let scale;
-  if (fitMode === 'width') scale = scaleW;
-  else if (fitMode === 'height') scale = scaleH;
-  else scale = Math.min(scaleW, scaleH);
+  const scale = fitMode === 'width' ? scaleW : Math.min(scaleW, scaleH);
   return { a, b, scale, L, R, single: false };
 }
 
