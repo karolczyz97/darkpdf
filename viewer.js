@@ -433,9 +433,7 @@ function fit(a, b, sa, sb) {
     if (!s || !s.w || !s.h) return { a, b: null, scale: 1, L: s, R: s, single: true };
     const scaleW = W / s.w;
     const scaleH = H / s.h;
-    // Wysokość 100% nie może wypchnąć strony poza ekran – wtedy zostaje dopasowanie całości
-    const scale = fitMode === 'width' ? scaleW : Math.min(scaleW, scaleH);
-    return { a, b: null, scale, L: s, R: s, single: true };
+    return { a, b: null, scale: pickScale(scaleW, scaleH), L: s, R: s, single: true };
   }
   const L = sa || sb, R = sb || sa;
   if (!L || !L.w || !L.h) return { a, b, scale: 1, L, R, single: false };
@@ -445,8 +443,15 @@ function fit(a, b, sa, sb) {
   const maxH = Math.max(L.h, rh);
   const scaleW = totalW > 0 ? W / totalW : 1;
   const scaleH = maxH > 0 ? H / maxH : 1;
-  const scale = fitMode === 'width' ? scaleW : Math.min(scaleW, scaleH);
-  return { a, b, scale, L, R, single: false };
+  return { a, b, scale: pickScale(scaleW, scaleH), L, R, single: false };
+}
+
+// auto = cała strona zawsze widoczna; width = pełna szerokość (reszta w pionie przewijana);
+// height = pełna wysokość zawsze, a to, co się nie mieści w poziomie, przewija się w bok
+function pickScale(scaleW, scaleH) {
+  if (fitMode === 'width') return scaleW;
+  if (fitMode === 'height') return scaleH;
+  return Math.min(scaleW, scaleH);
 }
 
 async function layout(s) {
@@ -1305,6 +1310,13 @@ window.addEventListener('wheel', (e) => {
         return; // Naturalne przewijanie strony
       }
     }
+  }
+  // Tryb wysokości: jeśli strony wystają w bok, ruch poziomy (touchpad, kółko przechylane) przewija je w bok,
+  // a kółko w pionie dalej przerzuca strony
+  if (fitMode === 'height' && stage.scrollWidth > stage.clientWidth + 2 && Math.abs(e.deltaX) > Math.abs(e.deltaY)) {
+    e.preventDefault();
+    stage.scrollLeft += e.deltaX * (e.deltaMode === 1 ? 40 : 1);
+    return;
   }
   e.preventDefault();
   let d = Math.abs(e.deltaY) >= Math.abs(e.deltaX) ? e.deltaY : e.deltaX;
