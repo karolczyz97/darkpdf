@@ -2,19 +2,29 @@
 :root {
   color-scheme: dark;
   --ui-bg: rgba(24, 24, 24, .95);
-  --ui-bg-solid: Canvas, #1b1c1e;              /* systemowy kolor powierzchni */
+  --ui-bg-solid: #1b1c1e;                      /* bezpieczny fallback tła */
   --ui-stage-bg: #0b0c0d;
-  --ui-resizer-bg: Canvas, #2c2c2c;            /* systemowy kolor separatora */
-  --ui-text: CanvasText, #e6e6e6;              /* systemowy kolor tekstu */
+  --ui-resizer-bg: #2c2c2c;                    /* bezpieczny fallback separatora */
+  --ui-text: #e6e6e6;                          /* bezpieczny fallback tekstu */
   --ui-text-strong: #ffffff;
-  --ui-text-dim: GrayText, #8a8a8a;            /* systemowy kolor wygaszonego tekstu */
+  --ui-text-dim: #8a8a8a;                      /* bezpieczny fallback wygaszonego tekstu */
   --ui-line: rgba(255, 255, 255, .10);
   --ui-hover: rgba(255, 255, 255, .10);
   --ui-fill: rgba(255, 255, 255, .06);
-  --ui-accent: AccentColor, #8ab4f8;           /* systemowy kolor akcentu */
+  --ui-accent: #8ab4f8;                        /* bezpieczny fallback akcentu */
   --ui-accent-soft: rgba(138, 180, 248, .14);
   --ui-font: system-ui, -apple-system, sans-serif;
   --calc-w: 440px;
+}
+
+@supports (color: CanvasText) {
+  :root {
+    --ui-bg-solid: Canvas;
+    --ui-resizer-bg: Canvas;
+    --ui-text: CanvasText;
+    --ui-text-dim: GrayText;
+    --ui-accent: AccentColor;
+  }
 }
 
 /* MOTYW GEMINI: Oficjalne tokeny projektowe Google Gemini (gemini.google.com i panel boczny Chrome) */

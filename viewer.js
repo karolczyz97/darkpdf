@@ -21,11 +21,13 @@ stage.style.gap = GAP + 'px';
 // Ustawienia trzymane w przeglądarce; typ bierzemy z wartości domyślnej.
 const pref = {
   get(k, d) {
-    const v = localStorage.getItem(k);
-    if (v === null) return d;
-    if (typeof d === 'boolean') return v === '1';
-    if (typeof d === 'number') return parseInt(v, 10) || d;
-    return v;
+    try {
+      const v = localStorage.getItem(k);
+      if (v === null) return d;
+      if (typeof d === 'boolean') return v === '1';
+      if (typeof d === 'number') return parseInt(v, 10) || d;
+      return v;
+    } catch { return d; }
   },
   set(k, v) { try { localStorage.setItem(k, typeof v === 'boolean' ? (v ? '1' : '0') : String(v)); } catch {} },
   json(k, d) { try { return JSON.parse(localStorage.getItem(k)) ?? d; } catch { return d; } },
@@ -89,9 +91,9 @@ function lru(max = Infinity) {
 
 // ---- Kalkulator i tryb dopasowania ----
 let calcOpen = false;
-let calcWidth = parseInt(localStorage.getItem('calcWidth'), 10) || 440;
-let targetPdfWidth = parseInt(localStorage.getItem('targetPdfWidth'), 10) || null;
-let fitMode = localStorage.getItem('fitMode') || 'auto'; // 'auto' | 'width' | 'height'
+let calcWidth = pref.get('calcWidth', 440);
+let targetPdfWidth = pref.get('targetPdfWidth', null);
+let fitMode = pref.get('fitMode', 'auto'); // 'auto' | 'width' | 'height'
 let userCustomWidth = false;
 
 const calcSidebar = document.getElementById('calc-sidebar');
@@ -173,7 +175,7 @@ function getCalcUrl() {
   } else {
     themeParam = isGemini ? 'gemini' : 'dark';
   }
-  const custom = localStorage.getItem('calcUrl') || window.DARKPDF_CALC_URL;
+  const custom = pref.get('calcUrl', null) || window.DARKPDF_CALC_URL;
   let base = custom;
   if (!base) {
     if (location.hostname === 'localhost' || location.hostname === '127.0.0.1') {
@@ -714,7 +716,7 @@ async function open(src, name, key, startPage = null, rawBlob = null) {
     if (blobToSave) rememberFile(key, name, blobToSave);
     let p = pref.get('pos:' + key, 1);
     if (startPage) p = startPage;
-    if (localStorage.getItem('calcOpen') === '1') {
+    if (pref.get('calcOpen', false)) {
       setCalcOpen(true);
     }
     show(spreadStartOf(p));
@@ -1162,7 +1164,7 @@ async function snapCalcToHeightFit() {
 function setCalcOpen(open) {
   if (open && !pdf) return;
   calcOpen = !!open;
-  localStorage.setItem('calcOpen', calcOpen ? '1' : '0');
+  pref.set('calcOpen', calcOpen);
   document.documentElement.classList.add('calc-animating');
   setTimeout(() => document.documentElement.classList.remove('calc-animating'), 250);
   document.documentElement.classList.toggle('calc-open', calcOpen);
@@ -1172,7 +1174,7 @@ function setCalcOpen(open) {
       snapCalcToHeightFit();
     } else if (!targetPdfWidth) {
       targetPdfWidth = Math.max(120, window.innerWidth - (calcWidth + 9));
-      localStorage.setItem('targetPdfWidth', String(targetPdfWidth));
+      pref.set('targetPdfWidth', targetPdfWidth);
     } else {
       const minW = 320;
       const maxW = Math.max(minW, window.innerWidth - 140);
@@ -1198,10 +1200,10 @@ function updateCalcWidth(w, updateTargetPdf = true) {
   const maxW = Math.max(minW, window.innerWidth - 140);
   calcWidth = Math.max(minW, Math.min(maxW, Math.round(w)));
   document.documentElement.style.setProperty('--calc-w', calcWidth + 'px');
-  localStorage.setItem('calcWidth', String(calcWidth));
+  pref.set('calcWidth', calcWidth);
   if (updateTargetPdf) {
     targetPdfWidth = Math.max(120, window.innerWidth - (calcWidth + 9));
-    localStorage.setItem('targetPdfWidth', String(targetPdfWidth));
+    pref.set('targetPdfWidth', targetPdfWidth);
   }
 }
 
@@ -1262,7 +1264,7 @@ window.addEventListener('message', (e) => {
 
 async function setFitMode(mode) {
   fitMode = mode;
-  localStorage.setItem('fitMode', fitMode);
+  pref.set('fitMode', fitMode);
   document.documentElement.classList.toggle('fit-width', fitMode === 'width');
   document.documentElement.classList.toggle('fit-height', fitMode === 'height');
   flash(fitMode === 'width' ? 'Zablokowano: Szerokość 100%' : (fitMode === 'height' ? 'Zablokowano: Wysokość 100%' : 'Dopasowanie: Auto'));
