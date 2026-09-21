@@ -179,7 +179,7 @@ function getCalcUrl() {
     }
   }
   const sep = base.includes('?') ? '&' : '?';
-  return `${base}${sep}embed=1&side=1&theme=${themeParam}&v=48`;
+  return `${base}${sep}embed=1&side=1&theme=${themeParam}&v=49`;
 }
 
 let hintTimer;
@@ -920,37 +920,11 @@ const pinBtn = menu.querySelector('.menu-pin');
 const toggleBtn = menu.querySelector('.menu-toggle');
 const pageInput = menu.querySelector('.page-input');
 const totalSpan = menu.querySelector('.total');
-const tipEl = document.getElementById('menu-tip');
 
 let pinned = pref.get('menuPinned', false);
 let popoverOpen = pref.get('popoverOpen', true);
-let menuTimer = null, tipTimer = null;
+let menuTimer = null;
 menuReady = true;     // od teraz applyTheme() może odświeżać pasek
-
-function hideTip() {
-  clearTimeout(tipTimer);
-  if (tipEl) { tipEl.classList.remove('show'); tipEl.hidden = true; }
-}
-
-function showTipFor(el) {
-  clearTimeout(tipTimer);
-  tipTimer = setTimeout(() => {
-    if (!el || !tipEl || menu.hidden) return;
-    const text = el.dataset.tip, key = el.dataset.key;
-    if (!text) return;
-    tipEl.innerHTML = `${text}${key ? ` <span class="tip-k">${key}</span>` : ''}`;
-    tipEl.hidden = false;
-
-    const rect = el.getBoundingClientRect(), tipRect = tipEl.getBoundingClientRect();
-    let left = rect.left + rect.width / 2;
-    let top = rect.top - tipRect.height - 8;
-    if (top < 6) top = rect.bottom + 8;
-    left = Math.max(tipRect.width / 2 + 8, Math.min(window.innerWidth - tipRect.width / 2 - 8, left));
-    tipEl.style.left = `${left}px`;
-    tipEl.style.top = `${top}px`;
-    tipEl.classList.add('show');
-  }, 100);
-}
 
 // Pasek chowa się po 3.5 s bezczynności, jeśli nie jest najechany ani zablokowany kłódką
 function scheduleHide() {
@@ -966,20 +940,18 @@ menu.addEventListener('mouseleave', () => {
   scheduleHide();
 });
 
-menu.addEventListener('pointerover', (e) => { const t = e.target.closest('[data-tip]'); if (t) showTipFor(t); });
-menu.addEventListener('pointerout', (e) => { const t = e.target.closest('[data-tip]'); if (t) hideTip(); });
 
 function hideMenu() {
   if (pinned) return;
   menu.hidden = true;
   clearTimeout(menuTimer);
-  hideTip();
+  syncPopover();
 }
 
 function showMenu() {
   if (!pdf) return;
-  updateMenu();
   menu.hidden = false;
+  updateMenu();
   scheduleHide();
 }
 
@@ -991,10 +963,17 @@ function setBtnLabel(btn, text, key) {
   if (kEl && key) kEl.textContent = key;
 }
 
+// Menu opcji to natywny popover (warstwa nad wszystkim, zakotwiczony nad paskiem).
+// Pokazujemy go tylko razem z paskiem; to, czy ma być otwarty, pamiętamy osobno.
+function syncPopover() {
+  if (!popoverEl?.showPopover) return;
+  const want = popoverOpen && !menu.hidden;
+  if (want !== popoverEl.matches(':popover-open')) want ? popoverEl.showPopover() : popoverEl.hidePopover();
+}
+
 function setPopoverOpen(open) {
   popoverOpen = !!open;
   pref.set('popoverOpen', popoverOpen);
-  if (popoverEl) popoverEl.hidden = !popoverOpen;
   updateMenu();
 }
 
@@ -1008,7 +987,7 @@ function updateMenu() {
     pageInput.value = (a && b ? `${a}–${b}` : `${a || b}`);
   }
   if (totalSpan) totalSpan.textContent = `/ ${numPages}`;
-  if (popoverEl) popoverEl.hidden = !popoverOpen;
+  syncPopover();
 
   // [klucz przycisku, etykieta, skrót, czy podświetlony]
   const buttons = [
@@ -1034,13 +1013,11 @@ function updateMenu() {
   if (darkBtn) {
     const iconEl = darkBtn.querySelector('.icon');
     if (iconEl && DARK_ICONS[colorMode]) iconEl.innerHTML = DARK_ICONS[colorMode];
-    darkBtn.dataset.tip = `Przełącz tryb: Ciemny / Jasny / Auto (${COLOR_LABELS[colorMode]})`;
   }
   const themeBtn = menu.querySelector('[data-k="theme"]');
   if (themeBtn) {
     const iconEl = themeBtn.querySelector('.icon');
     if (iconEl && THEME_ICONS[palette]) iconEl.innerHTML = THEME_ICONS[palette];
-    themeBtn.dataset.tip = 'Przełącz motyw: Gemini / Systemowy';
   }
 
   if (pinBtn) {
@@ -1097,7 +1074,6 @@ pageInput.addEventListener('keydown', (e) => {
 // są pomijane, gdy piszesz w polu – dlatego wystarczy tyle:
 pageInput.addEventListener('blur', () => {
   applyPageInput(true);
-  hideTip();
   scheduleHide();
 });
 pageInput.addEventListener('input', schedulePageJump);
