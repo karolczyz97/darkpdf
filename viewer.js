@@ -13,7 +13,7 @@ import {
   isUserCustomWidth,
   snapCalcToHeightFit,
   handleCalcResize
-} from './calc-panel.js?v=4';
+} from './calc-panel.js?v=5';
 
 // Pamięć podręczna aplikacji: po pierwszej wizycie czytnik otwiera się też offline
 if ('serviceWorker' in navigator && location.protocol === 'https:') {
@@ -551,7 +551,7 @@ async function show(s) {
       ? [shown[0] || blank(L, scale)]
       : [shown[0] || blank(L, scale), shown[1] || blank(R, scale)]));
     stage.scrollTop = 0;
-    stage.scrollLeft = 0;
+    centerX();
     const range = a && b ? `${a}–${b}` : `${a || b}`;
     document.title = `${range} / ${numPages} – ${fileName}`;
     if (!menu.hidden) updateMenu();
@@ -1424,6 +1424,12 @@ function fitNow() {
     if (c) { c.style.width = w; c.style.height = h; }
     else { el.style.width = w; el.style.height = h; }
   });
+  centerX();
+}
+
+// Tryb wysokości: gdy strony wystają w bok, ustaw widok na środek (a nie na lewą krawędź)
+function centerX() {
+  stage.scrollLeft = fitMode === 'height' ? Math.max(0, (stage.scrollWidth - stage.clientWidth) / 2) : 0;
 }
 
 window.addEventListener('resize', () => {
