@@ -448,7 +448,7 @@ async function updateText(s, token) {
     sec.append(h, pre);
     parts.push(sec);
   }
-  if (token === showToken) textLayer.replaceChildren(...parts);
+  if (token === showToken && textLayer) textLayer.replaceChildren(...parts);
 }
 
 // Prefetch stron w tle
@@ -532,27 +532,32 @@ async function open(src, name, key, startPage = null, rawBlob = null) {
     flash('Nie udało się otworzyć pliku: ' + (err?.message || err), 4000);
     return;
   }
-  if (pdf) pdf.destroy();
-  pdf = doc;
-  document.documentElement.classList.remove('empty');
-  hideMenu();
-  numPages = pdf.numPages;
-  fileName = name;
-  fileKey = key;
-  clearCaches();
-  textLayer.replaceChildren();
-  pairing = pref.get('pairing:' + key, pref.get('pairing', 'odd'));
-  hint.hidden = true;
-
-  rot = pref.get('rot:' + key, 0);
-  if (blobToSave) rememberFile(key, name, blobToSave);
-  let p = pref.get('pos:' + key, 1);
-  if (startPage) p = startPage;
-  if (localStorage.getItem('calcOpen') === '1') {
-    setCalcOpen(true);
+  try {
+    if (pdf) pdf.destroy();
+    pdf = doc;
+    document.documentElement.classList.remove('empty');
+    hideMenu();
+    numPages = pdf.numPages;
+    fileName = name;
+    fileKey = key;
+    clearCaches();
+    if (textLayer) textLayer.replaceChildren();
+    pairing = pref.get('pairing:' + key, pref.get('pairing', 'odd'));
+    rot = pref.get('rot:' + key, 0);
+    if (blobToSave) rememberFile(key, name, blobToSave);
+    let p = pref.get('pos:' + key, 1);
+    if (startPage) p = startPage;
+    if (localStorage.getItem('calcOpen') === '1') {
+      setCalcOpen(true);
+    }
+    show(spreadStartOf(p));
+    if (pinned) showMenu();
+  } catch (e) {
+    console.error('Błąd inicjalizacji PDF:', e);
+    flash('Błąd podczas wyświetlania: ' + (e?.message || e), 4000);
+  } finally {
+    hint.hidden = true;
   }
-  show(spreadStartOf(p));
-  if (pinned) showMenu();
 }
 
 function nameFromUrl(u) {
