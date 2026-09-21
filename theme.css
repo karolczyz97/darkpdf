@@ -1,0 +1,20 @@
+/* Wspólna paleta Gemini dla DarkPDF i kalkulatora.
+   Kolor zmieniasz tutaj i zmienia się w obu aplikacjach.
+   Wartości odczytane z gemini.google.com i panelu bocznego Gemini w Chrome. */
+:root {
+  --gem-bg: #0b0c0d;           /* tło panelu bocznego Gemini */
+  --gem-surface: #131314;      /* --gem-sys-color--surface */
+  --gem-fill: #1e1f20;         /* --gem-sys-color--surface-container */
+  --gem-fill-2: #1f2022;
+  --gem-hover: #282a2c;        /* --gem-sys-color--surface-container-high */
+  --gem-hover-2: #3c4043;
+  --gem-line: #2c2c2c;         /* separator */
+  --gem-text: #e3e3e3;         /* --gem-sys-color--on-surface */
+  --gem-text-muted: #c4c7c5;
+  --gem-text-dim: #9a9b9c;     /* --gem-sys-color--on-surface-variant */
+  --gem-accent: #a8c7fa;       /* --gem-sys-color--primary */
+  --gem-accent-bg: #1f3760;
+  --gem-accent-line: #3b5a8c;
+  --gem-err: #f2b8b5;
+  --gem-font: "Google Sans Flex", "Google Sans", "Helvetica Neue", system-ui, sans-serif;
+}
