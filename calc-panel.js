@@ -13,7 +13,6 @@ export const clampCalcW = (w) => {
 let ctx = null;
 let calcOpen = false;
 let calcWidth = 440;
-let targetPdfWidth = null;
 let userCustomWidth = false;
 let fixedW = null;                    // tryb szerokości: kalkulator stoi w miejscu, PDF bierze resztę
 let userCalcW = null;                 // szerokość z rozdzielacza (bez przycinania do okna – żeby nie „zjadało” jej zwężanie)
@@ -55,13 +54,10 @@ export function getCalcStageWidth() {
 export function resetUserCustomWidth() { userCustomWidth = false; userCalcW = null; }
 export function isUserCustomWidth() { return userCustomWidth; }
 
-export function updateCalcWidth(w, updateTargetPdf = true) {
+export function updateCalcWidth(w) {
   calcWidth = clampCalcW(w);
   document.documentElement.style.setProperty('--calc-w', calcWidth + 'px');
   ctx.pref.set('calcWidth', calcWidth);
-  if (updateTargetPdf) {
-    targetPdfWidth = Math.max(PDF_MIN_W, window.innerWidth - (calcWidth + 9));
-  }
 }
 
 export function getNeededPdfWidth() {
@@ -89,12 +85,6 @@ export function getNeededPdfWidth() {
     const totalPagesW = Math.ceil(L.w * scaleH) + Math.ceil(R.w * scaleH) + ctx.GAP;
     return totalPagesW + 2 * ctx.MARGIN + 4;
   }
-}
-
-export async function getOptimalCalcWidthForHeightFit() {
-  const neededW = getNeededPdfWidth();
-  if (neededW == null) return null;
-  return clampCalcW(window.innerWidth - neededW - 9);
 }
 
 export async function snapCalcToHeightFit() {
@@ -170,7 +160,6 @@ export function initCalcPanel(context) {
   ctx = context;
   lastNarrow = Boolean(ctx.isMobile());
   calcWidth = clampCalcW(ctx.pref.get('calcWidth', 440));
-  targetPdfWidth = null;
 
   calcSidebar = document.getElementById('calc-sidebar');
   calcContainer = document.getElementById('calc-container');

@@ -20,7 +20,13 @@ const MIME = {
 };
 
 const server = http.createServer((req, res) => {
-  let reqPath = decodeURIComponent(req.url.split('?')[0]);
+  let reqPath;
+  try {
+    reqPath = decodeURIComponent(req.url.split('?')[0]);
+  } catch {
+    res.writeHead(400);
+    return res.end('Bad Request');
+  }
   if (reqPath === '/' || reqPath === '') reqPath = '/index.html';
   if (reqPath === '/calc') {
     res.writeHead(302, { Location: '/calc/' });

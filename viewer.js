@@ -13,7 +13,7 @@ import {
   isUserCustomWidth,
   snapCalcToHeightFit,
   handleCalcResize
-} from './calc-panel.js?v=5';
+} from './calc-panel.js?v=6';
 
 // Pamięć podręczna aplikacji: po pierwszej wizycie czytnik otwiera się też offline
 if ('serviceWorker' in navigator && location.protocol === 'https:') {
@@ -728,13 +728,25 @@ async function open(src, name, key, startPage = null, rawBlob = null) {
       cMapUrl: PDFJS + 'cmaps/',
       cMapPacked: true,
       standardFontDataUrl: PDFJS + 'standard_fonts/',
-      isEvalSupported: false
+      isEvalSupported: false,
+      onPassword: (updatePassword, reason) => {
+        const promptText = reason === 2
+          ? 'Nieprawidłowe hasło. Wpisz ponownie:'
+          : 'Ten dokument jest chroniony hasłem. Wpisz hasło:';
+        const pwd = prompt(promptText);
+        if (pwd === null) {
+          updatePassword(new Error('Anulowano wprowadzanie hasła'));
+        } else {
+          updatePassword(pwd);
+        }
+      }
     }).promise;
   } catch (err) {
     setEmpty(true);
     flash('Nie udało się otworzyć pliku: ' + (err?.message || err), 4000);
     return;
   }
+  let hasInitError = false;
   try {
     if (pdf) pdf.destroy();
     pdf = doc;
@@ -756,10 +768,13 @@ async function open(src, name, key, startPage = null, rawBlob = null) {
     show(spreadStartOf(p));
     if (pinned) showMenu();
   } catch (e) {
+    hasInitError = true;
     console.error('Błąd inicjalizacji PDF:', e);
     flash('Błąd podczas wyświetlania: ' + (e?.message || e), 4000);
   } finally {
-    hint.hidden = true;
+    if (!hasInitError) {
+      hint.hidden = true;
+    }
   }
 }
 
@@ -1298,6 +1313,8 @@ window.addEventListener('touchend', (e) => {
 let lastWheel = 0, notch = 100, acc = 0;
 window.addEventListener('wheel', (e) => {
   if (e.ctrlKey) return;
+  if (e.target.closest('#calc-sidebar')) return;
+  if (!pdf) return;
   // W trybie blokady szerokości pozwól na naturalne przewijanie, jeśli strona wystaje pionowo
   if (fitMode === 'width') {
     const isScrollable = stage.scrollHeight > stage.clientHeight + 10;
@@ -1345,6 +1362,7 @@ window.addEventListener('wheel', (e) => {
 window.addEventListener('keydown', (e) => {
   if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.isContentEditable) return;
   if (document.activeElement === pageInput) return;
+  if (e.target.closest('#calc-sidebar') || document.activeElement?.closest('#calc-sidebar')) return;
   if ((e.ctrlKey || e.metaKey) && (e.key === 'o' || e.key === 'O')) { e.preventDefault(); pickFile(); return; }
   if (e.ctrlKey || e.metaKey || e.altKey) return;
   const k = e.key;
