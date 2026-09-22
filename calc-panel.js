@@ -1,6 +1,6 @@
 // calc-panel.js – panel boczny kalkulatora w DarkPDF (rozmiar, rozdzielacz, montowanie komponentu DOM)
 
-import { mountCalculator } from '../calc/calc-app.js?v=5';   // jedno źródło: repo calc
+import { mountCalculator } from '../calc/calc-app.js?v=6';   // jedno źródło: repo calc
 
 export const CALC_MIN_W = 320;         // najwęższy sensowny kalkulator
 export const PDF_MIN_W = 400;          // tyle miejsca zostawiamy zawsze na PDF (żeby tekst był czytelny)
@@ -47,7 +47,6 @@ function ensureCalcMounted() {
 }
 
 export function isCalcOpen() { return calcOpen; }
-export function getCalcWidth() { return calcWidth; }
 export function getCalcStageWidth() {
   return (calcOpen && !ctx?.isMobile?.()) ? (calcWidth + 9) : 0;
 }

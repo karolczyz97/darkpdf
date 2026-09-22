@@ -13,7 +13,7 @@ import {
   isUserCustomWidth,
   snapCalcToHeightFit,
   handleCalcResize
-} from './calc-panel.js?v=7';
+} from './calc-panel.js?v=8';
 
 // Pamięć podręczna aplikacji: po pierwszej wizycie czytnik otwiera się też offline
 if ('serviceWorker' in navigator && location.protocol === 'https:') {
@@ -524,11 +524,20 @@ function blank(size, scale) {
 let lastRenderedScale = null;
 let lastRenderedDpr = typeof window !== 'undefined' ? (window.devicePixelRatio || 1) : 1;
 
+// Uszkodzona strona (np. złe drzewo stron): komunikat zamiast pustego ekranu i nieobsłużonego wyjątku.
+// show() wołane jest w wielu miejscach bez await, więc błędy obsługuje samo.
+function showError(e) {
+  console.error('Błąd wyświetlania strony:', e);
+  flash('Nie udało się wyświetlić strony: ' + (e?.message || e), 4000);
+}
+
 async function show(s) {
   const token = ++showToken;
   start = s;
-  const { a, b, scale, L, R, single } = await layout(s);
+  let lay;
+  try { lay = await layout(s); } catch (e) { if (token === showToken) showError(e); return; }
   if (token !== showToken) return;
+  const { a, b, scale, L, R, single } = lay;
   lastRenderedScale = scale;
   lastRenderedDpr = window.devicePixelRatio || 1;
 
@@ -577,10 +586,11 @@ async function show(s) {
     }).catch(() => {});
   } catch (e) {
     if (token !== showToken || e?.name === 'RenderingCancelledException') return;
-    throw e;
+    showError(e);
+    return;
   }
   if (fileKey) pref.set('pos:' + fileKey, a || b);
-  prefetch(s, token).then(() => updateText(s, token)).catch(() => {});
+  prefetch(s, token).catch(() => {}).then(() => updateText(s, token)).catch(() => {});   // uszkodzona sąsiednia strona nie blokuje tekstu
 }
 
 // ---------- warstwa tekstowa i dostępność ----------
@@ -640,14 +650,14 @@ async function updateText(s, token) {
   const parts = [];
   for (let n = from; n <= to; n++) {
     if (n === a || n === b) continue;
-    const t = await pageText(n);
+    const t = await pageText(n).catch(() => null);
     if (token !== showToken) return;
     const sec = document.createElement('section');
     sec.setAttribute('aria-label', `Strona ${n}`);
     const h = document.createElement('h2');
     h.textContent = `Strona ${n}`;
     const pre = document.createElement('p');
-    pre.textContent = t || '[brak tekstu]';
+    pre.textContent = t === null ? '[nie da się odczytać tej strony]' : (t || '[brak tekstu]');
     sec.append(h, pre);
     parts.push(sec);
   }
@@ -751,7 +761,6 @@ async function open(src, name, key, startPage = null, rawBlob = null) {
     flash('Nie udało się otworzyć pliku: ' + (err?.message || err), 4000);
     return;
   }
-  let hasInitError = false;
   try {
     if (pdf) pdf.destroy();
     pdf = doc;
@@ -773,14 +782,11 @@ async function open(src, name, key, startPage = null, rawBlob = null) {
     show(spreadStartOf(p));
     if (pinned) showMenu();
   } catch (e) {
-    hasInitError = true;
     console.error('Błąd inicjalizacji PDF:', e);
     flash('Błąd podczas wyświetlania: ' + (e?.message || e), 4000);
-  } finally {
-    if (!hasInitError) {
-      hint.hidden = true;
-    }
+    return;
   }
+  hint.hidden = true;                   // „Ładowanie…” znika; komunikat błędu z catch zostaje
 }
 
 // Okno hasła do zaszyfrowanego PDF-a → Promise z hasłem albo null (Anuluj, Esc)
