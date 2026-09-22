@@ -38,13 +38,13 @@ const server = http.createServer((req, res) => {
   if (reqPath.startsWith('/calc/')) {
     const subPath = reqPath.slice(6) || 'index.html';
     filePath = path.join(CALC_DIR, subPath === '' ? 'index.html' : subPath);
-    if (!filePath.startsWith(CALC_DIR)) {
+    if (!filePath.startsWith(CALC_DIR + path.sep)) {
       res.writeHead(403);
       return res.end('Forbidden');
     }
   } else {
     filePath = path.join(ROOT, reqPath);
-    if (!filePath.startsWith(ROOT)) {
+    if (filePath !== ROOT && !filePath.startsWith(ROOT + path.sep)) {   // katalog obok o podobnej nazwie (darkpdf-kopia) też się nie liczy
       res.writeHead(403);
       return res.end('Forbidden');
     }

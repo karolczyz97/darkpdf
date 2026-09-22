@@ -5,9 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="robots" content="noindex">
   <link rel="stylesheet" href="theme.css?v=1">
-  <link rel="stylesheet" href="viewer.css?v=68">
+  <link rel="stylesheet" href="viewer.css?v=69">
   <!-- KaTeX LaTeX math rendering dla kalkulatora -->
-  <link rel="stylesheet" href="../calc/calc.css?v=4">   <!-- kalkulator ma jedno źródło: repo calc -->
+  <link rel="stylesheet" href="../calc/calc.css?v=6">   <!-- kalkulator ma jedno źródło: repo calc -->
 </head>
 <body>
   <svg width="0" height="0" style="position:absolute" aria-hidden="true">
@@ -234,7 +234,15 @@
       </button>
     </div>
   </div>
+  <dialog id="pw-dialog" aria-labelledby="pw-msg">
+    <p id="pw-msg">Ten plik jest chroniony hasłem.</p>
+    <input id="pw-input" type="password" autocomplete="off" spellcheck="false" aria-label="Hasło do pliku PDF">
+    <div class="pw-buttons">
+      <button type="button" id="pw-cancel">Anuluj</button>
+      <button type="button" id="pw-ok">Otwórz</button>
+    </div>
+  </dialog>
   <main id="text" class="sr-only" aria-label="Tekst dokumentu"></main>
-  <script type="module" src="viewer.js?v=79"></script>
+  <script type="module" src="viewer.js?v=80"></script>
 </body>
 </html>

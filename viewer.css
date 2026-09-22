@@ -424,7 +424,7 @@ html.gemini #hint { background: var(--ui-bg); color: var(--ui-text); font-family
 html.gemini .page-input:focus { border-color: var(--gem-accent); box-shadow: 0 0 0 1px var(--gem-accent); }
 
 /* ---- ekran startowy ---- */
-#welcome { position: fixed; inset: 0; z-index: 4; display: none; align-items: center; justify-content: center; padding: 24px; }
+#welcome { position: fixed; inset: 0; z-index: 4; display: none; align-items: center; align-items: safe center; justify-content: center; padding: 24px; overflow-y: auto; }
 html.empty #welcome { display: flex; }
 #welcome .card {
   width: 100%; max-width: 720px; padding: 32px 28px 22px; text-align: center;
@@ -642,3 +642,24 @@ html.mobile.calc-open #stage { left: 0; border-radius: 0; }
 }
 html.mobile #calc-close { display: inline-flex !important; }
 html.mobile #stage { touch-action: pan-y pinch-zoom; }
+
+/* Hasło do zaszyfrowanego PDF-a */
+#pw-dialog {
+  width: min(360px, calc(100vw - 32px)); box-sizing: border-box; padding: 20px 20px 16px;
+  border: 1px solid var(--ui-line); border-radius: 12px;
+  background: var(--ui-bg-solid); color: var(--ui-text); font: 14px/1.5 var(--ui-font);
+}
+#pw-dialog::backdrop { background: rgba(0, 0, 0, .5); }
+#pw-msg { margin: 0 0 12px; }
+#pw-input {
+  width: 100%; box-sizing: border-box; padding: 8px 10px;
+  border: 1px solid var(--ui-line); border-radius: 8px; background: var(--ui-fill); color: var(--ui-text); font: inherit;
+}
+#pw-input:focus { outline: 2px solid var(--ui-accent); outline-offset: 1px; }
+#pw-dialog .pw-buttons { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; }
+#pw-dialog button {
+  padding: 7px 14px; border: 1px solid var(--ui-line); border-radius: 8px;
+  background: transparent; color: var(--ui-text); font: inherit; cursor: pointer;
+}
+#pw-dialog button:hover { background: var(--ui-hover); }
+#pw-dialog #pw-ok { border-color: var(--ui-accent); color: var(--ui-accent); font-weight: 600; }

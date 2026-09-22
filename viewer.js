@@ -13,7 +13,7 @@ import {
   isUserCustomWidth,
   snapCalcToHeightFit,
   handleCalcResize
-} from './calc-panel.js?v=6';
+} from './calc-panel.js?v=7';
 
 // Pamięć podręczna aplikacji: po pierwszej wizycie czytnik otwiera się też offline
 if ('serviceWorker' in navigator && location.protocol === 'https:') {
@@ -721,27 +721,32 @@ const prev = () => flip(-1);
 async function open(src, name, key, startPage = null, rawBlob = null) {
   const blobToSave = rawBlob || (src?.data ? new Blob([src.data]) : null);
   flash('Ładowanie…', 0);
-  let doc;
+  let doc, task, cancelled = false;
   try {
-    doc = await pdfjsLib.getDocument({
+    task = pdfjsLib.getDocument({
       ...src,
       cMapUrl: PDFJS + 'cmaps/',
       cMapPacked: true,
       standardFontDataUrl: PDFJS + 'standard_fonts/',
-      isEvalSupported: false,
-      onPassword: (updatePassword, reason) => {
-        const promptText = reason === 2
-          ? 'Nieprawidłowe hasło. Wpisz ponownie:'
-          : 'Ten dokument jest chroniony hasłem. Wpisz hasło:';
-        const pwd = prompt(promptText);
-        if (pwd === null) {
-          updatePassword(new Error('Anulowano wprowadzanie hasła'));
-        } else {
-          updatePassword(pwd);
-        }
-      }
-    }).promise;
+      isEvalSupported: false
+    });
+    // PDF z hasłem: pdf.js pyta przez task.onPassword (ta sama nazwa jako opcja getDocument() jest ignorowana)
+    task.onPassword = (update, reason) => {
+      hint.hidden = true;
+      askPassword(reason === pdfjsLib.PasswordResponses.INCORRECT_PASSWORD).then((pw) => {
+        if (pw === null) { cancelled = true; update(new Error('Anulowano')); return; }
+        flash('Ładowanie…', 0);
+        update(pw);
+      });
+    };
+    doc = await task.promise;
   } catch (err) {
+    task?.destroy().catch(() => {});
+    if (cancelled) {                    // rezygnacja z hasła to nie błąd – zostaje to, co było otwarte
+      hint.hidden = true;
+      if (!pdf) setEmpty(true);
+      return;
+    }
     setEmpty(true);
     flash('Nie udało się otworzyć pliku: ' + (err?.message || err), 4000);
     return;
@@ -776,6 +781,21 @@ async function open(src, name, key, startPage = null, rawBlob = null) {
       hint.hidden = true;
     }
   }
+}
+
+// Okno hasła do zaszyfrowanego PDF-a → Promise z hasłem albo null (Anuluj, Esc)
+const pwDialog = document.getElementById('pw-dialog');
+const pwInput = document.getElementById('pw-input');
+document.getElementById('pw-ok').addEventListener('click', () => pwDialog.close('ok'));
+document.getElementById('pw-cancel').addEventListener('click', () => pwDialog.close());
+pwInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); pwDialog.close('ok'); } });
+function askPassword(wrong) {
+  document.getElementById('pw-msg').textContent = wrong ? 'Nieprawidłowe hasło – spróbuj jeszcze raz.' : 'Ten plik jest chroniony hasłem.';
+  pwInput.value = '';
+  pwDialog.returnValue = '';
+  pwDialog.showModal();
+  pwInput.focus();
+  return new Promise((resolve) => pwDialog.addEventListener('close', () => resolve(pwDialog.returnValue === 'ok' ? pwInput.value : null), { once: true }));
 }
 
 function nameFromUrl(u) {
@@ -1146,7 +1166,7 @@ async function setFitMode(mode) {
   if (fitMode === 'height') {
     resetUserCustomWidth();
     if (isCalcOpen()) {
-      await snapCalcToHeightFit(true);
+      snapCalcToHeightFit();
     }
   }
   fitNow();
@@ -1260,14 +1280,14 @@ menu.addEventListener('click', (e) => {
 window.addEventListener('dblclick', (e) => {
   if (isMobile()) return;
   if (!pdf || String(window.getSelection())) return;   // dwuklik w tekst zaznacza słowo
-  if (e.target.closest('#menu, #calc-sidebar')) return;
+  if (e.target.closest('#menu, #calc-sidebar, #pw-dialog')) return;
   act('full');
 });
 
 window.addEventListener('click', (e) => {
   if (!pdf) return;
   if (String(window.getSelection())) return;
-  if (e.target.closest('#menu, #calc-sidebar, #calc-resizer')) return;
+  if (e.target.closest('#menu, #calc-sidebar, #calc-resizer, #pw-dialog')) return;
   // Telefon: stuknięcie w lewą / prawą część strony przewraca, środek otwiera pasek
   if (isMobile()) {
     const x = e.clientX / window.innerWidth;
@@ -1300,7 +1320,7 @@ window.addEventListener('touchstart', (e) => {
   touchAt = Date.now();
 }, { passive: true });
 window.addEventListener('touchend', (e) => {
-  if (!pdf || !touchAt || String(window.getSelection())) return;
+  if (!pdf || !touchAt || String(window.getSelection()) || pwDialog.open) return;
   const t = e.changedTouches[0];
   const dx = t.clientX - touchX, dy = t.clientY - touchY;
   const ms = Date.now() - touchAt;
@@ -1313,7 +1333,7 @@ window.addEventListener('touchend', (e) => {
 let lastWheel = 0, notch = 100, acc = 0;
 window.addEventListener('wheel', (e) => {
   if (e.ctrlKey) return;
-  if (e.target.closest('#calc-sidebar')) return;
+  if (e.target.closest('#calc-sidebar, #pw-dialog')) return;
   if (!pdf) return;
   // W trybie blokady szerokości pozwól na naturalne przewijanie, jeśli strona wystaje pionowo
   if (fitMode === 'width') {
@@ -1362,7 +1382,8 @@ window.addEventListener('wheel', (e) => {
 window.addEventListener('keydown', (e) => {
   if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.isContentEditable) return;
   if (document.activeElement === pageInput) return;
-  if (e.target.closest('#calc-sidebar') || document.activeElement?.closest('#calc-sidebar')) return;
+  if (e.target.closest('#pw-dialog')) return;
+  if (e.target.closest('#calc-sidebar') && e.key.length === 1 && !/^[a-z?]$/i.test(e.key)) return;   // cyfry i działania z panelu idą do kalkulatora
   if ((e.ctrlKey || e.metaKey) && (e.key === 'o' || e.key === 'O')) { e.preventDefault(); pickFile(); return; }
   if (e.ctrlKey || e.metaKey || e.altKey) return;
   const k = e.key;
@@ -1410,6 +1431,7 @@ window.addEventListener('keydown', (e) => {
   };
   if (keyActions[k]) { act(keyActions[k]); e.preventDefault(); return; }
 
+  if (!pdf && k !== '?') return;       // bez pliku strzałki i spacja przewijają ekran startowy
   const jump = e.shiftKey ? 10 : 1;   // Shift = skok o 10 rozkładówek
   if (['ArrowRight', 'ArrowDown', 'PageDown', 'j', 'l'].includes(k)) { flip(jump); e.preventDefault(); return; }
   if (['ArrowLeft', 'ArrowUp', 'PageUp'].includes(k)) { flip(-jump); e.preventDefault(); return; }
