@@ -294,7 +294,9 @@ function showError(e) {
 
 async function show(s) {
   const token = ++showToken;
-  start = s;
+  // Początek rozkładówki liczymy przy każdym pokazaniu: po obrocie telefonu (jedna strona → dwie)
+  // przerysowanie z rerenderSoon() mogłoby inaczej pokazać parę 2–3 zamiast 1–2
+  start = s = spreadStartOf(s);
   let lay;
   try { lay = await layoutSpread(s); } catch (e) { if (token === showToken) showError(e); return; }
   if (token !== showToken) return;
@@ -1049,22 +1051,40 @@ function wakeCursor() {
 ['mousemove', 'mousedown', 'wheel', 'keydown'].forEach((ev) =>
   window.addEventListener(ev, wakeCursor, { passive: true }));
 
-// Dotyk: przesunięcie palcem w bok zmienia stronę.
-let touchX = 0, touchY = 0, touchAt = 0;
+// Dotyk: szybkie przesunięcie palcem zmienia stronę – w bok (w lewo = dalej) i w pionie (w górę = dalej,
+// jak przy przewijaniu). Strona większa niż ekran (Szerokość / Wysokość 100%) najpierw przewija się
+// palcem do brzegu, a dopiero kolejne przesunięcie przy brzegu zmienia stronę.
+// Kalkulator, pasek i okno hasła przewijają się same – tam gest nie rusza stron.
+const SWIPE_PX = 50;      // tyle px ruchu palca to już przesunięcie, a nie stuknięcie
+const SWIPE_MS = 700;     // dłuższy ruch to przewijanie albo zaznaczanie, nie przewracanie
+let swipe = null;
 window.addEventListener('touchstart', (e) => {
-  if (e.touches.length !== 1) { touchAt = 0; return; }
-  touchX = e.touches[0].clientX;
-  touchY = e.touches[0].clientY;
-  touchAt = Date.now();
+  swipe = null;
+  if (e.touches.length !== 1 || e.target.closest('#calc-sidebar, #menu, #pw-dialog')) return;
+  const t = e.touches[0];
+  swipe = {
+    x: t.clientX, y: t.clientY, at: Date.now(),
+    // czy strona była już przewinięta do brzegu, zanim palec ruszył
+    left: stage.scrollLeft <= 2, right: stage.scrollLeft + stage.clientWidth >= stage.scrollWidth - 2,
+    top: stage.scrollTop <= 2, bottom: stage.scrollTop + stage.clientHeight >= stage.scrollHeight - 2
+  };
 }, { passive: true });
 window.addEventListener('touchend', (e) => {
-  if (!pdf || !touchAt || String(window.getSelection()) || pwDialog.open) return;
+  const s = swipe;
+  swipe = null;
+  if (!pdf || !s || String(window.getSelection()) || pwDialog.open) return;
+  if (Date.now() - s.at > SWIPE_MS) return;
+  if ((window.visualViewport?.scale || 1) > 1.01) return;   // przybliżone dwoma palcami: palec przesuwa widok
   const t = e.changedTouches[0];
-  const dx = t.clientX - touchX, dy = t.clientY - touchY;
-  const ms = Date.now() - touchAt;
-  touchAt = 0;
-  if (ms > 700 || Math.abs(dx) < 50 || Math.abs(dx) < Math.abs(dy) * 1.5) return;
-  dx < 0 ? next() : prev();
+  const dx = t.clientX - s.x, dy = t.clientY - s.y;
+  const ax = Math.abs(dx), ay = Math.abs(dy);
+  if (ax >= SWIPE_PX && ax >= ay * 1.5) {
+    if (dx < 0 && s.right) next();
+    else if (dx > 0 && s.left) prev();
+  } else if (ay >= SWIPE_PX && ay >= ax * 1.5) {
+    if (dy < 0 && s.bottom) next();
+    else if (dy > 0 && s.top) prev();
+  }
 }, { passive: true });
 
 // ---------- kółko myszy i gesty ----------

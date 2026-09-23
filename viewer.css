@@ -51,6 +51,7 @@ html, body {
   overflow: hidden;
   background: #525659;
   user-select: none;
+  overscroll-behavior: none;   /* przesunięcie w dół przy górze nie odświeża strony, w bok nie cofa historii */
 }
 html.dark, html.dark body { background: var(--ui-stage-bg); }
 
@@ -642,7 +643,9 @@ html.mobile.calc-open #stage { left: 0; border-radius: 0; }
   color: var(--ui-text); font: 14px var(--ui-font); cursor: pointer;
 }
 html.mobile #calc-close { display: inline-flex !important; }
-html.mobile #stage { touch-action: pan-y pinch-zoom; }
+/* Palec przewija stronę większą niż ekran w obie strony; przewracanie stron obsługuje viewer.js.
+   manipulation zamiast „pan-y pinch-zoom”, którego Safari nie zna (ignorował całą regułę) */
+html.mobile #stage { touch-action: manipulation; }
 
 /* Hasło do zaszyfrowanego PDF-a */
 #pw-dialog {
