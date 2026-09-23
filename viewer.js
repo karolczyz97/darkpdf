@@ -164,7 +164,6 @@ function applyTheme() {
 function cycleColorMode() {
   colorMode = COLOR_MODES[(COLOR_MODES.indexOf(colorMode) + 1) % COLOR_MODES.length];
   pref.set('colorMode', colorMode);
-  pref.set('dark', colorMode !== 'light');
   applyTheme();
   flash(COLOR_LABELS[colorMode]);
 }
@@ -172,7 +171,6 @@ function cycleColorMode() {
 function togglePalette() {
   palette = palette === 'gemini' ? 'system' : 'gemini';
   pref.set('palette', palette);
-  pref.set('theme', palette === 'gemini' ? 'gemini' : 'normal');
   applyTheme();
   flash(PALETTE_LABELS[palette]);
 }
@@ -1020,12 +1018,15 @@ window.addEventListener('dblclick', (e) => {
   act('full');
 });
 
+const zoomed = () => (window.visualViewport?.scale || 1) > 1.01;   // przybliżone dwoma palcami: palec przesuwa widok
+
 window.addEventListener('click', (e) => {
   if (!pdf) return;
   if (String(window.getSelection())) return;
   if (e.target.closest('#menu, #calc-sidebar, #calc-resizer, #pw-dialog')) return;
-  // Telefon: stuknięcie w lewą / prawą część strony przewraca, środek otwiera pasek
-  if (isMobile()) {
+  // Telefon: stuknięcie w lewą / prawą część strony przewraca, środek otwiera pasek.
+  // Przybliżona strona przewija się palcem – wtedy stuknięcie tylko otwiera pasek.
+  if (isMobile() && !zoomed()) {
     const x = e.clientX / window.innerWidth;
     if (x < 0.3) { hideMenu(); prev(); return; }
     if (x > 0.7) { hideMenu(); next(); return; }
@@ -1070,7 +1071,7 @@ window.addEventListener('touchend', (e) => {
   swipe = null;
   if (!pdf || !s || String(window.getSelection()) || pwDialog.open) return;
   if (Date.now() - s.at > SWIPE_MS) return;
-  if ((window.visualViewport?.scale || 1) > 1.01) return;   // przybliżone dwoma palcami: palec przesuwa widok
+  if (zoomed()) return;
   const t = e.changedTouches[0];
   const dx = t.clientX - s.x, dy = t.clientY - s.y;
   const ax = Math.abs(dx), ay = Math.abs(dy);
@@ -1189,7 +1190,7 @@ window.addEventListener('keydown', (e) => {
   if (k === ' ') { e.shiftKey ? prev() : next(); e.preventDefault(); return; }
   if (k === 'b' || k === 'B') { toggleMark(); e.preventDefault(); return; }
   if (k === 'Home') { go(1); e.preventDefault(); return; }
-  if (k === 'End') { if (pdf) go(spreadStartOf(numPages)); e.preventDefault(); return; }
+  if (k === 'End') { go(spreadStartOf(numPages)); e.preventDefault(); return; }
   if (k === '?') { flash(HELP, 6000); e.preventDefault(); }
 });
 

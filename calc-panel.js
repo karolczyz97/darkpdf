@@ -19,6 +19,7 @@ let userCalcW = null;                 // szerokość z rozdzielacza (bez przycin
 let fixedW = null;                    // tryb szerokości: kalkulator stoi w miejscu, PDF bierze resztę
 let autoCollapsed = false;
 let lastNarrow = false;               // czy przy poprzednim sprawdzeniu okno było „mobilne”
+let sidebar = null;
 let calcContainer = null;
 let calcInstance = null;
 
@@ -80,6 +81,10 @@ export function setCalcOpen(open, fromUser = false) {
   if (open && !ctx.isPdfLoaded()) return;
   calcOpen = !!open;
   ctx.pref.set('calcOpen', calcOpen);
+  // Schowany panel tylko odjeżdża w bok: bez tego fokus zostałby w jego polu (Esc zamyka kalkulator,
+  // a strzałki dalej nie przewracają stron), a Tab wchodziłby w niewidoczne przyciski
+  sidebar.inert = !calcOpen;
+  if (!calcOpen && sidebar.contains(document.activeElement)) document.activeElement.blur();
   document.documentElement.classList.add('calc-animating');
   setTimeout(() => document.documentElement.classList.remove('calc-animating'), 250);
   document.documentElement.classList.toggle('calc-open', calcOpen);
@@ -87,9 +92,9 @@ export function setCalcOpen(open, fromUser = false) {
   if (calcOpen) {
     handleCalcResize();
     ensureCalcMounted();
-    setTimeout(() => calcInstance.focus(), 50);
+    // Na dotyku bez fokusu – klawiatura ekranowa zasłoniłaby przyciski kalkulatora
+    if (matchMedia('(pointer: fine)').matches) setTimeout(() => calcInstance.focus(), 50);
   }
-  window.focus();
   ctx.updateMenu();
   if (ctx.isPdfLoaded()) {
     ctx.fitNow();
@@ -137,7 +142,8 @@ export function initCalcPanel(context) {
   ctx = context;
   lastNarrow = ctx.isMobile();
 
-  const sidebar = document.getElementById('calc-sidebar');
+  sidebar = document.getElementById('calc-sidebar');
+  sidebar.inert = true;
   const resizer = document.getElementById('calc-resizer');
   calcContainer = document.getElementById('calc-container');
 
