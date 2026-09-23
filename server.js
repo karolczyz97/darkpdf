@@ -1,75 +1,75 @@
-const http = require('http');
-const fs = require('fs');
-const path = require('path');
+// Serwer do pracy lokalnej – układ jak na GitHub Pages: czytnik pod /darkpdf/, kalkulator pod /calc/.
+// Aplikacje sięgają do siebie ścieżką ../, więc drugie repo musi leżeć obok (…/darkpdf i …/calc).
+// Start: npm start → http://localhost:8080/  (inny port: PORT=9000 npm start)
+// Ten sam plik jest w obu repo – różni się tylko stałą SELF.
+import http from 'node:http';
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-const PORT = 8080;
-const ROOT = __dirname;
+const SELF = 'darkpdf';                              // które to repo; drugie leży w katalogu obok
+const OTHER = SELF === 'darkpdf' ? 'calc' : 'darkpdf';
+const PORT = Number(process.env.PORT) || (SELF === 'darkpdf' ? 8080 : 3333);
+const HERE = path.dirname(fileURLToPath(import.meta.url));
+const APPS = new Map([[SELF, HERE], [OTHER, path.resolve(HERE, '..', OTHER)]]);
 
 const MIME = {
   '.html': 'text/html; charset=utf-8',
   '.css': 'text/css; charset=utf-8',
-  '.js': 'application/javascript; charset=utf-8',
-  '.mjs': 'application/javascript; charset=utf-8',
-  '.json': 'application/json',
+  '.js': 'text/javascript; charset=utf-8',
+  '.mjs': 'text/javascript; charset=utf-8',
+  '.json': 'application/json; charset=utf-8',
+  '.svg': 'image/svg+xml',
   '.png': 'image/png',
   '.pdf': 'application/pdf',
-  '.svg': 'image/svg+xml',
-  '.wasm': 'application/wasm',
-  '.gz': 'application/gzip',
-  '.traineddata': 'application/octet-stream'
+  '.ttf': 'font/ttf'
 };
 
+function send(res, code, text, headers = {}) {
+  res.writeHead(code, { 'Content-Type': 'text/plain; charset=utf-8', ...headers });
+  res.end(text);
+}
+
 const server = http.createServer((req, res) => {
-  let reqPath;
+  let pathname;
   try {
-    reqPath = decodeURIComponent(req.url.split('?')[0]);
+    pathname = decodeURIComponent(new URL(req.url, 'http://localhost').pathname);
   } catch {
-    res.writeHead(400);
-    return res.end('Bad Request');
+    return send(res, 400, 'Bad Request');
   }
-  if (reqPath === '/' || reqPath === '') reqPath = '/index.html';
-  if (reqPath === '/calc') {
-    res.writeHead(302, { Location: '/calc/' });
-    return res.end();
-  }
+  if (pathname.includes('\0')) return send(res, 400, 'Bad Request');   // bez tego fs rzuca wyjątek i serwer pada
 
-  let filePath;
-  const CALC_DIR = path.resolve(ROOT, '..', 'calc');
-  if (reqPath.startsWith('/calc/')) {
-    const subPath = reqPath.slice(6) || 'index.html';
-    filePath = path.join(CALC_DIR, subPath === '' ? 'index.html' : subPath);
-    if (!filePath.startsWith(CALC_DIR + path.sep)) {
-      res.writeHead(403);
-      return res.end('Forbidden');
-    }
-  } else {
-    filePath = path.join(ROOT, reqPath);
-    if (filePath !== ROOT && !filePath.startsWith(ROOT + path.sep)) {   // katalog obok o podobnej nazwie (darkpdf-kopia) też się nie liczy
-      res.writeHead(403);
-      return res.end('Forbidden');
-    }
-  }
+  const [, app = '', ...rest] = pathname.split('/');
+  if (!app) return send(res, 302, '', { Location: `/${SELF}/` });
+  const root = APPS.get(app);
+  if (!root) return send(res, 404, 'Not Found');
+  if (!rest.length) return send(res, 302, '', { Location: `/${app}/` });   // /calc → /calc/, jak na GitHub Pages
 
-  fs.stat(filePath, (err, stats) => {
-    if (err || !stats.isFile()) {
+  let file = path.join(root, ...rest);
+  if (file !== root && !file.startsWith(root + path.sep)) return send(res, 403, 'Forbidden');   // ../ poza aplikację
+
+  fs.stat(file, (err, stats) => {
+    if (!err && stats.isDirectory()) {
+      file = path.join(file, 'index.html');
+      return fs.stat(file, (err2, s2) => serve(err2 || !s2.isFile()));
+    }
+    serve(err || !stats.isFile());
+  });
+
+  function serve(missing) {
+    if (missing) {
       console.log(`[404] ${req.method} ${req.url}`);
-      res.writeHead(404);
-      return res.end('Not Found');
+      return send(res, 404, 'Not Found');
     }
-
-    const ext = path.extname(filePath).toLowerCase();
-    const contentType = MIME[ext] || 'application/octet-stream';
-    console.log(`[200] ${req.method} ${req.url}`);
     res.writeHead(200, {
-      'Content-Type': contentType,
+      'Content-Type': MIME[path.extname(file).toLowerCase()] || 'application/octet-stream',
       'Access-Control-Allow-Origin': '*',
       'Cache-Control': 'no-cache'
     });
-    fs.createReadStream(filePath).pipe(res);
-  });
+    fs.createReadStream(file).on('error', () => res.destroy()).pipe(res);
+  }
 });
 
-// Nasłuchuj na wszystkich interfejsach (IPv4 i IPv6)
 server.listen(PORT, () => {
-  console.log(`Server running at http://localhost:${PORT}/ (IPv4 and IPv6)`);
+  console.log(`http://localhost:${PORT}/${SELF}/  (obok: /${OTHER}/)`);
 });

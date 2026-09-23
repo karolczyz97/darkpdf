@@ -1,12 +1,14 @@
 // calc-panel.js – panel boczny kalkulatora w DarkPDF (rozmiar, rozdzielacz, montowanie komponentu DOM)
 
-import { mountCalculator } from '../calc/calc-app.js?v=6';   // jedno źródło: repo calc
+import { mountCalculator } from '../calc/calc-app.js';   // jedno źródło: repo calc
+import { heightFitWidth } from './layout.js';
 
-export const CALC_MIN_W = 320;         // najwęższy sensowny kalkulator
-export const PDF_MIN_W = 400;          // tyle miejsca zostawiamy zawsze na PDF (żeby tekst był czytelny)
+const CALC_MIN_W = 320;         // najwęższy sensowny kalkulator
+const PDF_MIN_W = 400;          // tyle miejsca zostawiamy zawsze na PDF (żeby tekst był czytelny)
+const RESIZER_W = 9;            // szerokość rozdzielacza – ta sama co --resizer-w w viewer.css
 
-export const clampCalcW = (w) => {
-  const max = Math.max(CALC_MIN_W, window.innerWidth - PDF_MIN_W - 9);
+const clampCalcW = (w) => {
+  const max = Math.max(CALC_MIN_W, window.innerWidth - PDF_MIN_W - RESIZER_W);
   return Math.max(CALC_MIN_W, Math.min(max, Math.round(w)));
 };
 
@@ -46,44 +48,30 @@ function ensureCalcMounted() {
   }
 }
 
+// Szerokość panelu na stronie: zapis do zmiennej CSS (panel, rozdzielacz, przesunięcie PDF-a)
+function applyCalcWidth(w) {
+  calcWidth = clampCalcW(w);
+  document.documentElement.style.setProperty('--calc-w', calcWidth + 'px');
+}
+
 export function isCalcOpen() { return calcOpen; }
 export function getCalcStageWidth() {
-  return (calcOpen && !ctx?.isMobile?.()) ? (calcWidth + 9) : 0;
+  return (calcOpen && !ctx?.isMobile?.()) ? (calcWidth + RESIZER_W) : 0;
 }
 export function resetUserCustomWidth() { userCustomWidth = false; userCalcW = null; }
 export function isUserCustomWidth() { return userCustomWidth; }
 
-export function updateCalcWidth(w) {
-  calcWidth = clampCalcW(w);
-  document.documentElement.style.setProperty('--calc-w', calcWidth + 'px');
-  ctx.pref.set('calcWidth', calcWidth);
-}
-
-export function getNeededPdfWidth() {
+// Ile miejsca potrzebuje PDF dopasowany do wysokości okna (px) albo null, gdy strony jeszcze nie znamy
+function neededPdfWidth() {
   if (!ctx?.isPdfLoaded?.()) return null;
   const [a, b] = ctx.spreadOf(ctx.getStartPage());
   // ref = wspólne przycięcie grupy; strona-wyjątek (pełnoekranowy obrazek) nie zmienia szerokości panelu
   const ref = (s) => s?.ref || s;
   const sa = a ? ref(ctx.getPageSize(a)) : null;
   const sb = b ? ref(ctx.getPageSize(b)) : null;
-  if (!sa && !sb) return null;
-
   const H = Math.max(120, window.innerHeight - 2 * ctx.MARGIN);
-  if (!ctx.showTwo()) {
-    const size = sa || sb;
-    if (!size || !size.h || !size.w) return null;
-    const scaleH = H / size.h;
-    const w = Math.ceil(size.w * scaleH);
-    return w + 2 * ctx.MARGIN + 4;
-  } else {
-    const L = sa || sb, R = sb || sa;
-    if (!L || !L.h || !L.w) return null;
-    const maxH = Math.max(L.h, R?.h || L.h);
-    const scaleH = H / maxH;
-    // Zawsze dwie strony + odstęp: samotna strona (okładka, ostatnia) ma obok pusty placeholder, tak jak w fit()
-    const totalPagesW = Math.ceil(L.w * scaleH) + Math.ceil(R.w * scaleH) + ctx.GAP;
-    return totalPagesW + 2 * ctx.MARGIN + 4;
-  }
+  const w = heightFitWidth(sa, sb, { H, two: ctx.showTwo(), gap: ctx.GAP });
+  return w == null ? null : w + 2 * ctx.MARGIN + 4;
 }
 
 export function snapCalcToHeightFit() {
@@ -148,23 +136,21 @@ export function handleCalcResize() {
     w = fixedW;
   } else if (!userCustomWidth) {
     fixedW = null;
-    const neededW = getNeededPdfWidth();
-    if (neededW != null) w = window.innerWidth - neededW - 9;
+    const neededW = neededPdfWidth();
+    if (neededW != null) w = window.innerWidth - neededW - RESIZER_W;
   }
-  calcWidth = clampCalcW(w);
-  document.documentElement.style.setProperty('--calc-w', calcWidth + 'px');
+  applyCalcWidth(w);
 }
 
 export function initCalcPanel(context) {
   ctx = context;
   lastNarrow = Boolean(ctx.isMobile());
-  calcWidth = clampCalcW(ctx.pref.get('calcWidth', 440));
 
   calcSidebar = document.getElementById('calc-sidebar');
   calcContainer = document.getElementById('calc-container');
   calcResizer = document.getElementById('calc-resizer');
 
-  document.documentElement.style.setProperty('--calc-w', calcWidth + 'px');
+  applyCalcWidth(ctx.pref.get('calcWidth', 440));
 
   if (calcResizer) {
     let startX = 0, initialW = 0, isDragging = false;
@@ -185,8 +171,7 @@ export function initCalcPanel(context) {
     const onPointerMove = (ev) => {
       if (!isDragging) return;
       userCustomWidth = true;
-      const delta = ev.clientX - startX;
-      updateCalcWidth(initialW + delta, true);
+      applyCalcWidth(initialW + ev.clientX - startX);
       userCalcW = calcWidth;
       ctx.fitNow();
     };
@@ -201,6 +186,7 @@ export function initCalcPanel(context) {
       document.body.style.cursor = '';
       if (calcContainer) calcContainer.style.pointerEvents = '';
       try { calcResizer.releasePointerCapture(ev.pointerId); } catch {}
+      ctx.pref.set('calcWidth', calcWidth);   // zapis raz, po puszczeniu – nie przy każdym ruchu myszy
       ctx.fitNow();
       ctx.rerenderSoon();
     };

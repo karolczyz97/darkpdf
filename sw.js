@@ -1,17 +1,21 @@
 // DarkPDF – pamięć podręczna aplikacji, dzięki której czytnik działa bez internetu.
-// Pliki aplikacji: najpierw z sieci (zawsze świeże), bez sieci – ostatnia zapisana wersja.
+// Pliki aplikacji: najpierw z sieci (zawsze świeże, bez ręcznych ?v=), bez sieci – ostatnia zapisana wersja.
 // pdf.js w lib/pdfjs się nie zmienia, więc bierzemy go od razu z pamięci.
-const CACHE = 'darkpdf-v10';
+const CACHE = 'darkpdf-v11';
 const CORE = [
   './',
   'index.html',
   'theme.css',
   'viewer.css',
   'viewer.js',
+  'util.js',
+  'layout.js',
+  'crop.js',
+  'library.js',
+  'calc-panel.js',
   '../calc/calc.css',
   '../calc/calc-app.js',
   '../calc/calc-engine.js',
-  'calc-panel.js',
   'lib/pdfjs/build/pdf.min.mjs',
   'lib/pdfjs/build/pdf.worker.min.mjs'
 ];
@@ -51,11 +55,13 @@ self.addEventListener('fetch', (e) => {
       return res;
     }
     try {
-      const res = await fetch(req);
+      // no-cache: przeglądarka pyta serwer, czy plik się zmienił (GitHub Pages trzyma pliki 10 min),
+      // więc po wdrożeniu od razu widać nową wersję wszystkich plików naraz
+      const res = await fetch(req, { cache: 'no-cache' });
       if (res.ok) cache.put(req, res.clone());
       return res;
     } catch (err) {
-      const hit = await cache.match(req, { ignoreSearch: true });   // viewer.js?v=… – każda zapisana wersja się nada
+      const hit = await cache.match(req, { ignoreSearch: true });   // stary adres z ?v=… też się nada
       if (hit) return hit;
       throw err;
     }
