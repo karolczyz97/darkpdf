@@ -12,18 +12,14 @@ const clampCalcW = (w) => {
   return Math.max(CALC_MIN_W, Math.min(max, Math.round(w)));
 };
 
-let ctx = null;
+let ctx = null;                       // stan i funkcje czytnika z initCalcPanel()
 let calcOpen = false;
 let calcWidth = 440;
-let userCustomWidth = false;
-let fixedW = null;                    // tryb szerokości: kalkulator stoi w miejscu, PDF bierze resztę
 let userCalcW = null;                 // szerokość z rozdzielacza (bez przycinania do okna – żeby nie „zjadało” jej zwężanie)
+let fixedW = null;                    // tryb szerokości: kalkulator stoi w miejscu, PDF bierze resztę
 let autoCollapsed = false;
 let lastNarrow = false;               // czy przy poprzednim sprawdzeniu okno było „mobilne”
-
-let calcSidebar = null;
 let calcContainer = null;
-let calcResizer = null;
 let calcInstance = null;
 
 // KaTeX (ładne wzory w drugiej linii) ładujemy dopiero przy pierwszym otwarciu kalkulatora,
@@ -39,13 +35,11 @@ function loadKatex() {
 
 function ensureCalcMounted() {
   loadKatex();
-  if (!calcInstance && calcContainer) {
-    calcInstance = mountCalculator(calcContainer, {
-      isEmbedded: true,
-      onClose: () => setCalcOpen(false, true),
-      onFlash: (text, ms) => ctx?.flash?.(text, ms)
-    });
-  }
+  calcInstance ??= mountCalculator(calcContainer, {
+    isEmbedded: true,
+    onClose: () => setCalcOpen(false, true),
+    onFlash: ctx.flash
+  });
 }
 
 // Szerokość panelu na stronie: zapis do zmiennej CSS (panel, rozdzielacz, przesunięcie PDF-a)
@@ -54,16 +48,14 @@ function applyCalcWidth(w) {
   document.documentElement.style.setProperty('--calc-w', calcWidth + 'px');
 }
 
-export function isCalcOpen() { return calcOpen; }
-export function getCalcStageWidth() {
-  return (calcOpen && !ctx?.isMobile?.()) ? (calcWidth + RESIZER_W) : 0;
-}
-export function resetUserCustomWidth() { userCustomWidth = false; userCalcW = null; }
-export function isUserCustomWidth() { return userCustomWidth; }
+export const isCalcOpen = () => calcOpen;
+export const getCalcStageWidth = () => (calcOpen && !ctx.isMobile() ? calcWidth + RESIZER_W : 0);
+export const isUserCustomWidth = () => userCalcW !== null;
+export function resetUserCustomWidth() { userCalcW = null; }
 
 // Ile miejsca potrzebuje PDF dopasowany do wysokości okna (px) albo null, gdy strony jeszcze nie znamy
 function neededPdfWidth() {
-  if (!ctx?.isPdfLoaded?.()) return null;
+  if (!ctx.isPdfLoaded()) return null;
   const [a, b] = ctx.spreadOf(ctx.getStartPage());
   // ref = wspólne przycięcie grupy; strona-wyjątek (pełnoekranowy obrazek) nie zmienia szerokości panelu
   const ref = (s) => s?.ref || s;
@@ -77,15 +69,15 @@ function neededPdfWidth() {
 export function snapCalcToHeightFit() {
   resetUserCustomWidth();
   handleCalcResize();
-  ctx?.fitNow?.();
+  ctx.fitNow();
 }
 
 export function setCalcOpen(open, fromUser = false) {
   if (fromUser) {
     autoCollapsed = false;
-    lastNarrow = Boolean(ctx?.isMobile?.());
+    lastNarrow = ctx.isMobile();
   }
-  if (open && !ctx?.isPdfLoaded?.()) return;
+  if (open && !ctx.isPdfLoaded()) return;
   calcOpen = !!open;
   ctx.pref.set('calcOpen', calcOpen);
   document.documentElement.classList.add('calc-animating');
@@ -95,7 +87,7 @@ export function setCalcOpen(open, fromUser = false) {
   if (calcOpen) {
     handleCalcResize();
     ensureCalcMounted();
-    setTimeout(() => calcInstance?.focus(), 50);
+    setTimeout(() => calcInstance.focus(), 50);
   }
   window.focus();
   ctx.updateMenu();
@@ -105,96 +97,89 @@ export function setCalcOpen(open, fromUser = false) {
   }
 }
 
-export function toggleCalc(fromUser = true) {
-  setCalcOpen(!calcOpen, fromUser);
+export function toggleCalc() {
+  setCalcOpen(!calcOpen, true);
 }
 
 // Ręczna szerokość z rozdzielacza zostaje (przewijanie, zmiana okna) aż do H – wtedy resetUserCustomWidth().
 export function handleCalcResize() {
-  const narrow = Boolean(ctx?.isMobile?.());
+  const narrow = ctx.isMobile();
   const wasNarrow = lastNarrow;
   lastNarrow = narrow;
 
   // Zwijanie/przywracanie po tym samym warunku co klasa .mobile – bez rozjazdu przy 800 px
   if (calcOpen && !autoCollapsed && !wasNarrow && narrow) {
     autoCollapsed = true;
-    setCalcOpen(false, false);
+    setCalcOpen(false);
     return;
   }
   if (!calcOpen && autoCollapsed && wasNarrow && !narrow) {
     autoCollapsed = false;
-    setCalcOpen(true, false);
+    setCalcOpen(true);
     return;
   }
 
   if (!calcOpen || narrow) return;
-  let w = userCalcW ?? calcWidth;
-  if (!userCustomWidth && ctx.getFitMode() === 'width') {
+  let w = userCalcW;
+  if (w === null && ctx.getFitMode() === 'width') {
     // Szerokość 100%: nie dopasowujemy kalkulatora do strony – zostaje tak szeroki, jak był,
     // a przy zmianie okna zmienia się tylko PDF
-    if (fixedW == null) fixedW = calcWidth;
-    w = fixedW;
-  } else if (!userCustomWidth) {
+    w = fixedW ??= calcWidth;
+  } else if (w === null) {
     fixedW = null;
     const neededW = neededPdfWidth();
-    if (neededW != null) w = window.innerWidth - neededW - RESIZER_W;
+    w = neededW == null ? calcWidth : window.innerWidth - neededW - RESIZER_W;
   }
   applyCalcWidth(w);
 }
 
 export function initCalcPanel(context) {
   ctx = context;
-  lastNarrow = Boolean(ctx.isMobile());
+  lastNarrow = ctx.isMobile();
 
-  calcSidebar = document.getElementById('calc-sidebar');
+  const sidebar = document.getElementById('calc-sidebar');
+  const resizer = document.getElementById('calc-resizer');
   calcContainer = document.getElementById('calc-container');
-  calcResizer = document.getElementById('calc-resizer');
 
   applyCalcWidth(ctx.pref.get('calcWidth', 440));
 
-  if (calcResizer) {
-    let startX = 0, initialW = 0, isDragging = false;
-    calcResizer.addEventListener('pointerdown', (e) => {
-      if (e.button !== 0) return;
-      startX = e.clientX;
-      initialW = calcWidth;
-      calcResizer.classList.add('dragging');
-      calcSidebar.style.transition = 'none';
-      ctx.stage.style.transition = 'none';
-      document.body.style.userSelect = 'none';
-      document.body.style.cursor = 'ew-resize';
-      if (calcContainer) calcContainer.style.pointerEvents = 'none';
-      try { calcResizer.setPointerCapture(e.pointerId); } catch {}
-      isDragging = true;
-    });
+  // Rozdzielacz: przeciąganie zmienia szerokość na żywo, zapis dopiero po puszczeniu
+  let startX = 0, initialW = 0, dragging = false;
+  const setDragStyles = (on) => {
+    resizer.classList.toggle('dragging', on);
+    sidebar.style.transition = ctx.stage.style.transition = on ? 'none' : '';
+    document.body.style.userSelect = on ? 'none' : '';
+    document.body.style.cursor = on ? 'ew-resize' : '';
+    calcContainer.style.pointerEvents = on ? 'none' : '';
+  };
 
-    const onPointerMove = (ev) => {
-      if (!isDragging) return;
-      userCustomWidth = true;
-      applyCalcWidth(initialW + ev.clientX - startX);
-      userCalcW = calcWidth;
-      ctx.fitNow();
-    };
+  resizer.addEventListener('pointerdown', (e) => {
+    if (e.button !== 0) return;
+    startX = e.clientX;
+    initialW = calcWidth;
+    setDragStyles(true);
+    try { resizer.setPointerCapture(e.pointerId); } catch {}
+    dragging = true;
+  });
 
-    const onPointerUp = (ev) => {
-      if (!isDragging) return;
-      isDragging = false;
-      calcResizer.classList.remove('dragging');
-      calcSidebar.style.transition = '';
-      ctx.stage.style.transition = '';
-      document.body.style.userSelect = '';
-      document.body.style.cursor = '';
-      if (calcContainer) calcContainer.style.pointerEvents = '';
-      try { calcResizer.releasePointerCapture(ev.pointerId); } catch {}
-      ctx.pref.set('calcWidth', calcWidth);   // zapis raz, po puszczeniu – nie przy każdym ruchu myszy
-      ctx.fitNow();
-      ctx.rerenderSoon();
-    };
+  resizer.addEventListener('pointermove', (e) => {
+    if (!dragging) return;
+    applyCalcWidth(initialW + e.clientX - startX);
+    userCalcW = calcWidth;
+    ctx.fitNow();
+  });
 
-    calcResizer.addEventListener('pointermove', onPointerMove);
-    calcResizer.addEventListener('pointerup', onPointerUp);
-    calcResizer.addEventListener('pointercancel', onPointerUp);
-  }
+  const stopDrag = (e) => {
+    if (!dragging) return;
+    dragging = false;
+    setDragStyles(false);
+    try { resizer.releasePointerCapture(e.pointerId); } catch {}
+    ctx.pref.set('calcWidth', calcWidth);   // zapis raz, po puszczeniu – nie przy każdym ruchu myszy
+    ctx.fitNow();
+    ctx.rerenderSoon();
+  };
+  resizer.addEventListener('pointerup', stopDrag);
+  resizer.addEventListener('pointercancel', stopDrag);
 
-  document.getElementById('calc-close')?.addEventListener('click', () => setCalcOpen(false, true));
+  document.getElementById('calc-close').addEventListener('click', () => setCalcOpen(false, true));
 }

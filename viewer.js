@@ -200,16 +200,12 @@ const nextStart = (s) => geo.nextStart(s, spreadOpts());
 const prevStart = (s) => geo.prevStart(s, spreadOpts());
 const spreadLabel = (s = start) => geo.spreadLabel(spreadOf(s));
 
-function getStageDimensions() {
-  const calcW = getCalcStageWidth();
-  const W = Math.max(120, (window.innerWidth - calcW) - 2 * MARGIN - (showTwo() ? GAP : 0));
-  const H = Math.max(120, window.innerHeight - 2 * MARGIN);
-  return { W, H };
-}
-
+// Skala rozkładówki w miejscu, które zostaje obok kalkulatora
 function fit(a, b, sa, sb) {
-  const twoUp = showTwo();
-  return { a, b: twoUp ? b : null, ...geo.fitSpread(sa, sb, { ...getStageDimensions(), two: twoUp, fitMode }) };
+  const two = showTwo();
+  const W = Math.max(120, window.innerWidth - getCalcStageWidth() - 2 * MARGIN - (two ? GAP : 0));
+  const H = Math.max(120, window.innerHeight - 2 * MARGIN);
+  return { a, b: two ? b : null, ...geo.fitSpread(sa, sb, { W, H, two, fitMode }) };
 }
 
 async function layoutSpread(s) {
@@ -351,7 +347,7 @@ async function show(s) {
     showError(e);
     return;
   }
-  if (fileKey) pref.set('pos:' + fileKey, a || b);
+  pref.set('pos:' + fileKey, a || b);
   prefetch(s, token).catch(() => {}).then(() => updateText(s, token)).catch(() => {});   // uszkodzona sąsiednia strona nie blokuje tekstu
 }
 
@@ -423,7 +419,7 @@ async function updateText(s, token) {
     sec.append(h, pre);
     parts.push(sec);
   }
-  if (token === showToken && textLayer) textLayer.replaceChildren(...parts);
+  if (token === showToken) textLayer.replaceChildren(...parts);
 }
 
 // Prefetch stron w tle
@@ -445,9 +441,7 @@ async function prefetch(s, token) {
 const prog = document.getElementById('prog');
 let progTimer;
 function showProgress() {
-  if (!pdf || !prog) return;
-  const [a, b] = spreadOf(start);
-  const page = a || b;
+  const page = spreadOf(start).find(Boolean);
   const frac = numPages > 1 ? (page - 1) / (numPages - 1) : 0;
   const thumb = prog.firstElementChild;
   thumb.style.height = Math.max(6, 100 / Math.max(1, numPages / (showTwo() ? 2 : 1))) + '%';
@@ -459,7 +453,7 @@ function showProgress() {
 
 // ---------- zakładki ----------
 function toggleMark() {
-  if (!pdf || !fileKey) return;
+  if (!pdf) return;
   const page = spreadOf(start).find(Boolean);
   const added = toggleBookmark(fileKey, fileName, page);
   flash(added ? `Zakładka: strona ${page}` : `Zakładka na stronie ${page} usunięta`);
@@ -533,7 +527,7 @@ async function open(src, { name, key, page = null, blob = null, req }) {
     fileName = name;
     fileKey = key;
     clearCaches();
-    textLayer?.replaceChildren();
+    textLayer.replaceChildren();
     pairing = pref.get('pairing:' + key, pref.get('pairing', 'odd'));
     rot = pref.get('rot:' + key, 0);
     rememberFile(key, name, blob);
@@ -559,7 +553,7 @@ function closeDocument() {
   numPages = 0;
   fileKey = null;
   stage.replaceChildren();
-  textLayer?.replaceChildren();
+  textLayer.replaceChildren();
   document.title = TITLE;
   menu.hidden = true;                   // także przypięty – bez pliku pasek nie ma czego pokazywać
   syncPopover();
@@ -657,10 +651,13 @@ picker.accept = 'application/pdf,.pdf';
 picker.hidden = true;
 document.body.append(picker);
 
+// Plik z dysku lub z pamięci przeglądarki: adres bez #file=…, inaczej odświeżenie wróciłoby do pliku z sieci
+const clearFileHash = () => history.replaceState(null, '', location.pathname);
+
 async function openLocal(f) {
   if (!f) return;
   const req = ++openSeq;
-  history.replaceState(null, '', location.pathname);
+  clearFileHash();
   setEmpty(false);
   flash('Ładowanie…', 0);
   let data;
@@ -676,13 +673,12 @@ async function openLocal(f) {
 function pickFile() { picker.value = ''; picker.click(); }
 picker.addEventListener('change', () => openLocal(picker.files[0]));
 const welcome = document.getElementById('welcome');
-welcome.querySelector('.pick')?.addEventListener('click', (e) => { e.stopPropagation(); pickFile(); });
+welcome.querySelector('.pick').addEventListener('click', (e) => { e.stopPropagation(); pickFile(); });
 
 // ---------- ekran startowy: ostatnie pliki i zakładki ----------
 // Wiersze na ekranie startowym: ostatnie pliki i zakładki wyglądają tak samo.
 function renderList(id, items, onPick) {
   const box = document.getElementById(id);
-  if (!box) return;
   box.replaceChildren();
   box.hidden = items.length === 0;
   for (const it of items.slice(0, 6)) {
@@ -701,6 +697,7 @@ function renderList(id, items, onPick) {
 // Plik zapisany w przeglądarce. Uszkodzony wpis (pusty albo nieczytelny blob) usuwamy z listy.
 async function openStored(rec, page = null) {
   const req = ++openSeq;
+  clearFileHash();
   setEmpty(false);
   let data = null;
   try { if (rec.blob.size) data = new Uint8Array(await rec.blob.arrayBuffer()); } catch {}
@@ -788,13 +785,6 @@ function showMenu() {
   scheduleHide();
 }
 
-function setBtnLabel(btn, text, key) {
-  const labelEl = btn.querySelector('.label-text');
-  if (labelEl) labelEl.textContent = text;
-  const kEl = btn.querySelector('.k');
-  if (kEl && key) kEl.textContent = key;
-}
-
 // Menu opcji to natywny popover (warstwa nad wszystkim, zakotwiczony nad paskiem).
 // Pokazujemy go tylko razem z paskiem; to, czy ma być otwarty, pamiętamy osobno.
 function syncPopover() {
@@ -811,45 +801,37 @@ function setPopoverOpen(open) {
 
 function updateMenu() {
   if (document.activeElement !== pageInput) pageInput.value = spreadLabel();
-  if (totalSpan) totalSpan.textContent = `/ ${numPages}`;
+  totalSpan.textContent = `/ ${numPages}`;
   syncPopover();
 
-  // [klucz przycisku, etykieta, skrót, czy podświetlony]
-  const buttons = [
-    ['calc', isCalcOpen() ? 'Ukryj kalkulator' : 'Kalkulator', 'K', isCalcOpen()],
-    ['fit-w', fitMode === 'width' ? 'Szerokość [100%]' : 'Szerokość 100%', 'W', fitMode === 'width'],
-    ['fit-h', fitMode === 'height' ? 'Wysokość [100%]' : 'Wysokość 100%', 'H', fitMode === 'height'],
-    ['pages', two ? 'Jedna strona' : 'Dwie strony', 'P'],
-    ['pairing', pairing === 'odd' ? 'Pary 1–2' : 'Pary 1, 2–3', 'O'],
-    ['dark', COLOR_LABELS[colorMode], 'D'],
-    ['theme', PALETTE_LABELS[palette], 'T'],
-    ['crop', crop ? 'Z marginesami' : 'Przytnij marginesy', 'C'],
-    ['rotate', 'Obróć o 90°', 'R']
+  const btn = (k) => menu.querySelector(`[data-k="${k}"]`);
+  // [przycisk, etykieta, czy podświetlony]; skrót klawiszowy (.k) jest na stałe w index.html
+  const labels = [
+    ['calc', isCalcOpen() ? 'Ukryj kalkulator' : 'Kalkulator', isCalcOpen()],
+    ['fit-w', fitMode === 'width' ? 'Szerokość [100%]' : 'Szerokość 100%', fitMode === 'width'],
+    ['fit-h', fitMode === 'height' ? 'Wysokość [100%]' : 'Wysokość 100%', fitMode === 'height'],
+    ['pages', two ? 'Jedna strona' : 'Dwie strony'],
+    ['pairing', pairing === 'odd' ? 'Pary 1–2' : 'Pary 1, 2–3'],
+    ['dark', COLOR_LABELS[colorMode]],
+    ['theme', PALETTE_LABELS[palette]],
+    ['crop', crop ? 'Z marginesami' : 'Przytnij marginesy']
   ];
-  for (const [k, text, key, active] of buttons) {
-    const btn = menu.querySelector(`[data-k="${k}"]`);
-    if (!btn) continue;
-    setBtnLabel(btn, text, key);
-    if (active !== undefined) btn.classList.toggle('active', active);
+  for (const [k, text, active] of labels) {
+    btn(k).querySelector('.label-text').textContent = text;
+    if (active !== undefined) btn(k).classList.toggle('active', active);
   }
-  const hide = (k, v) => { const btn = menu.querySelector(`[data-k="${k}"]`); if (btn) btn.hidden = v; };
-  hide('pairing', !showTwo());                  // parowanie nic nie zmienia przy jednej stronie
-  hide('pages', isPortraitPhone());             // telefon w pionie zawsze pokazuje jedną stronę
-  hide('full', !document.fullscreenEnabled);    // iPhone i ramki bez zgody nie mają pełnego ekranu
-  menu.querySelector('[data-k="dark"] use')?.setAttribute('href', `#i-mode-${colorMode}`);
-  menu.querySelector('[data-k="theme"] use')?.setAttribute('href', `#i-pal-${palette}`);
+  btn('pairing').hidden = !showTwo();              // parowanie nic nie zmienia przy jednej stronie
+  btn('pages').hidden = isPortraitPhone();         // telefon w pionie zawsze pokazuje jedną stronę
+  btn('full').hidden = !document.fullscreenEnabled; // iPhone i ramki bez zgody nie mają pełnego ekranu
+  btn('dark').querySelector('use').setAttribute('href', `#i-mode-${colorMode}`);
+  btn('theme').querySelector('use').setAttribute('href', `#i-pal-${palette}`);
 
-  if (pinBtn) {
-    pinBtn.classList.toggle('pinned', pinned);
-    pinBtn.querySelector('.icon-unlocked').hidden = pinned;
-    pinBtn.querySelector('.icon-locked').hidden = !pinned;
-    pinBtn.dataset.tip = pinned ? 'Odblokuj pasek (auto-ukrywanie)' : 'Zablokuj pasek na stałe';
-  }
-
-  if (toggleBtn) {
-    toggleBtn.classList.toggle('open', popoverOpen);
-    toggleBtn.dataset.tip = popoverOpen ? 'Zamknij menu opcji (M)' : 'Otwórz menu opcji (M)';
-  }
+  pinBtn.classList.toggle('pinned', pinned);
+  pinBtn.querySelector('.icon-unlocked').hidden = pinned;
+  pinBtn.querySelector('.icon-locked').hidden = !pinned;
+  pinBtn.dataset.tip = pinned ? 'Odblokuj pasek (auto-ukrywanie)' : 'Zablokuj pasek na stałe';
+  toggleBtn.classList.toggle('open', popoverOpen);
+  toggleBtn.dataset.tip = popoverOpen ? 'Zamknij menu opcji (M)' : 'Otwórz menu opcji (M)';
 }
 
 // Skok do strony: automatyczny po 1s lub natychmiastowy po Enter; Esc anuluje
@@ -921,21 +903,17 @@ function toggleFullscreen() {
 }
 
 // ---------- akcje wspólne dla klawiatury, menu i kalkulatora ----------
+const WITHOUT_PDF = new Set(['open', 'pin', 'toggle-menu', 'full', 'dark', 'theme']);   // reszta potrzebuje pliku
+
 function act(k) {
+  if (!pdf && !WITHOUT_PDF.has(k)) return;
   switch (k) {
     case 'prev': prev(); break;
     case 'next': next(); break;
     case 'open': pickFile(); break;
-    case 'calc':
-      if (!pdf) break;
-      toggleCalc();
-      break;
-    case 'fit-w':
-      if (!pdf) break;
-      setFitMode(fitMode === 'width' ? 'auto' : 'width');
-      break;
+    case 'calc': toggleCalc(); break;
+    case 'fit-w': setFitMode(fitMode === 'width' ? 'auto' : 'width'); break;
     case 'fit-h':
-      if (!pdf) break;
       // Ręczna szerokość kalkulatora? H najpierw wraca do automatu (tryb wysokości zostaje / włącza się).
       // Dopiero H bez ręcznej szerokości wyłącza tryb wysokości.
       if (fitMode === 'height' && isCalcOpen() && isUserCustomWidth()) {
@@ -964,16 +942,14 @@ function act(k) {
       toggleFullscreen();
       break;
     case 'crop':
-      if (!pdf) break;
       crop = !crop;
       pref.set('crop', crop);
       flash(crop ? 'Marginesy przycięte' : 'Pełne strony');
       relayout();
       break;
     case 'rotate':
-      if (!pdf) break;
       rot = (rot + 90) % 360;
-      if (fileKey) pref.set('rot:' + fileKey, rot);
+      pref.set('rot:' + fileKey, rot);
       flash(`Obrót ${rot}°`);
       relayout();
       break;
@@ -984,7 +960,6 @@ function act(k) {
       togglePalette();
       break;
     case 'pages': {
-      if (!pdf) break;
       const anchor = spreadOf(start).find(Boolean);
       two = !two;
       pref.set('two', two);
@@ -994,11 +969,11 @@ function act(k) {
       break;
     }
     case 'pairing': {
-      if (!pdf || !showTwo()) break;
+      if (!showTwo()) break;
       const anchor = spreadOf(start).find(Boolean);
       pairing = pairing === 'odd' ? 'even' : 'odd';
       pref.set('pairing', pairing);
-      if (fileKey) pref.set('pairing:' + fileKey, pairing);
+      pref.set('pairing:' + fileKey, pairing);
       flash(pairing === 'odd' ? 'Pary: 1–2, 3–4, 5–6…' : 'Pary: 1, 2–3, 4–5…');
       go(spreadStartOf(anchor));
       break;
@@ -1151,7 +1126,7 @@ window.addEventListener('keydown', (e) => {
   const k = e.key;
 
   if (k === 'Escape') {
-    if (popoverOpen) {
+    if (popoverOpen && !menu.hidden) {     // schowany pasek = schowane menu opcji; Esc idzie dalej
       setPopoverOpen(false);
       e.preventDefault();
       return;
@@ -1168,7 +1143,8 @@ window.addEventListener('keydown', (e) => {
     }
   }
 
-  if (!pdf && k === 'Enter' && lastRecent) { e.preventDefault(); openRecent(lastRecent); return; }
+  // Enter na ekranie startowym otwiera ostatni plik – chyba że przycisk jest zaznaczony (Tab), wtedy działa on
+  if (!pdf && k === 'Enter' && lastRecent && !e.target.closest('button')) { e.preventDefault(); openRecent(lastRecent); return; }
 
   if (/^[0-9]$/.test(k) && pdf) {
     e.preventDefault();
