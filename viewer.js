@@ -100,9 +100,13 @@ const sizeCache = lru();             // nr strony -> obszar do pokazania
 const canvasCache = lru(() => (isMobile() ? CACHE_MAX_MOBILE : CACHE_MAX), releaseCanvas);   // klucz -> gotowa strona
 const loCache = lru(LO_CACHE_MAX, releaseCanvas);   // klucz -> szybki podgląd
 const tlCache = lru(CACHE_MAX);      // klucz -> warstwa tekstowa
-const textCache = lru();             // nr strony -> tekst
 const tcCache = lru();               // nr strony -> Promise<textContent>
-const pending = new Map();           // klucz -> trwające renderowanie
+const textCache = lru();             // nr strony -> Promise<tekst strony>
+const pending = new Map();           // klucz -> trwające renderowanie { promise, cancel }
+
+// Rośnie przy każdym wyrzuceniu obrazów stron (inna skala, plik, obrót, przycięcie). Jest w kluczach
+// i w layoutSpread(), więc to, co jeszcze liczy się dla starego układu, nigdzie już nie trafi.
+let layoutGen = 0;
 
 const cropper = createCropper({
   doc: () => pdf,
@@ -113,8 +117,12 @@ const cropper = createCropper({
 const pageBox = (n) => cropper.pageBox(n);
 const rotationOf = (page) => cropper.rotationOf(page);
 
-// Gotowe obrazy stron są liczone dla konkretnej skali – po zmianie układu wyrzucamy je
-function clearRenderCaches() { canvasCache.clear(); loCache.clear(); tlCache.clear(); }
+// Gotowe obrazy stron są liczone dla konkretnej skali i pól stron – po zmianie układu wyrzucamy je
+function clearRenderCaches() {
+  layoutGen++;
+  for (const job of [...pending.values()]) job.cancel();
+  canvasCache.clear(); loCache.clear(); tlCache.clear();
+}
 
 // Przerysowanie z krótkim opóźnieniem, żeby seria zmian (przeciąganie, przełączniki) dała jedno
 let resizeTimer;
@@ -123,16 +131,22 @@ function rerenderSoon(ms = 120) {
   resizeTimer = setTimeout(() => { clearRenderCaches(); show(start); }, ms);
 }
 
-function clearCaches() {
-  for (const job of pending.values()) job.cancel();
-  for (const c of [sizeCache, canvasCache, loCache, tlCache, textCache, tcCache]) c.clear();
-  cropper.reset();
-}
-
-// Zmiana przycinania lub obrotu: inne pola stron, więc układ liczymy od nowa
-function relayout() {
+// Inne pola stron (plik, przycinanie, obrót): układ i obrazy stron liczymy od nowa
+function resetLayout() {
   sizeCache.clear();
   cropper.reset();
+  clearRenderCaches();
+}
+
+// Nowy plik albo jego zamknięcie: także tekst stron
+function clearCaches() {
+  resetLayout();
+  tcCache.clear();
+  textCache.clear();
+}
+
+function relayout() {
+  resetLayout();
   show(start);
 }
 
@@ -209,8 +223,10 @@ function fit(a, b, sa, sb) {
 }
 
 async function layoutSpread(s) {
+  const gen = layoutGen;
   const [a, b] = spreadOf(s);
   const [sa, sb] = await Promise.all([a ? pageBox(a) : null, b ? pageBox(b) : null]);
+  if (gen !== layoutGen) throw cancelled();   // w międzyczasie inny plik, obrót albo skala – te pola są nieaktualne
   if (a) sizeCache.set(a, sa);
   if (b) sizeCache.set(b, sb);
   if (s === start) handleCalcResize();   // szerokość kalkulatora zależy od stron na ekranie, nie od tych w tle
@@ -226,7 +242,7 @@ function layoutSpreadSync(s) {
 }
 
 // ---------- renderowanie ----------
-function cacheKey(n, scale, q = 1) { return `${n}|${scale.toFixed(5)}|${q === 1 ? (window.devicePixelRatio || 1) : 'lo'}|${rot}|${crop ? 1 : 0}`; }
+function cacheKey(n, scale, q = 1) { return `${layoutGen}|${n}|${scale.toFixed(5)}|${q === 1 ? (window.devicePixelRatio || 1) : 'lo'}`; }
 function cancelled() { const e = new Error('cancelled'); e.name = 'RenderingCancelledException'; return e; }
 
 function renderPage(n, scale, q = 1) {
@@ -237,12 +253,16 @@ function renderPage(n, scale, q = 1) {
   if (pending.has(k)) return pending.get(k).promise;
 
   let task = null, stop = false;
-  const promise = (async () => {
+  const check = () => { if (stop) throw cancelled(); };
+  const drop = () => { if (pending.get(k) === job) pending.delete(k); };
+  // Przerwane zadanie od razu znika z listy – następne pytanie o tę stronę zaczyna od nowa
+  const job = { cancel() { stop = true; task?.cancel(); drop(); } };
+  job.promise = (async () => {
     const page = await pdf.getPage(n);
-    if (stop) throw cancelled();
+    check();
     const dpr = q === 1 ? (window.devicePixelRatio || 1) : q;
     const b = await pageBox(n);
-    if (stop) throw cancelled();
+    check();
     const vp = page.getViewport({
       scale: scale * dpr, rotation: rotationOf(page),
       offsetX: -b.x * scale * dpr, offsetY: -b.y * scale * dpr
@@ -258,16 +278,17 @@ function renderPage(n, scale, q = 1) {
     task = page.render({ canvasContext: ctx, viewport: vp });
     try {
       await task.promise;
+      check();                         // skończone tuż po przerwaniu (np. inny plik) – do pamięci nie trafia
     } catch (e) {
       canvas.width = 0;                // przerwane albo nieudane – pamięć płótna od razu z powrotem
       canvas.height = 0;
       throw e;
     }
     return cache.set(k, canvas);
-  })().finally(() => pending.delete(k));
+  })().finally(drop);
 
-  pending.set(k, { promise, cancel() { stop = true; task?.cancel(); } });
-  return promise;
+  pending.set(k, job);
+  return job.promise;
 }
 
 function blank(size, scale) {
@@ -293,8 +314,10 @@ async function show(s) {
   // Początek rozkładówki liczymy przy każdym pokazaniu: po obrocie telefonu (jedna strona → dwie)
   // przerysowanie z rerenderSoon() mogłoby inaczej pokazać parę 2–3 zamiast 1–2
   start = s = spreadStartOf(s);
+  // Przerwane (nowsze show(), nowy układ) to nie błąd; komunikat tylko dla tego, co widać
+  const failed = (e) => { if (token === showToken && e?.name !== 'RenderingCancelledException') showError(e); };
   let lay;
-  try { lay = await layoutSpread(s); } catch (e) { if (token === showToken) showError(e); return; }
+  try { lay = await layoutSpread(s); } catch (e) { failed(e); return; }
   if (token !== showToken) return;
   const { a, b, scale, L, R, single } = lay;
   lastRenderedScale = scale;
@@ -343,8 +366,7 @@ async function show(s) {
       tls.forEach((tl, i) => { if (tl && wrappers[i]) wrappers[i].append(tl); });
     }).catch(() => {});
   } catch (e) {
-    if (token !== showToken || e?.name === 'RenderingCancelledException') return;
-    showError(e);
+    failed(e);
     return;
   }
   pref.set('pos:' + fileKey, a || b);
@@ -352,9 +374,19 @@ async function show(s) {
 }
 
 // ---------- warstwa tekstowa i dostępność ----------
+// Tekst strony z pdf.js i ten sam tekst jako zwykły napis (dla czytników ekranu i Gemini). Obietnice
+// zapisujemy od razu, więc wynik należy do pliku otwartego w chwili pytania i nie trafi do następnego.
 function textContent(n) {
   if (!tcCache.has(n)) tcCache.set(n, pdf.getPage(n).then((p) => p.getTextContent()));
   return tcCache.get(n);
+}
+
+function pageText(n) {
+  if (!textCache.has(n)) {
+    textCache.set(n, textContent(n).then((tc) => tc.items.filter((it) => 'str' in it)
+      .map((it) => it.str + (it.hasEOL ? '\n' : '')).join('').replace(/[ \t]+\n/g, '\n').trim()));
+  }
+  return textCache.get(n);
 }
 
 async function textLayerFor(n, scale) {
@@ -389,17 +421,6 @@ document.addEventListener('pointerup', () => {
   for (const d of stage.querySelectorAll('.textLayer.selecting')) d.classList.remove('selecting');
 });
 
-async function pageText(n) {
-  if (textCache.has(n)) return textCache.get(n);
-  const tc = await textContent(n);
-  let out = '';
-  for (const it of tc.items) {
-    if ('str' in it) out += it.str + (it.hasEOL ? '\n' : '');
-  }
-  out = out.replace(/[ \t]+\n/g, '\n').trim();
-  textCache.set(n, out);
-  return out;
-}
 
 async function updateText(s, token) {
   const [a, b] = spreadOf(s);
