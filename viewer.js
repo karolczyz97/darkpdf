@@ -52,10 +52,9 @@ const COLOR_MODES = ['dark', 'light', 'auto'];
 const COLOR_LABELS = { dark: 'Tryb: Ciemny', light: 'Tryb: Jasny', auto: 'Tryb: Auto' };
 const PALETTE_LABELS = { gemini: 'Motyw: Gemini', system: 'Motyw: Systemowy' };
 
-// Starsze wersje zapisywały „dark” (1/0) i „theme” – z nich bierzemy ustawienie, gdy nowego jeszcze nie ma
-let colorMode = pref.get('colorMode', null) || (pref.get('dark', true) ? 'dark' : 'light');
+let colorMode = pref.get('colorMode', 'dark');
 if (!COLOR_MODES.includes(colorMode)) colorMode = 'dark';
-let palette = pref.get('palette', null) || (pref.get('theme', 'gemini') === 'gemini' ? 'gemini' : 'system');
+let palette = pref.get('palette', 'gemini');
 if (!(palette in PALETTE_LABELS)) palette = 'gemini';
 
 const systemDark = window.matchMedia('(prefers-color-scheme: dark)');
@@ -396,18 +395,12 @@ async function textLayerFor(n, scale) {
   div.className = 'textLayer';
 
   const tc = await textContent(n);
-  if (tc) {
-    const b = await pageBox(n);
-    const tl = new pdfjsLib.TextLayer({
-      textContentSource: tc,
-      container: div,
-      viewport: page.getViewport({
-        scale, rotation: rotationOf(page),
-        offsetX: -b.x * scale, offsetY: -b.y * scale
-      })
-    });
-    await tl.render();
-  }
+  const b = await pageBox(n);
+  await new pdfjsLib.TextLayer({
+    textContentSource: tc,
+    container: div,
+    viewport: page.getViewport({ scale, rotation: rotationOf(page), offsetX: -b.x * scale, offsetY: -b.y * scale })
+  }).render();
 
   const end = document.createElement('div');
   end.className = 'endOfContent';
@@ -846,8 +839,6 @@ function updateMenu() {
   btn('theme').querySelector('use').setAttribute('href', `#i-pal-${palette}`);
 
   pinBtn.classList.toggle('pinned', pinned);
-  pinBtn.querySelector('.icon-unlocked').hidden = pinned;
-  pinBtn.querySelector('.icon-locked').hidden = !pinned;
   pinBtn.dataset.tip = pinned ? 'Odblokuj pasek (auto-ukrywanie)' : 'Zablokuj pasek na stałe';
   toggleBtn.classList.toggle('open', popoverOpen);
   toggleBtn.dataset.tip = popoverOpen ? 'Zamknij menu opcji (M)' : 'Otwórz menu opcji (M)';
@@ -1185,7 +1176,7 @@ window.addEventListener('keydown', (e) => {
 
   if (!pdf && k !== '?') return;       // bez pliku strzałki i spacja przewijają ekran startowy
   const jump = e.shiftKey ? 10 : 1;   // Shift = skok o 10 rozkładówek
-  if (['ArrowRight', 'ArrowDown', 'PageDown', 'j', 'l'].includes(k)) { flip(jump); e.preventDefault(); return; }
+  if (['ArrowRight', 'ArrowDown', 'PageDown'].includes(k)) { flip(jump); e.preventDefault(); return; }
   if (['ArrowLeft', 'ArrowUp', 'PageUp'].includes(k)) { flip(-jump); e.preventDefault(); return; }
   if (k === ' ') { e.shiftKey ? prev() : next(); e.preventDefault(); return; }
   if (k === 'b' || k === 'B') { toggleMark(); e.preventDefault(); return; }

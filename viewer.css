@@ -66,7 +66,7 @@ html.dark, html.dark body { background: var(--ui-stage-bg); }
   justify-content: center;
   overflow: hidden;
 }
-html.dark #stage, html.gemini #stage {
+html.dark #stage {
   background: var(--ui-stage-bg);
 }
 html.calc-animating #stage {
@@ -79,17 +79,15 @@ html.calc-animating #hint {
   transition: left .22s cubic-bezier(0.16, 1, 0.3, 1);
 }
 html.calc-open,
-html.calc-open body,
-html.gemini.calc-open body,
-html.dark.calc-open body {
+html.calc-open body {
   background: var(--ui-resizer-bg) !important;
 }
-html:not(.dark):not(.gemini).calc-open,
-html:not(.dark):not(.gemini).calc-open body {
+html:not(.dark).calc-open,
+html:not(.dark).calc-open body {
   background: #e0e0e0 !important;
 }
 html.calc-open #stage {
-  left: calc(var(--calc-w, 440px) + var(--resizer-w));
+  left: calc(var(--calc-w) + var(--resizer-w));
   border-top-left-radius: 10px;
   border-bottom-left-radius: 10px;
   background: var(--ui-stage-bg);
@@ -98,10 +96,10 @@ html:not(.dark).calc-open #stage {
   background: #f1f3f4;
 }
 html.calc-open #menu {
-  left: calc((100vw + var(--calc-w, 440px) + var(--resizer-w)) / 2);
+  left: calc((100vw + var(--calc-w) + var(--resizer-w)) / 2);
 }
 html.calc-open #hint {
-  left: calc((100vw + var(--calc-w, 440px) + var(--resizer-w)) / 2);
+  left: calc((100vw + var(--calc-w) + var(--resizer-w)) / 2);
 }
 
 /* Blokowanie dopasowania strony PDF */
@@ -178,7 +176,6 @@ html.dark .textLayer ::selection { background: rgba(90, 160, 255, .45); }
 
 /* Motyw Gemini: kolory ze wspólnej palety theme.css.
    Strona zlewa się z tłem jak czat Gemini, kontrast mocniejszy niż w zwykłym trybie. */
-html.gemini, html.gemini body { background: var(--gem-bg); }
 html.gemini #stage canvas { filter: invert(1) hue-rotate(180deg) url(#gemini-colors); }
 html.gemini .textLayer ::selection { background: rgba(168, 199, 250, .38); }
 html.gemini #hint { background: var(--ui-bg); color: var(--ui-text); font-family: var(--ui-font); }
@@ -230,7 +227,7 @@ html.gemini #hint { background: var(--ui-bg); color: var(--ui-text); font-family
 .menu-popover:not(:popover-open) { opacity: 0; transform: translateY(6px); }
 @starting-style { .menu-popover:popover-open { opacity: 0; transform: translateY(6px); } }
 
-.menu-item[hidden] { display: none !important; }   /* np. parowanie przy jednej stronie; !important, bo .menu-item też go ma */
+.menu-item[hidden] { display: none; }   /* np. parowanie przy jednej stronie */
 
 .menu-section {
   display: flex;
@@ -246,7 +243,7 @@ html.gemini #hint { background: var(--ui-bg); color: var(--ui-text); font-family
 }
 
 .menu-item {
-  display: flex !important;
+  display: flex;
   align-items: center;
   gap: 10px;
   width: 100%;
@@ -423,8 +420,6 @@ html.gemini #hint { background: var(--ui-bg); color: var(--ui-text); font-family
 .menu-nav [data-tip]:hover::after { opacity: 1; transform: translate(-50%, 0); transition-delay: .1s; }
 .menu-popover:popover-open ~ .menu-nav [data-tip]::after { display: none; }   /* nie zasłaniamy otwartego menu */
 
-html.gemini .page-input:focus { border-color: var(--gem-accent); box-shadow: 0 0 0 1px var(--gem-accent); }
-
 /* ---- ekran startowy ---- */
 #welcome { position: fixed; inset: 0; z-index: 4; display: none; align-items: center; align-items: safe center; justify-content: center; padding: 24px; overflow-y: auto; }
 html.empty #welcome { display: flex; }
@@ -526,7 +521,7 @@ html.nocursor .textLayer :is(span, br) { cursor: none; }
   top: 0;
   bottom: 0;
   left: 0;
-  width: var(--calc-w, 440px);
+  width: var(--calc-w);
   min-width: 320px;
   max-width: calc(100vw - 140px);
   background: var(--ui-stage-bg);
@@ -540,10 +535,7 @@ html.nocursor .textLayer :is(span, br) { cursor: none; }
   box-sizing: border-box;
   overflow: hidden;
 }
-html.gemini #calc-sidebar {
-  background: var(--ui-stage-bg);
-}
-html:not(.dark):not(.gemini) #calc-sidebar {
+html:not(.dark) #calc-sidebar {
   background: #f1f3f4;
 }
 html.calc-open #calc-sidebar {
@@ -555,21 +547,12 @@ html.empty #calc-sidebar {
 #calc-container {
   flex: 1;
   min-height: 0;
-  width: 100%;
-  height: 100%;
-  border: 0;
-  border-top-right-radius: 10px;
-  border-bottom-right-radius: 10px;
-  background: transparent;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
 }
 #calc-resizer {
   position: fixed;
   top: 0;
   bottom: 0;
-  left: var(--calc-w, 440px);
+  left: var(--calc-w);
   width: var(--resizer-w);
   background: var(--ui-resizer-bg);
   cursor: ew-resize;
@@ -601,7 +584,7 @@ html.calc-animating #calc-resizer {
 #calc-resizer.dragging::after {
   opacity: 1;
 }
-html:not(.dark):not(.gemini) #calc-resizer {
+html:not(.dark) #calc-resizer {
   background: #e0e0e0;
 }
 html:not(.dark) #calc-resizer::after {
@@ -619,7 +602,7 @@ html.empty #calc-resizer {
 html.mobile .mobile-only { display: revert !important; }
 html.mobile .desktop-only { display: none !important; }
 html.mobile #welcome .keys-group.mobile-only { display: flex !important; margin-top: 20px; text-align: left; }
-html.mobile #welcome { align-items: flex-start; overflow-y: auto; }
+html.mobile #welcome { align-items: flex-start; }
 html.mobile #welcome .card { padding: 26px 18px 20px; }
 
 /* Pasek na dole ekranu i większe cele do dotyku */

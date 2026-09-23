@@ -61,7 +61,7 @@ self.addEventListener('fetch', (e) => {
       if (res.ok) cache.put(req, res.clone());
       return res;
     } catch (err) {
-      const hit = await cache.match(req, { ignoreSearch: true });   // stary adres z ?v=… też się nada
+      const hit = await cache.match(req, { ignoreSearch: true });   // adres z ?… też się nada
       if (hit) return hit;
       throw err;
     }

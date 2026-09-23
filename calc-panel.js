@@ -92,8 +92,10 @@ export function setCalcOpen(open, fromUser = false) {
   if (calcOpen) {
     handleCalcResize();
     ensureCalcMounted();
-    // Na dotyku bez fokusu – klawiatura ekranowa zasłoniłaby przyciski kalkulatora
-    if (matchMedia('(pointer: fine)').matches) setTimeout(() => calcInstance.focus(), 50);
+    // Fokus tylko po otwarciu przez użytkownika (K, przycisk) i tylko z myszą. Kalkulator otwarty sam
+    // (zapamiętany przy wczytaniu pliku) nie zabiera klawiszy czytnikowi, a na dotyku klawiatura
+    // ekranowa nie zasłania jego przycisków.
+    if (fromUser && matchMedia('(pointer: fine)').matches) setTimeout(() => calcInstance.focus(), 50);
   }
   ctx.updateMenu();
   if (ctx.isPdfLoaded()) {
