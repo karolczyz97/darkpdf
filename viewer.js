@@ -335,6 +335,11 @@ async function show(s) {
   let shown = [];
   const put = ([ca, cb]) => {
     shown = [ca && wrap(ca), cb && wrap(cb)];
+    // Przy dwóch prawdziwych stronach rogi od strony środka zostają proste
+    if (!single && shown[0] && shown[1]) {
+      shown[0].classList.add('has-right');
+      shown[1].classList.add('has-left');
+    }
     stage.replaceChildren(...(single
       ? [shown[0] || blank(L, scale)]
       : [shown[0] || blank(L, scale), shown[1] || blank(R, scale)]));
