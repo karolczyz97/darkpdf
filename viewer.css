@@ -509,12 +509,6 @@ html.empty #welcome { display: flex; }
 .recent-row .rn { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .recent-row .rp { flex: none; color: var(--ui-text-dim); font-size: 12px; }
 
-/* Piksel HDR w rogu na pełnym ekranie – obejście błędu Windows z HDR (opis w viewer.js przy syncHdrPixel) */
-#hdr-pixel {
-  position: fixed; right: 0; bottom: 0; width: 1px; height: 1px; z-index: 2147483647;
-  pointer-events: none; user-select: none; dynamic-range-limit: no-limit;
-}
-
 /* ---- wskaźnik postępu przy prawej krawędzi ---- */
 #prog {
   position: fixed; right: 2px; top: 8px; bottom: 8px; width: 3px; z-index: 3;
