@@ -15,8 +15,8 @@
   --ui-accent-soft: rgba(138, 180, 248, .14);
   --ui-font: system-ui, -apple-system, sans-serif;
   --calc-w: 440px;
-  --panel-r: 10px;                            /* zaokrąglenie paneli (PDF i kalkulator) */
-  --page-gap: 6px;                            /* odstęp strony od krawędzi panelu – ta sama wartość co MARGIN w viewer.js */
+  --panel-r: 12px;                            /* zaokrąglenie paneli (PDF i kalkulator) */
+  --page-gap: 8px;                            /* odstęp strony od krawędzi panelu – ta sama wartość co MARGIN w viewer.js */
   --resizer-w: 9px;                           /* rozdzielacz kalkulatora – ta sama wartość co RESIZER_W w calc-panel.js */
 }
 
