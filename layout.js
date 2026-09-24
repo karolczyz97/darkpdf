@@ -149,3 +149,38 @@ export function contentBounds(data, width, height, { step = 2, threshold = 235 }
   const ys = span(rows, width), xs = span(cols, height);
   return ys && xs ? { x0: xs[0], x1: xs[1], y0: ys[0], y1: ys[1] } : null;
 }
+
+// ---------- kolor kartki ----------
+// Kartka strony do wyrównania przed odwróceniem kolorów: najczęstszy kolor miniatury (razem z szumem skanu)
+// → [r, g, b] albo null, gdy nie ma czego wyrównywać: kartka biała, za mało jej (zdjęcie, okładka), za ciemna,
+// za mocno zabarwiona (żółta ramka na pół strony) albo są na niej wyraźnie jaśniejsze pola (białe ramki na szarym
+// tle zlałyby się z kartką). data – RGBA z getImageData
+export function paperColor(data, { minShare = 0.3, minLevel = 160, maxTint = 60, maxLighter = 0.04 } = {}) {
+  const n = data.length / 4;
+  const counts = new Map();
+  let top = 0, topN = 0;
+  for (let i = 0; i < data.length; i += 4) {
+    const k = ((data[i] >> 3) << 10) | ((data[i + 1] >> 3) << 5) | (data[i + 2] >> 3);   // przedziały po 8 poziomów
+    const c = (counts.get(k) || 0) + 1;
+    counts.set(k, c);
+    if (c > topN) { top = k; topN = c; }
+  }
+  const kr = top >> 10, kg = (top >> 5) & 31, kb = top & 31;
+  const near = (v, k) => Math.abs((v >> 3) - k) <= 1;                  // sąsiednie przedziały: szum skanu
+  const ch = [[], [], []];
+  for (let i = 0; i < data.length; i += 4) {
+    if (near(data[i], kr) && near(data[i + 1], kg) && near(data[i + 2], kb)) {
+      ch[0].push(data[i]); ch[1].push(data[i + 1]); ch[2].push(data[i + 2]);
+    }
+  }
+  if (!n || ch[0].length < n * minShare) return null;
+  // Dolna część rozkładu: po wyrównaniu większość ziaren kartki jest biała, czyli po odwróceniu dokładnie w kolorze tła
+  const paper = ch.map((a) => a.sort((x, y) => x - y)[Math.floor(a.length * 0.2)]);
+  const lo = Math.min(...paper), hi = Math.max(...paper);
+  if (lo >= 253 || lo < minLevel || hi - lo > maxTint) return null;
+  let lighter = 0;
+  for (let i = 0; i < data.length; i += 4) {
+    if (data[i] >= paper[0] + 16 && data[i + 1] >= paper[1] + 16 && data[i + 2] >= paper[2] + 16) lighter++;
+  }
+  return lighter > n * maxLighter ? null : paper;
+}

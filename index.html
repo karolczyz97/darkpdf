@@ -10,14 +10,12 @@
   <link rel="stylesheet" href="../calc/calc.css">   <!-- kalkulator ma jedno źródło: repo calc (KaTeX dociąga calc-panel.js) -->
 </head>
 <body>
-  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
-    <filter id="gemini-colors" color-interpolation-filters="sRGB">
-      <!-- czerń → #0f0f0f, biel → #e3e3e3 (kolory Gemini: tło body, --gem-sys-color--on-surface) -->
-      <feComponentTransfer>
-        <feFuncR type="linear" slope="0.8314" intercept="0.0588"/>
-        <feFuncG type="linear" slope="0.8314" intercept="0.0588"/>
-        <feFuncB type="linear" slope="0.8314" intercept="0.0588"/>
-      </feComponentTransfer>
+  <svg id="page-filters" width="0" height="0" style="position:absolute" aria-hidden="true">
+    <!-- Odwrócona strona w trybie ciemnym: kartka (czerń po odwróceniu) → kolor tła, druk (biel) → kolor tekstu.
+         Wartości wpisuje viewer.js z --ui-stage-bg i --page-ink; tu domyślne dla Gemini (#0f0f0f, #e3e3e3).
+         Tu trafiają też filtry wyrównujące kartkę skanów (paper-…). -->
+    <filter id="page-colors" color-interpolation-filters="sRGB">
+      <feColorMatrix type="matrix" values="0.831373 0 0 0 0.059804  0 0.831373 0 0 0.059804  0 0 0.831373 0 0.059804  0 0 0 1 0"/>
     </filter>
   </svg>
   <!-- Wspólne ikony: menu, ekran startowy i tryb mobilny używają tych samych -->

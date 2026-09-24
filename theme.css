@@ -2,7 +2,7 @@
    Kolor zmieniasz tutaj i zmienia się w obu aplikacjach.
    Wartości odczytane z gemini.google.com i panelu bocznego Gemini w Chrome. */
 :root {
-  --gem-bg: #0b0c0d;           /* tło panelu bocznego Gemini */
+  --gem-bg: #0f0f0f;           /* tło panelu bocznego Gemini w Chrome (zmierzone na zrzucie, wrzesień 2026) */
   --gem-surface: #131314;      /* --gem-sys-color--surface */
   --gem-fill: #1e1f20;         /* --gem-sys-color--surface-container */
   --gem-fill-2: #1f2022;

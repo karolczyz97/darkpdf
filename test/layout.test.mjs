@@ -3,7 +3,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   spreadStartOf, spreadOf, nextStart, prevStart, spreadLabel, pickScale, fitSpread, heightFitWidth,
-  isFullBleed, cutsContent, cropCandidatePages, commonBox, contentBounds
+  isFullBleed, cutsContent, cropCandidatePages, commonBox, contentBounds, paperColor
 } from '../layout.js';
 import { lru, mapConcurrent } from '../util.js';
 
@@ -158,6 +158,25 @@ test('pole treści z pikseli miniatury', () => {
   const dust = img();
   dark(dust, 15, 8);                                                    // pojedyncza kropka ze skanu
   assert.equal(contentBounds(dust, W, H, { step: 1 }), null);
+});
+
+test('kolor kartki do wyrównania przed odwróceniem kolorów', () => {
+  const page = (fill) => {
+    const d = new Uint8ClampedArray(40 * 40 * 4);
+    for (let i = 0; i < d.length; i += 4) { d.set(fill(i / 4), i); d[i + 3] = 255; }
+    return d;
+  };
+  const ink = (i) => i % 7 === 0;                                                    // co siódmy piksel to druk
+  assert.equal(paperColor(page((i) => (ink(i) ? [20, 20, 20] : [255, 255, 255]))), null);              // biała kartka – bez zmian
+  assert.deepEqual(paperColor(page((i) => (ink(i) ? [20, 20, 20] : [240, 234, 220]))), [240, 234, 220]); // żółtawy skan
+  assert.deepEqual(paperColor(page((i) => (ink(i) ? [20, 20, 20] : [200, 200, 200]))), [200, 200, 200]); // szare tło
+  // szum skanu (225–235): kolor z dolnej części rozkładu, żeby większość ziaren wyszła biała
+  const noisy = paperColor(page((i) => { const v = 225 + (i * 10) % 11; return ink(i) ? [30, 30, 30] : [v, v, v]; }));
+  assert.ok(noisy[0] >= 225 && noisy[0] <= 229 && noisy[0] === noisy[2], String(noisy));
+  assert.equal(paperColor(page(() => [60, 50, 40])), null);                                            // ciemne zdjęcie
+  assert.equal(paperColor(page((i) => (ink(i) ? [0, 0, 0] : [255, 245, 160]))), null);                 // mocno żółte tło
+  assert.equal(paperColor(page((i) => (i % 10 === 0 ? [255, 255, 255] : [215, 215, 215]))), null);    // białe pola na szarym
+  assert.equal(paperColor(page((i) => [(i * 37) % 256, (i * 91) % 256, (i * 53) % 256])), null);      // bez wyraźnej kartki
 });
 
 test('pamięć LRU wyrzuca najdawniej używane i sprząta po nich', () => {
