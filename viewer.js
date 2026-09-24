@@ -983,6 +983,32 @@ function toggleFullscreen() {
   p?.catch(() => {});                  // np. przeglądarka odmówiła – nic się nie dzieje
 }
 
+// Obejście błędu Windows 11 (od 24H2): przy włączonym HDR okno na pełnym ekranie po kilku sekundach idzie
+// prosto do karty graficznej (independent flip), a ta przelicza zwykłe kolory inaczej niż Windows – ciemne tło
+// szarzeje, a menu kontekstowe (okno nad stroną) to cofa. Jeden piksel zapisany w HDR (PNG z krzywą PQ) sprawia,
+// że Chrome sam oddaje cały obraz w HDR, więc po drodze nie ma już czego przeliczać. Piksel ma jasność tła
+// Gemini (~1,8 nita przy bieli SDR 380 nitów) i jest w rogu ekranu. Tylko Windows, ekran HDR i pełny ekran.
+const HDR_PIXEL = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAABGNJQ1AJEAABTSMj/gAAAAxJREFUeNpj0NfXBwABHgCOcGBqPgAAAABJRU5ErkJggg==';
+const hdrScreen = matchMedia('(dynamic-range: high)');
+const browserFullscreen = matchMedia('(display-mode: fullscreen)');   // także F11
+const onWindows = /Windows/.test(navigator.userAgentData?.platform || navigator.userAgent);
+let hdrPixel = null;
+function syncHdrPixel() {
+  const on = onWindows && hdrScreen.matches && (!!document.fullscreenElement || browserFullscreen.matches);
+  if (on && !hdrPixel) {
+    hdrPixel = Object.assign(document.createElement('img'), { id: 'hdr-pixel', src: HDR_PIXEL, alt: '' });
+    hdrPixel.setAttribute('aria-hidden', 'true');
+    document.body.append(hdrPixel);
+  } else if (!on && hdrPixel) {
+    hdrPixel.remove();
+    hdrPixel = null;
+  }
+}
+document.addEventListener('fullscreenchange', syncHdrPixel);
+hdrScreen.addEventListener('change', syncHdrPixel);
+browserFullscreen.addEventListener('change', syncHdrPixel);
+syncHdrPixel();
+
 // ---------- akcje wspólne dla klawiatury, menu i kalkulatora ----------
 const WITHOUT_PDF = new Set(['open', 'pin', 'toggle-menu', 'full', 'dark', 'theme']);   // reszta potrzebuje pliku
 
