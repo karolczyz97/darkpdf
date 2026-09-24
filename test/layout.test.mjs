@@ -86,6 +86,16 @@ test('skala strony w trybach auto / szerokość / wysokość', () => {
   assert.equal(fitSpread({ w: 0, h: 0 }, null, { W: 400, H: 300, two: false, fitMode: 'auto' }).scale, 1);
 });
 
+test('auto: szerokość zaokrąglona do piksela nie zmniejsza skali na wysokość', () => {
+  const p = { w: 595, h: 842 };
+  const H = 708;
+  const W = heightFitWidth(p, null, { H, two: false, gap: 4 });   // tyle miejsca daje panel dla strony na wysokość
+  const { scale } = fitSpread(p, null, { W, H, two: false, fitMode: 'auto' });
+  assert.equal(scale, H / p.h);                                   // wysokość strony = H co do piksela, odstępy równe
+  // za wąskie o cały piksel: skala spada do szerokości
+  assert.ok(fitSpread(p, null, { W: W - 1, H, two: false, fitMode: 'auto' }).scale < H / p.h);
+});
+
 test('szerokość PDF-a dopasowanego do wysokości (panel kalkulatora)', () => {
   const p = { w: 100, h: 200 };
   assert.equal(heightFitWidth(p, null, { H: 400, two: false, gap: 4 }), 200);

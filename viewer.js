@@ -267,8 +267,8 @@ function renderPage(n, scale, q = 1) {
     const canvas = document.createElement('canvas');
     canvas.width = Math.max(1, Math.floor(b.w * scale * dpr));
     canvas.height = Math.max(1, Math.floor(b.h * scale * dpr));
-    canvas.style.width = Math.floor(b.w * scale) + 'px';
-    canvas.style.height = Math.floor(b.h * scale) + 'px';
+    canvas.style.width = geo.pagePx(b.w * scale) + 'px';
+    canvas.style.height = geo.pagePx(b.h * scale) + 'px';
     const ctx = canvas.getContext('2d', { alpha: false });
     ctx.fillStyle = '#ffffff';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -291,8 +291,8 @@ function renderPage(n, scale, q = 1) {
 function blank(size, scale) {
   const d = document.createElement('div');
   d.className = 'blank';
-  d.style.width = Math.floor(size.w * scale) + 'px';
-  d.style.height = Math.floor(size.h * scale) + 'px';
+  d.style.width = geo.pagePx(size.w * scale) + 'px';
+  d.style.height = geo.pagePx(size.h * scale) + 'px';
   return d;
 }
 
@@ -1198,7 +1198,7 @@ function fitNow() {
   [...stage.children].forEach((el, i) => {
     const size = sizes[i];
     if (!size) return;
-    const w = Math.floor(size.w * l.scale) + 'px', h = Math.floor(size.h * l.scale) + 'px';
+    const w = geo.pagePx(size.w * l.scale) + 'px', h = geo.pagePx(size.h * l.scale) + 'px';
     el.style.setProperty('--scale-factor', l.scale);
     const c = el.querySelector('canvas');
     if (c) { c.style.width = w; c.style.height = h; }

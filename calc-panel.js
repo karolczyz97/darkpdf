@@ -64,7 +64,7 @@ function neededPdfWidth() {
   const sb = b ? ref(ctx.getPageSize(b)) : null;
   const H = Math.max(120, window.innerHeight - 2 * ctx.MARGIN);
   const w = heightFitWidth(sa, sb, { H, two: ctx.showTwo(), gap: ctx.GAP });
-  return w == null ? null : w + 2 * ctx.MARGIN + 4;
+  return w == null ? null : w + 2 * ctx.MARGIN;   // boki i dół mają ten sam odstęp
 }
 
 export function snapCalcToHeightFit() {

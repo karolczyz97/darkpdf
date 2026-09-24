@@ -15,6 +15,8 @@
   --ui-accent-soft: rgba(138, 180, 248, .14);
   --ui-font: system-ui, -apple-system, sans-serif;
   --calc-w: 440px;
+  --panel-r: 10px;                            /* zaokrąglenie paneli (PDF i kalkulator) */
+  --page-gap: 6px;                            /* odstęp strony od krawędzi panelu – ta sama wartość co MARGIN w viewer.js */
   --resizer-w: 9px;                           /* rozdzielacz kalkulatora – ta sama wartość co RESIZER_W w calc-panel.js */
 }
 
@@ -88,8 +90,8 @@ html:not(.dark).calc-open body {
 }
 html.calc-open #stage {
   left: calc(var(--calc-w) + var(--resizer-w));
-  border-top-left-radius: 10px;
-  border-bottom-left-radius: 10px;
+  border-top-left-radius: var(--panel-r);
+  border-bottom-left-radius: var(--panel-r);
   background: var(--ui-stage-bg);
 }
 html:not(.dark).calc-open #stage {
@@ -107,7 +109,7 @@ html.fit-width #stage {
   overflow-y: auto;
   overflow-x: hidden;
   align-items: flex-start;
-  padding: 10px 0;
+  padding: var(--page-gap);   /* boki, góra i dół (po przewinięciu) mają ten sam odstęp */
   box-sizing: border-box;
 }
 html.fit-height #stage {
@@ -115,7 +117,7 @@ html.fit-height #stage {
   overflow-y: hidden;
   align-items: center;
   justify-content: safe center;   /* gdy strony wystają w bok, lewa krawędź zostaje osiągalna */
-  padding: 0;
+  padding: 0 var(--page-gap);
   box-sizing: border-box;
   scrollbar-width: none;
 }
@@ -123,7 +125,8 @@ html.fit-height #stage::-webkit-scrollbar {
   display: none;
 }
 #stage .page, #stage .blank { display: block; flex: none; position: relative; overflow: hidden; }
-#stage .page { border-radius: 10px; }
+/* Rogi strony współśrodkowe z rogiem panelu: promień panelu minus odstęp */
+#stage .page { border-radius: calc(var(--panel-r) - var(--page-gap)); }
 #stage .page.has-right { border-top-right-radius: 0; border-bottom-right-radius: 0; }
 #stage .page.has-left { border-top-left-radius: 0; border-bottom-left-radius: 0; }
 #stage canvas { display: block; background: #fff; box-shadow: 0 0 6px rgba(0, 0, 0, .45); }
@@ -528,8 +531,8 @@ html.nocursor .textLayer :is(span, br) { cursor: none; }
   min-width: 320px;
   max-width: calc(100vw - 140px);
   background: var(--ui-stage-bg);
-  border-top-right-radius: 10px;
-  border-bottom-right-radius: 10px;
+  border-top-right-radius: var(--panel-r);
+  border-bottom-right-radius: var(--panel-r);
   z-index: 8;
   display: flex;
   flex-direction: column;

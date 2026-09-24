@@ -42,29 +42,38 @@ export function pickScale(scaleW, scaleH, fitMode) {
 // Skala rozkładówki w obszarze W×H px. sa, sb – pola stron { w, h } (null = brak strony).
 // W trybie dwóch stron samotna strona ma obok puste miejsce tej samej wielkości.
 export function fitSpread(sa, sb, { W, H, two, fitMode }) {
+  // Auto: gdy strony przy skali „na wysokość” mieszczą się w W co do piksela, bierzemy tę skalę –
+  // inaczej ułamek piksela z zaokrąglenia szerokości ucinałby wysokość o piksel i odstępy góra/dół rozjeżdżałyby się
+  const pick = (scaleW, scaleH, widthAt) =>
+    fitMode === 'auto' && scaleW < scaleH && W >= widthAt(scaleH) ? scaleH : pickScale(scaleW, scaleH, fitMode);
   if (!two) {
     const s = sa || sb;
     if (!s || !s.w || !s.h) return { scale: 1, L: s, R: s, single: true };
-    return { scale: pickScale(W / s.w, H / s.h, fitMode), L: s, R: s, single: true };
+    return { scale: pick(W / s.w, H / s.h, (k) => pagePx(s.w * k)), L: s, R: s, single: true };
   }
   const L = sa || sb, R = sb || sa;
   if (!L || !L.w || !L.h) return { scale: 1, L, R, single: false };
   const totalW = L.w + (R.w || L.w);
   const maxH = Math.max(L.h, R.h || L.h);
-  return { scale: pickScale(W / totalW, H / maxH, fitMode), L, R, single: false };
+  const widthAt = (k) => pagePx(L.w * k) + pagePx((R.w || L.w) * k);
+  return { scale: pick(W / totalW, H / maxH, widthAt), L, R, single: false };
 }
+
+// Rozmiar strony na ekranie w pełnych pikselach. Ta sama reguła w rysowaniu i w liczeniu miejsca na PDF,
+// żeby odstępy po bokach wychodziły równe (bez połówek piksela); 1e-6 chroni przed błędem zmiennoprzecinkowym
+export const pagePx = (x) => Math.floor(x + 1e-6);
 
 // Szerokość stron (px) przy dopasowaniu do wysokości H – tyle miejsca potrzebuje PDF obok kalkulatora
 export function heightFitWidth(sa, sb, { H, two, gap }) {
   if (!two) {
     const s = sa || sb;
     if (!s || !s.w || !s.h) return null;
-    return Math.ceil(s.w * (H / s.h));
+    return pagePx(s.w * (H / s.h));
   }
   const L = sa || sb, R = sb || sa;
   if (!L || !L.w || !L.h) return null;
   const scale = H / Math.max(L.h, R.h || L.h);
-  return Math.ceil(L.w * scale) + Math.ceil(R.w * scale) + gap;   // samotna strona też ma obok puste miejsce
+  return pagePx(L.w * scale) + pagePx(R.w * scale) + gap;   // samotna strona też ma obok puste miejsce
 }
 
 // ---------- przycinanie marginesów ----------
