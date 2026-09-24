@@ -16,6 +16,7 @@
   --ui-font: system-ui, -apple-system, sans-serif;
   --calc-w: 440px;
   --panel-r: 12px;                            /* zaokrąglenie paneli (PDF i kalkulator) */
+  --card-r: 32px;                             /* zaokrąglenie strony – jak karta pola wpisywania w Gemini (margines 8, promień 32) */
   --page-gap: 8px;                            /* odstęp strony od krawędzi panelu – ta sama wartość co MARGIN w viewer.js */
   --resizer-w: 9px;                           /* rozdzielacz kalkulatora – ta sama wartość co RESIZER_W w calc-panel.js */
 }
@@ -125,8 +126,8 @@ html.fit-height #stage::-webkit-scrollbar {
   display: none;
 }
 #stage .page, #stage .blank { display: block; flex: none; position: relative; overflow: hidden; }
-/* Rogi strony współśrodkowe z rogiem panelu: promień panelu minus odstęp */
-#stage .page { border-radius: calc(var(--panel-r) - var(--page-gap)); }
+/* Strona to „karta” jak pole wpisywania w Gemini: 8 px od brzegu panelu, promień 32 px */
+#stage .page { border-radius: var(--card-r); }
 #stage .page.has-right { border-top-right-radius: 0; border-bottom-right-radius: 0; }
 #stage .page.has-left { border-top-left-radius: 0; border-bottom-left-radius: 0; }
 #stage canvas { display: block; background: #fff; box-shadow: 0 0 6px rgba(0, 0, 0, .45); }
