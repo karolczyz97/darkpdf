@@ -123,7 +123,7 @@ html.fit-height #stage::-webkit-scrollbar {
   display: none;
 }
 #stage .page, #stage .blank { display: block; flex: none; position: relative; overflow: hidden; }
-#stage .page { border-radius: 14px; }
+#stage .page { border-radius: 10px; }
 #stage .page.has-right { border-top-right-radius: 0; border-bottom-right-radius: 0; }
 #stage .page.has-left { border-top-left-radius: 0; border-bottom-left-radius: 0; }
 #stage canvas { display: block; background: #fff; box-shadow: 0 0 6px rgba(0, 0, 0, .45); }
