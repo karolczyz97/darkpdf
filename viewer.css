@@ -19,7 +19,7 @@
   --panel-r: 12px;                            /* zaokrąglenie paneli (PDF i kalkulator) */
   --card-r: 32px;                             /* zaokrąglenie strony – jak karta pola wpisywania w Gemini (margines 8, promień 32) */
   --page-gap: 8px;                            /* odstęp strony od krawędzi panelu – ta sama wartość co MARGIN w viewer.js */
-  --resizer-w: 0px;                           /* miejsce zajmowane przez rozdzielacz kalkulatora (0 – przerwę robi sam --page-gap, tak jak po prawej) – ta sama wartość co RESIZER_W w calc-panel.js */
+  --resizer-w: 7px;                           /* rozdzielacz kalkulatora – ta sama wartość co RESIZER_W w calc-panel.js; 7 px = tyle, ile wygląda przerwa przy panelu Gemini po prawej */
 }
 
 @supports (color: CanvasText) {
@@ -575,7 +575,7 @@ html.calc-open #calc-resizer {
 html.calc-animating #calc-resizer {
   transition: left .22s cubic-bezier(0.16, 1, 0.3, 1);
 }
-/* Rozdzielacz nie zajmuje miejsca (szerokość 0) – łapie się go szerszym, niewidocznym polem wokół krawędzi */
+/* Pole do łapania rozdzielacza jest szersze niż widoczny pasek */
 #calc-resizer::before {
   content: '';
   position: absolute;
@@ -588,7 +588,7 @@ html.calc-animating #calc-resizer {
   content: '';
   position: absolute;
   top: 50%;
-  left: calc(var(--page-gap) / 2);   /* środek przerwy między kalkulatorem a stroną */
+  left: 50%;
   transform: translate(-50%, -50%);
   width: 4px;
   height: 24px;
