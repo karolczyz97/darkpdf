@@ -100,6 +100,32 @@ html.calc-open #stage {
 html:not(.dark).calc-open #stage {
   background: #f1f3f4;
 }
+/* Zaokrąglone rogi panelu PDF rysowane nad nim: Chrome gubi zaokrąglenie #stage, gdy strona jest szersza
+   niż panel (przewijanie w bok) – wtedy róg przy rozdzielaczu robił się ostry */
+html.calc-open:not(.mobile):not(.empty) body::before,
+html.calc-open:not(.mobile):not(.empty) body::after {
+  content: '';
+  position: fixed;
+  left: calc(var(--calc-w) + var(--resizer-w));
+  width: var(--panel-r);
+  height: var(--panel-r);
+  z-index: 1;
+  pointer-events: none;
+}
+html.calc-open { --corner-bg: var(--ui-resizer-bg); }   /* kolor rozdzielacza – ten sam co tło za panelami */
+html:not(.dark).calc-open { --corner-bg: #e0e0e0; }
+html.calc-open body::before {
+  top: 0;
+  background: radial-gradient(circle at 100% 100%, transparent calc(var(--panel-r) - .5px), var(--corner-bg) var(--panel-r));
+}
+html.calc-open body::after {
+  bottom: 0;
+  background: radial-gradient(circle at 100% 0, transparent calc(var(--panel-r) - .5px), var(--corner-bg) var(--panel-r));
+}
+html.calc-animating body::before,
+html.calc-animating body::after {
+  transition: left .22s cubic-bezier(0.16, 1, 0.3, 1);
+}
 html.calc-open #menu {
   left: calc((100vw + var(--calc-w) + var(--resizer-w)) / 2);
 }
