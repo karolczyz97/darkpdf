@@ -5,7 +5,7 @@ import { heightFitWidth } from './layout.js';
 
 const CALC_MIN_W = 320;         // najwęższy sensowny kalkulator
 const PDF_MIN_W = 400;          // tyle miejsca zostawiamy zawsze na PDF (żeby tekst był czytelny)
-const RESIZER_W = 7;            // szerokość rozdzielacza – ta sama co --resizer-w w viewer.css
+const RESIZER_W = 8;            // szerokość rozdzielacza – ta sama co --resizer-w w viewer.css
 
 const clampCalcW = (w) => {
   const max = Math.max(CALC_MIN_W, window.innerWidth - PDF_MIN_W - RESIZER_W);
