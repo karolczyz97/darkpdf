@@ -372,7 +372,7 @@ function showError(e) {
   flash('Nie udało się wyświetlić strony: ' + (e?.message || e), 4000);
 }
 
-async function show(s) {
+async function show(s, { keepShown = false } = {}) {
   const token = ++showToken;
   // Początek rozkładówki liczymy przy każdym pokazaniu: po obrocie telefonu (jedna strona → dwie)
   // przerysowanie z rerenderSoon() mogłoby inaczej pokazać parę 2–3 zamiast 1–2
@@ -419,7 +419,7 @@ async function show(s) {
   try {
     const hiP = Promise.all(pages.map((n) => n ? renderPage(n, scale) : null));
     const ready = pages.every((n) => !n || canvasCache.has(cacheKey(n, scale)));
-    if (!ready) {
+    if (!ready && !(keepShown && stage.querySelector('canvas'))) {
       hiP.catch(() => {});
       const lo = await Promise.all(pages.map((n) => n ? renderPage(n, scale, LO_QUALITY) : null));
       if (token !== showToken) return;
@@ -1278,11 +1278,24 @@ function centerX() {
   stage.scrollLeft = fitMode === 'height' ? Math.max(0, (stage.scrollWidth - stage.clientWidth) / 2) : 0;
 }
 
+// Rysowanie stron w innej skali (z poprzedniej chwili przerwy w przeciąganiu okna) przerywamy od razu –
+// inaczej zajmowałoby przeglądarkę w trakcie dalszego przeciągania i okno się zacinało
+let renderInterrupted = false;
+function stopStaleRendering() {
+  const l = layoutSpreadSync(start);
+  if (!l || Math.abs(l.scale - (lastRenderedScale || 0)) <= 1e-4) return;
+  if (!pending.size && renderInterrupted) return;
+  showToken++;                          // show() i dociąganie sąsiednich stron kończą się przy najbliższym sprawdzeniu
+  for (const job of [...pending.values()]) job.cancel();
+  renderInterrupted = true;
+}
+
 window.addEventListener('resize', () => {
   document.documentElement.classList.toggle('mobile', isMobile());
   handleCalcResize();
   if (!pdf) return;
   fitNow();
+  stopStaleRendering();
   clearTimeout(resizeTimer);
   resizeTimer = setTimeout(() => {
     const isMob = isMobile();
@@ -1294,8 +1307,13 @@ window.addEventListener('resize', () => {
     const scaleChanged = !l || Math.abs((l.scale || 0) - (lastRenderedScale || 0)) > 1e-4;
     if (scaleChanged || mobChanged || dprChanged) {
       clearRenderCaches();
-      show(spreadStartOf(start));
+      // Te same strony zostają na ekranie (tylko rozciągnięte) aż do ostrej wersji – bez rozmytego podglądu po drodze.
+      // Nie na telefonie: tam stare płótno trzeba szybko zwolnić (limit pamięci iOS)
+      show(spreadStartOf(start), { keepShown: !isMob && !mobChanged });
+    } else if (renderInterrupted) {
+      show(start);
     }
+    renderInterrupted = false;
     updateMenu();
   }, 180);
 });
