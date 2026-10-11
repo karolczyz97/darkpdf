@@ -567,6 +567,94 @@ function openFailed(msg) {
   flash(msg, 4000);
 }
 
+function extractPageStats(vp, tc) {
+  const width = vp.width;
+  const height = vp.height;
+  if (!tc || !tc.items) return { width, height, textLength: 0, wordCount: 0, numbers: [] };
+
+  let textLength = 0;
+  let wordCount = 0;
+  const numbers = [];
+
+  for (const item of tc.items) {
+    const s = (item.str || '').trim();
+    if (!s) continue;
+    textLength += s.length;
+    wordCount += s.split(/\s+/).length;
+
+    const x = item.transform?.[4] ?? 0;
+    const y = item.transform?.[5] ?? 0;
+    const inHeaderOrFooter = (y < height * 0.15) || (y > height * 0.85);
+    if (inHeaderOrFooter) {
+      const m = s.match(/^(?:[-—–\s]*|p(?:age|\.)\s*)(\d+)(?:[-—–\s]*)$/i);
+      if (m) {
+        numbers.push({
+          value: parseInt(m[1], 10),
+          x,
+          side: x < width * 0.4 ? 'left' : (x > width * 0.6 ? 'right' : 'center')
+        });
+      }
+    }
+  }
+
+  return { width, height, textLength, wordCount, numbers };
+}
+
+async function detectDocumentLayout(doc) {
+  if (!doc) return { pairing: 'odd', two: true };
+  if (doc.numPages <= 1) return { pairing: 'odd', two: false };
+
+  try {
+    let pageLayout = null;
+    try { pageLayout = await doc.getPageLayout(); } catch {}
+
+    let pageLabels = null;
+    try { pageLabels = await doc.getPageLabels(); } catch {}
+
+    let outlineTitles = [];
+    try {
+      const outline = await doc.getOutline();
+      if (Array.isArray(outline)) {
+        outlineTitles = outline.slice(0, 5).map((item) => item?.title || '');
+      }
+    } catch {}
+
+    const p1 = await doc.getPage(1);
+    const vp1 = p1.getViewport({ scale: 1 });
+    const tc1 = await p1.getTextContent().catch(() => null);
+
+    let p2Info = null;
+    if (doc.numPages >= 2) {
+      const p2 = await doc.getPage(2);
+      const vp2 = p2.getViewport({ scale: 1 });
+      const tc2 = await p2.getTextContent().catch(() => null);
+      p2Info = extractPageStats(vp2, tc2);
+    }
+
+    const p1Info = extractPageStats(vp1, tc1);
+
+    const pairing = geo.inferPairing({
+      pageLayout,
+      pageLabels,
+      outlineTitles,
+      numPages: doc.numPages,
+      page1: p1Info,
+      page2: p2Info
+    });
+
+    const two = geo.inferTwoPages({
+      numPages: doc.numPages,
+      page1: p1Info,
+      page2: p2Info
+    });
+
+    return { pairing, two };
+  } catch (err) {
+    console.warn('Błąd detekcji układu dokumentu:', err);
+    return { pairing: 'odd', two: true };
+  }
+}
+
 // src – źródło dla pdf.js ({ data }); blob – oryginalny plik z dysku do zapamiętania; req – numer żądania
 async function open(src, { name, key, page = null, blob = null, req }) {
   flash('Ładowanie…', 0);
@@ -610,8 +698,19 @@ async function open(src, { name, key, page = null, blob = null, req }) {
     fileName = name;
     fileKey = key;
     clearCaches();
-    textLayer.replaceChildren();
-    pairing = pref.get('pairing:' + key, pref.get('pairing', 'odd'));
+    const layoutHint = await detectDocumentLayout(pdf);
+    const savedPairing = pref.get('pairing:' + key);
+    pairing = savedPairing !== undefined ? savedPairing : layoutHint.pairing;
+
+    const savedTwo = pref.get('two:' + key);
+    if (savedTwo !== undefined) {
+      two = savedTwo;
+    } else if (layoutHint.two !== undefined && !layoutHint.two) {
+      two = false;
+    } else {
+      two = pref.get('two', true);
+    }
+
     rot = pref.get('rot:' + key, 0);
     rememberFile(key, name, blob);
     const p = page || pref.get('pos:' + key, 1);
@@ -1044,6 +1143,7 @@ function act(k) {
       const anchor = spreadOf(start).find(Boolean);
       two = !two;
       pref.set('two', two);
+      if (fileKey) pref.set('two:' + fileKey, two);
       flash(two ? 'Dwie strony' : 'Jedna strona');
       if (fitMode === 'height' && isCalcOpen() && !isUserCustomWidth()) snapCalcToHeightFit();
       go(spreadStartOf(anchor));

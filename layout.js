@@ -30,6 +30,85 @@ export function prevStart(s, o) { return s <= 1 ? null : spreadStartOf(s - 1, o)
 // Napis rozkładówki: „7–8” albo „7”
 export const spreadLabel = ([a, b]) => (a && b ? `${a}–${b}` : `${a || b}`);
 
+// Rozpoznawanie, czy dokument zaczyna się pojedynczą okładką ('even': 1, 2–3…),
+// czy od razu parą stron ('odd': 1–2, 3–4…).
+export function inferPairing({
+  pageLayout = null,
+  pageLabels = null,
+  outlineTitles = [],
+  numPages = 0,
+  page1 = null,
+  page2 = null
+} = {}) {
+  if (numPages <= 1) return 'odd';
+
+  // 1. Jawny wpis PageLayout w katalogu PDF
+  if (pageLayout === 'TwoPageRight' || pageLayout === 'TwoColumnRight') return 'even';
+  if (pageLayout === 'TwoPageLeft' || pageLayout === 'TwoColumnLeft') return 'odd';
+
+  // 2. Etykiety stron (/PageLabels): jeśli strona 2 lub 3 ma etykietę '1', to strona 1 to okładka
+  if (Array.isArray(pageLabels) && pageLabels.length >= 2) {
+    const l0 = String(pageLabels[0] || '').trim().toLowerCase();
+    const l1 = String(pageLabels[1] || '').trim().toLowerCase();
+    const l2 = String(pageLabels[2] || '').trim().toLowerCase();
+    if (l1 === '1' || l2 === '1' || /^(cover|okładka|front)\b/i.test(l0)) return 'even';
+  }
+
+  // 3. Spis treści / zakładki: pierwsza pozycja to okładka
+  if (Array.isArray(outlineTitles) && outlineTitles.length > 0) {
+    const t0 = String(outlineTitles[0] || '').trim().toLowerCase();
+    if (/^(cover|okładka|front\s*cover|strona\s*tytułowa|title\s*page)\b/i.test(t0)) return 'even';
+  }
+
+  // 4. Geometria stron: proporcje boków
+  if (page1 && page2 && page1.height > 0 && page2.height > 0) {
+    const ar1 = page1.width / page1.height;
+    const ar2 = page2.width / page2.height;
+    // Strona 1 to pojedyncza strona w pionie, a strona 2 to podwójna rozkładówka w poziomie
+    if (ar1 < 0.95 && ar2 > 1.15) return 'even';
+    // Strona 1 to pełna rozkładówka okładki w poziomie, a strona 2 to pojedyncza strona w pionie
+    if (ar1 > 1.15 && ar2 < 0.95) return 'even';
+  }
+
+  // 5. Numery stron w nagłówkach/stopkach
+  if (page2?.numbers?.length) {
+    // Strona 2 ma numer 1 (ciało książki numerowane od 1 po okładce)
+    if (page2.numbers.some((n) => n.value === 1)) return 'even';
+    // Strona 2 ma numer 2 po lewej stronie (verso = lewa strona rozkładówki)
+    if (page2.numbers.some((n) => n.value === 2 && n.side === 'left')) return 'even';
+  }
+  if (page1?.numbers?.length) {
+    // Strona 1 ma numer 1 po lewej stronie -> para 1-2
+    if (page1.numbers.some((n) => n.value === 1 && n.side === 'left')) return 'odd';
+  }
+
+  // 6. Gęstość tekstu: okładka (mało tekstu lub obrazek) vs strona z treścią (dużo tekstu)
+  if (page1 && page2) {
+    const p1Sparse = (page1.textLength ?? 0) < 140 && (page1.wordCount ?? 0) < 30;
+    const p2Dense = (page2.textLength ?? 0) > 240 && (page2.wordCount ?? 0) > 35;
+    if (p1Sparse && p2Dense) return 'even';
+  }
+
+  return 'odd';
+}
+
+// Rozpoznawanie, czy dokument powinien domyślnie otworzyć się w trybie dwóch stron,
+// czy pojedynczej strony (np. slajdy prezentacji w poziomie lub dokument 1-stronicowy).
+export function inferTwoPages({
+  numPages = 0,
+  page1 = null,
+  page2 = null
+} = {}) {
+  if (numPages <= 1) return false;
+  if (page1 && page1.height > 0) {
+    const ar1 = page1.width / page1.height;
+    const ar2 = page2 && page2.height > 0 ? page2.width / page2.height : ar1;
+    // Slajdy prezentacji lub szerokie arkusze w poziomie
+    if (ar1 > 1.15 && ar2 > 1.15) return false;
+  }
+  return true;
+}
+
 // ---------- skala ----------
 // fitMode: 'auto' – cała strona zawsze widoczna, 'width' – pełna szerokość (reszta przewijana w pionie),
 // 'height' – pełna wysokość (nadmiar przewija się w bok)

@@ -3,7 +3,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   spreadStartOf, spreadOf, nextStart, prevStart, spreadLabel, pickScale, fitSpread, heightFitWidth,
-  isFullBleed, cutsContent, cropCandidatePages, commonBox, contentBounds, paperColor
+  isFullBleed, cutsContent, cropCandidatePages, commonBox, contentBounds, paperColor,
+  inferPairing, inferTwoPages
 } from '../layout.js';
 import { lru, mapConcurrent } from '../util.js';
 
@@ -212,4 +213,73 @@ test('równoległe zadania z limitem', async () => {
   assert.deepEqual(out, [2, 4, 6, null, 10, 12, 14]);   // błąd jednej strony nie przerywa reszty
   assert.equal(peak, 3);
   assert.deepEqual(await mapConcurrent([], 3, async (x) => x), []);
+});
+
+test('automatyczne wykrywanie parowania stron (okładka vs rozkładówka)', () => {
+  // 1 strona -> odd
+  assert.equal(inferPairing({ numPages: 1 }), 'odd');
+
+  // Jawny wpis w katalogu PDF
+  assert.equal(inferPairing({ numPages: 10, pageLayout: 'TwoPageRight' }), 'even');
+  assert.equal(inferPairing({ numPages: 10, pageLayout: 'TwoPageLeft' }), 'odd');
+
+  // Etykiety stron
+  assert.equal(inferPairing({ numPages: 10, pageLabels: ['Cover', '1', '2'] }), 'even');
+  assert.equal(inferPairing({ numPages: 10, pageLabels: ['', '1', '2'] }), 'even');
+  assert.equal(inferPairing({ numPages: 10, pageLabels: ['i', 'ii', '1'] }), 'even');
+
+  // Spis treści / zakładki
+  assert.equal(inferPairing({ numPages: 10, outlineTitles: ['Okładka', 'Rozdział 1'] }), 'even');
+  assert.equal(inferPairing({ numPages: 10, outlineTitles: ['Cover Page', 'Introduction'] }), 'even');
+
+  // Geometria: okładka w pionie, wnętrze w poziomie (rozkładówki)
+  assert.equal(inferPairing({
+    numPages: 10,
+    page1: { width: 600, height: 800 },
+    page2: { width: 1200, height: 800 }
+  }), 'even');
+
+  // Numeracja stron: strona 2 ma numer 1
+  assert.equal(inferPairing({
+    numPages: 10,
+    page1: { width: 600, height: 800, textLength: 100, wordCount: 20 },
+    page2: { width: 600, height: 800, textLength: 800, wordCount: 150, numbers: [{ value: 1, side: 'center' }] }
+  }), 'even');
+
+  // Numeracja stron: strona 2 ma numer 2 po lewej stronie (verso)
+  assert.equal(inferPairing({
+    numPages: 10,
+    page1: { width: 600, height: 800, textLength: 100, wordCount: 20 },
+    page2: { width: 600, height: 800, textLength: 800, wordCount: 150, numbers: [{ value: 2, side: 'left' }] }
+  }), 'even');
+
+  // Gęstość tekstu: okładka (mało tekstu) vs gęsta treść na stronie 2
+  assert.equal(inferPairing({
+    numPages: 10,
+    page1: { width: 600, height: 800, textLength: 50, wordCount: 8 },
+    page2: { width: 600, height: 800, textLength: 900, wordCount: 160 }
+  }), 'even');
+
+  // Artykuł / raport bez okładki: dużo tekstu na stronie 1 i 2
+  assert.equal(inferPairing({
+    numPages: 10,
+    page1: { width: 600, height: 800, textLength: 1200, wordCount: 220 },
+    page2: { width: 600, height: 800, textLength: 1400, wordCount: 250 }
+  }), 'odd');
+});
+
+test('wykrywanie trybu jednej lub dwóch stron', () => {
+  assert.equal(inferTwoPages({ numPages: 1 }), false);
+  // Slajdy w poziomie (np. prezentacja 16:9)
+  assert.equal(inferTwoPages({
+    numPages: 15,
+    page1: { width: 1920, height: 1080 },
+    page2: { width: 1920, height: 1080 }
+  }), false);
+  // Książka w pionie (np. A4)
+  assert.equal(inferTwoPages({
+    numPages: 15,
+    page1: { width: 595, height: 842 },
+    page2: { width: 595, height: 842 }
+  }), true);
 });
