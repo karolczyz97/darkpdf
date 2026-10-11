@@ -69,6 +69,7 @@ html.dark, html.dark body { background: var(--ui-stage-bg); }
   display: flex;
   align-items: center;
   justify-content: center;
+  gap: 0;
   overflow: hidden;
 }
 html.dark #stage {
@@ -158,6 +159,7 @@ html.fit-height #stage::-webkit-scrollbar {
 #stage .page { border-radius: var(--card-r); }
 #stage .page.has-right { border-top-right-radius: 0; border-bottom-right-radius: 0; }
 #stage .page.has-left { border-top-left-radius: 0; border-bottom-left-radius: 0; }
+html.fit-height #stage .page { border-radius: 0; }
 #stage canvas { display: block; background: #fff; box-shadow: 0 0 6px rgba(0, 0, 0, .45); }
 #stage .blank { visibility: hidden; }
 

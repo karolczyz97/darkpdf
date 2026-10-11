@@ -98,6 +98,9 @@ test('auto: szerokość zaokrąglona do piksela nie zmniejsza skali na wysokoś�
 
 test('szerokość PDF-a dopasowanego do wysokości (panel kalkulatora)', () => {
   const p = { w: 100, h: 200 };
+  assert.equal(heightFitWidth(p, null, { H: 400, two: false, gap: 0 }), 200);
+  assert.equal(heightFitWidth(p, { w: 150, h: 200 }, { H: 400, two: true, gap: 0 }), 500);
+  assert.equal(heightFitWidth(p, null, { H: 400, two: true, gap: 0 }), 400);    // samotna strona + puste miejsce
   assert.equal(heightFitWidth(p, null, { H: 400, two: false, gap: 4 }), 200);
   assert.equal(heightFitWidth(p, { w: 150, h: 200 }, { H: 400, two: true, gap: 4 }), 504);
   assert.equal(heightFitWidth(p, null, { H: 400, two: true, gap: 4 }), 404);    // samotna strona + puste miejsce
