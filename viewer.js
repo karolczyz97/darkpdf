@@ -470,8 +470,12 @@ async function textLayerFor(n, scale) {
   await new pdfjsLib.TextLayer({
     textContentSource: tc,
     container: div,
-    viewport: page.getViewport({ scale, rotation: rotationOf(page), offsetX: -b.x * scale, offsetY: -b.y * scale })
+    viewport: page.getViewport({ scale, rotation: rotationOf(page) })
   }).render();
+
+  const bx = b?.x || 0, by = b?.y || 0;
+  div.style.left = `calc(var(--scale-factor) * ${-bx}px)`;
+  div.style.top = `calc(var(--scale-factor) * ${-by}px)`;
 
   const end = document.createElement('div');
   end.className = 'endOfContent';
@@ -479,8 +483,10 @@ async function textLayerFor(n, scale) {
   div.addEventListener('pointerdown', () => div.classList.add('selecting'));
   return tlCache.set(k, div);
 }
-document.addEventListener('pointerup', () => {
-  for (const d of stage.querySelectorAll('.textLayer.selecting')) d.classList.remove('selecting');
+['pointerup', 'pointercancel'].forEach((ev) => {
+  document.addEventListener(ev, () => {
+    for (const d of stage.querySelectorAll('.textLayer.selecting')) d.classList.remove('selecting');
+  });
 });
 
 
@@ -1278,8 +1284,8 @@ menu.addEventListener('click', (e) => {
 
 window.addEventListener('dblclick', (e) => {
   if (isMobile()) return;
-  if (!pdf || String(window.getSelection())) return;   // dwuklik w tekst zaznacza słowo
-  if (e.target.closest('#menu, #calc-sidebar, #pw-dialog')) return;
+  if (!pdf) return;
+  if (e.target.closest('#menu, #calc-sidebar, #calc-resizer, #pw-dialog')) return;
   act('full');
 });
 
