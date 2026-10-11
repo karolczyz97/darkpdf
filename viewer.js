@@ -303,7 +303,6 @@ async function show(s, { keepShown = false } = {}) {
   const wrap = (canvas) => {
     const w = document.createElement('div');
     w.className = 'page';
-    w.style.setProperty('--scale-factor', scale);
     w.append(canvas);
     return w;
   };
@@ -370,19 +369,14 @@ async function textLayerFor(n, scale) {
   const page = await pdf.getPage(n);
   const div = document.createElement('div');
   div.className = 'textLayer';
-  div.style.setProperty('--scale-factor', scale);
 
   const tc = await textContent(n);
   const b = await pageBox(n);
   await new pdfjsLib.TextLayer({
     textContentSource: tc,
     container: div,
-    viewport: page.getViewport({ scale, rotation: rotationOf(page) })
+    viewport: page.getViewport({ scale, rotation: rotationOf(page), offsetX: -b.x * scale, offsetY: -b.y * scale })
   }).render();
-
-  const bx = b?.x || 0, by = b?.y || 0;
-  div.style.left = `calc(var(--scale-factor) * ${-bx}px)`;
-  div.style.top = `calc(var(--scale-factor) * ${-by}px)`;
 
   const end = document.createElement('div');
   end.className = 'endOfContent';
@@ -598,12 +592,9 @@ function fitNow() {
     const size = sizes[i];
     if (!size) return;
     const w = geo.pagePx(size.w * l.scale) + 'px', h = geo.pagePx(size.h * l.scale) + 'px';
-    el.style.setProperty('--scale-factor', l.scale);
     const c = el.querySelector('canvas');
     if (c) { c.style.width = w; c.style.height = h; }
     else { el.style.width = w; el.style.height = h; }
-    const tl = el.querySelector('.textLayer');
-    if (tl) tl.style.setProperty('--scale-factor', l.scale);
   });
   centerX();
 }

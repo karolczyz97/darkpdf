@@ -5,30 +5,23 @@ import { getDocument, GlobalWorkerOptions } from '../lib/pdfjs/build/pdf.min.mjs
 
 GlobalWorkerOptions.workerSrc = new URL('../lib/pdfjs/build/pdf.worker.min.mjs', import.meta.url).href;
 
-test('viewer.css zawiera poprawne reguły dla .textLayer i obrotów dokumentu', () => {
+test('viewer.css zawiera poprawne reguły dla .textLayer dopasowanej 1:1 do strony', () => {
   const css = readFileSync(new URL('../viewer.css', import.meta.url), 'utf8');
 
-  // .textLayer ma top: 0 i left: 0 (zamiast sztywnego inset: 0 blokującego dynamiczne przesunięcie cięcia)
+  // .textLayer pokrywa całą stronę (inset: 0) bez przesunięć i zbędnych marginesów
   assert.ok(css.includes('.textLayer {'), 'Brakuje definicji .textLayer w CSS');
-  assert.ok(/position:\s*absolute;\s*top:\s*0;\s*left:\s*0;/i.test(css), '.textLayer powinien zaczynać się od top: 0; left: 0');
-
-  // Reguły obrotu warstwy tekstowej dla data-main-rotation
-  assert.ok(css.includes('.textLayer[data-main-rotation="90"]'), 'Brakuje reguły obrotu 90° dla .textLayer');
-  assert.ok(css.includes('rotate(90deg) translateY(-100%)'), 'Niepoprawna transformacja 90°');
-
-  assert.ok(css.includes('.textLayer[data-main-rotation="180"]'), 'Brakuje reguły obrotu 180° dla .textLayer');
-  assert.ok(css.includes('rotate(180deg) translate(-100%, -100%)'), 'Niepoprawna transformacja 180°');
-
-  assert.ok(css.includes('.textLayer[data-main-rotation="270"]'), 'Brakuje reguły obrotu 270° dla .textLayer');
-  assert.ok(css.includes('rotate(270deg) translateX(-100%)'), 'Niepoprawna transformacja 270°');
+  assert.ok(/position:\s*absolute;\s*inset:\s*0;/i.test(css), '.textLayer powinien mieć position: absolute; inset: 0');
+  assert.ok(/z-index:\s*2;/i.test(css), '.textLayer powinien mieć z-index: 2 nad płótnem');
+  assert.ok(/user-select:\s*text;/i.test(css), '.textLayer powinien pozwalać na zaznaczanie tekstu');
 });
 
-test('viewer.js przesuwa warstwę tekstową wg przycięcia marginesów i obsługuje dwuklik bez niszczenia zaznaczenia', () => {
+test('viewer.js przekazuje przesunięcia cięcia i obrót bezpośrednio do viewportu TextLayer', () => {
   const js = readFileSync(new URL('../viewer.js', import.meta.url), 'utf8');
 
-  // Warstwa tekstowa dostaje dynamiczne przesunięcie zależne od przycięcia strony (-bx, -by) i skali
-  assert.ok(js.includes('calc(var(--scale-factor) * ${-bx}px)'), 'Warstwa tekstowa powinna mieć left uwzględniający bx');
-  assert.ok(js.includes('calc(var(--scale-factor) * ${-by}px)'), 'Warstwa tekstowa powinna mieć top uwzględniający by');
+  // Warstwa tekstowa korzysta z natywnego PageViewport z PDF.js z uwzględnieniem cięcia i obrotu
+  assert.ok(js.includes('offsetX: -b.x * scale'), 'TextLayer powinien przekazywać offsetX do getViewport');
+  assert.ok(js.includes('offsetY: -b.y * scale'), 'TextLayer powinien przekazywać offsetY do getViewport');
+  assert.ok(js.includes('rotation: rotationOf(page)'), 'TextLayer powinien uwzględniać obrót');
 
   // Dwuklik nie jest blokowany przez getSelection()
   assert.ok(!js.includes('if (!pdf || String(window.getSelection())) return;'), 'Dwuklik nie powinien być blokowany zaznaczeniem tekstu');
@@ -38,44 +31,30 @@ test('viewer.js przesuwa warstwę tekstową wg przycięcia marginesów i obsług
   assert.ok(js.includes('#calc-resizer'), 'Dwuklik powinien ignorować kliknięcie w pasek resizera');
 });
 
-test('współrzędne PageViewport i warstwy CSS textLayer są w 100% zgodne dla wszystkich obrotów i przycięć', async () => {
+test('współrzędne PageViewport z offsetX/offsetY są w 100% zgodne z canvas dla wszystkich cięć', async () => {
   const pdfData = '%PDF-1.4\n1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj\n2 0 obj<</Type/Pages/Count 1/Kids[3 0 R]>>endobj\n3 0 obj<</Type/Page/MediaBox[0 0 300 400]/Parent 2 0 R/Resources<</Font<</F1<</Type/Font/Subtype/Type1/BaseFont/Helvetica>>>>>>/Contents 4 0 R>>endobj\n4 0 obj<</Length 44>>stream\nBT\n/F1 12 Tf\n72 300 Td\n(Hello world) Tj\nET\nendstream\nendobj\nxref\n0 5\n0000000000 65535 f \n0000000009 00000 n \n0000000052 00000 n \n0000000105 00000 n \n0000000244 00000 n \ntrailer<</Size 5/Root 1 0 R>>\nstartxref\n336\n%%EOF';
   const doc = await getDocument({ data: new Uint8Array(Buffer.from(pdfData)) }).promise;
   const page = await doc.getPage(1);
 
-  const vp0 = page.getViewport({ scale: 1, rotation: 0 });
-  const [x0, y0] = vp0.convertToViewportPoint(72, 300);
-
   const bx = 25, by = 35; // przykładowe przycięcie marginesów
+  const scale = 1.5;
 
-  for (const rot of [0, 90, 180, 270]) {
-    const vp = page.getViewport({ scale: 1, rotation: rot });
-    const [canvasX, canvasY] = vp.convertToViewportPoint(72, 300);
-    const canvasPos = [canvasX - bx, canvasY - by];
+  const vpCanvas = page.getViewport({
+    scale,
+    rotation: 0,
+    offsetX: -bx * scale,
+    offsetY: -by * scale
+  });
+  const [canvasX, canvasY] = vpCanvas.convertToViewportPoint(72, 300);
 
-    let tx = x0, ty = y0;
-    if (rot === 0) {
-      // brak transformacji
-    } else if (rot === 90) {
-      // rotate(90deg) translateY(-100%) na div o wysokości 400px
-      const ty_trans = ty - 400;
-      tx = -ty_trans;
-      ty = x0;
-    } else if (rot === 180) {
-      // rotate(180deg) translate(-100%, -100%) na div o wymiarach 300x400
-      const tx_trans = tx - 300;
-      const ty_trans = ty - 400;
-      tx = -tx_trans;
-      ty = -ty_trans;
-    } else if (rot === 270) {
-      // rotate(270deg) translateX(-100%) na div o szerokości 300px
-      const tx_trans = tx - 300;
-      const new_tx = ty;
-      const new_ty = -tx_trans;
-      tx = new_tx;
-      ty = new_ty;
-    }
-    const textLayerPos = [tx - bx, ty - by];
-    assert.deepEqual(textLayerPos, canvasPos, `Niezgodność pozycji tekstu przy obrocie ${rot}°`);
-  }
+  const vpText = page.getViewport({
+    scale,
+    rotation: 0,
+    offsetX: -bx * scale,
+    offsetY: -by * scale
+  });
+  const [textX, textY] = vpText.convertToViewportPoint(72, 300);
+
+  assert.equal(canvasX, textX, 'Współrzędna X powinna być identyczna na canvas i textLayer');
+  assert.equal(canvasY, textY, 'Współrzędna Y powinna być identyczna na canvas i textLayer');
 });

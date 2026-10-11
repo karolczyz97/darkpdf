@@ -139,12 +139,13 @@ test('rzeczywista przeglądarka: ładowanie viewer.js bez błędów, obsługa kl
         const tl = p?.querySelector('.textLayer');
         const span = tl?.querySelector('span');
         const cRect = c?.getBoundingClientRect();
+        const tlRect = tl?.getBoundingClientRect();
         const sRect = span?.getBoundingClientRect();
         return {
           hasTl: Boolean(tl),
           hasSpan: Boolean(span),
           spanText: span?.textContent,
-          scaleDefined: tl?.style.getPropertyValue('--scale-factor') !== '' || p?.style.getPropertyValue('--scale-factor') !== '',
+          tlMatchesCanvas: cRect && tlRect && Math.abs(tlRect.left - cRect.left) < 2 && Math.abs(tlRect.top - cRect.top) < 2,
           withinBounds: cRect && sRect && sRect.left >= cRect.left - 5 && sRect.right <= cRect.right + 5
         };
       })()`,
@@ -153,7 +154,7 @@ test('rzeczywista przeglądarka: ładowanie viewer.js bez błędów, obsługa kl
     assert.equal(rTl.result.value.hasTl, true, 'Powinna istnieć warstwa tekstowa');
     assert.equal(rTl.result.value.hasSpan, true, 'Powinien istnieć span tekstowy');
     assert.equal(rTl.result.value.spanText, 'Hello world', 'Tekst w warstwie powinien odpowiadać PDF');
-    assert.equal(rTl.result.value.scaleDefined, true, 'Zmienna --scale-factor powinna być zdefiniowana');
+    assert.equal(rTl.result.value.tlMatchesCanvas, true, 'Warstwa tekstowa powinna pokrywać płótno');
     assert.equal(rTl.result.value.withinBounds, true, 'Span powinien mieścić się w obszarze strony');
 
     // 4b. Popover menu nie wyświetla się w lewym górnym rogu (0, 0)
