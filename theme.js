@@ -24,13 +24,20 @@ let pageFilters = null;
 let notifyChange = null;
 let flashMsg = null;
 
+let probeEl = null;
+
 function cssRgb(name) {
-  const el = document.createElement('i');
-  el.style.color = `var(${name})`;
-  document.body.append(el);
-  const rgb = getComputedStyle(el).color.match(/[\d.]+/g).slice(0, 3).map(Number);
-  el.remove();
-  return rgb;
+  if (typeof document === 'undefined') return [0, 0, 0];
+  if (!probeEl) {
+    probeEl = document.createElement('i');
+    probeEl.style.display = 'none';
+  }
+  if (!probeEl.isConnected) {
+    (document.body || document.documentElement)?.append(probeEl);
+  }
+  probeEl.style.color = `var(${name})`;
+  const m = getComputedStyle(probeEl).color.match(/[\d.]+/g);
+  return m ? m.slice(0, 3).map(Number) : [0, 0, 0];
 }
 
 // Odwrócona kartka ma dokładnie kolor tła, a czarny druk kolor tekstu motywu. Kolory bierzemy z CSS

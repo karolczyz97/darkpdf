@@ -7,8 +7,14 @@ export const pref = {
     try {
       const v = localStorage.getItem(k);
       if (v === null) return d;
-      if (typeof d === 'boolean') return v === '1';
-      if (typeof d === 'number') return parseInt(v, 10) || d;
+      if (typeof d === 'boolean') return v === '1' || v === 'true';
+      if (typeof d === 'number') {
+        const n = parseInt(v, 10);
+        return isNaN(n) ? d : n;
+      }
+      if (typeof d === 'string') return v;
+      if (v === '1' || v === 'true') return true;
+      if (v === '0' || v === 'false') return false;
       return v;
     } catch { return d; }
   },

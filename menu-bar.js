@@ -10,6 +10,7 @@ let pinBtn = null;
 let toggleBtn = null;
 let pageInput = null;
 let totalSpan = null;
+let buttonMap = null;
 
 let pinned = pref.get('menuPinned', false);
 let popoverOpen = pref.get('popoverOpen', true);
@@ -76,7 +77,6 @@ export function updateMenu() {
   totalSpan.textContent = `/ ${ctx.getNumPages()}`;
   syncPopover();
 
-  const btn = (k) => menu.querySelector(`[data-k="${k}"]`);
   const fitMode = ctx.getFitMode();
   const colorMode = ctx.getColorMode();
   const palette = ctx.getPalette();
@@ -93,26 +93,26 @@ export function updateMenu() {
     ['crop', ctx.getCrop() ? 'Z marginesami' : 'Przytnij marginesy']
   ];
   for (const [k, text, active] of labels) {
-    const el = btn(k);
-    if (el) {
-      el.querySelector('.label-text').textContent = text;
-      if (active !== undefined) el.classList.toggle('active', active);
+    const item = buttonMap?.get(k);
+    if (item) {
+      if (item.labelText) item.labelText.textContent = text;
+      if (active !== undefined) item.el.classList.toggle('active', active);
     }
   }
-  const pairingBtn = btn('pairing');
+  const pairingBtn = buttonMap?.get('pairing')?.el;
   if (pairingBtn) pairingBtn.hidden = !ctx.showTwo();              // parowanie nic nie zmienia przy jednej stronie
 
-  const pagesBtn = btn('pages');
+  const pagesBtn = buttonMap?.get('pages')?.el;
   if (pagesBtn) pagesBtn.hidden = ctx.isPortraitPhone();         // telefon w pionie zawsze pokazuje jedną stronę
 
-  const fullBtn = btn('full');
+  const fullBtn = buttonMap?.get('full')?.el;
   if (fullBtn) fullBtn.hidden = typeof document !== 'undefined' ? !document.fullscreenEnabled : true; // iPhone i ramki bez zgody nie mają pełnego ekranu
 
-  const darkBtn = btn('dark');
-  if (darkBtn) darkBtn.querySelector('use').setAttribute('href', `#i-mode-${colorMode}`);
+  const darkBtn = buttonMap?.get('dark');
+  if (darkBtn?.use) darkBtn.use.setAttribute('href', `#i-mode-${colorMode}`);
 
-  const themeBtn = btn('theme');
-  if (themeBtn) themeBtn.querySelector('use').setAttribute('href', `#i-pal-${palette}`);
+  const themeBtn = buttonMap?.get('theme');
+  if (themeBtn?.use) themeBtn.use.setAttribute('href', `#i-pal-${palette}`);
 
   pinBtn.classList.toggle('pinned', pinned);
   pinBtn.dataset.tip = pinned ? 'Odblokuj pasek (auto-ukrywanie)' : 'Zablokuj pasek na stałe';
@@ -164,6 +164,17 @@ export function initMenuBar(context) {
   toggleBtn = menu.querySelector('.menu-toggle');
   pageInput = menu.querySelector('.page-input');
   totalSpan = menu.querySelector('.total');
+
+  buttonMap = new Map();
+  for (const b of menu.querySelectorAll('[data-k]')) {
+    if (!buttonMap.has(b.dataset.k) || b.classList.contains('menu-item')) {
+      buttonMap.set(b.dataset.k, {
+        el: b,
+        labelText: b.querySelector('.label-text'),
+        use: b.querySelector('use')
+      });
+    }
+  }
 
   menu.addEventListener('mouseenter', () => clearTimeout(menuTimer));
   menu.addEventListener('mouseleave', scheduleHide);

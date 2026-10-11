@@ -8,7 +8,8 @@ const PDF_MIN_W = 400;          // tyle miejsca zostawiamy zawsze na PDF (żeby 
 const RESIZER_W = 8;            // szerokość rozdzielacza – ta sama co --resizer-w w viewer.css
 
 const clampCalcW = (w) => {
-  const max = Math.max(CALC_MIN_W, window.innerWidth - PDF_MIN_W - RESIZER_W);
+  const winW = typeof window !== 'undefined' ? window.innerWidth : 1200;
+  const max = Math.max(CALC_MIN_W, winW - PDF_MIN_W - RESIZER_W);
   return Math.max(CALC_MIN_W, Math.min(max, Math.round(w)));
 };
 
@@ -22,6 +23,7 @@ let lastNarrow = false;               // czy przy poprzednim sprawdzeniu okno by
 let sidebar = null;
 let calcContainer = null;
 let calcInstance = null;
+let animTimer = null;
 
 // KaTeX (ładne wzory w drugiej linii) ładujemy dopiero przy pierwszym otwarciu kalkulatora,
 // żeby nie spowalniał otwierania samego PDF-a
@@ -77,16 +79,20 @@ export function setCalcOpen(open, fromUser = false) {
   if (fromUser) {
     autoCollapsed = false;
     lastNarrow = ctx.isMobile();
+    ctx.pref.set('calcOpen', !!open);
   }
   if (open && !ctx.isPdfLoaded()) return;
   calcOpen = !!open;
-  ctx.pref.set('calcOpen', calcOpen);
   // Schowany panel tylko odjeżdża w bok: bez tego fokus zostałby w jego polu (Esc zamyka kalkulator,
   // a strzałki dalej nie przewracają stron), a Tab wchodziłby w niewidoczne przyciski
   sidebar.inert = !calcOpen;
   if (!calcOpen && sidebar.contains(document.activeElement)) document.activeElement.blur();
+  clearTimeout(animTimer);
   document.documentElement.classList.add('calc-animating');
-  setTimeout(() => document.documentElement.classList.remove('calc-animating'), 250);
+  animTimer = setTimeout(() => {
+    if (typeof document !== 'undefined') document.documentElement.classList.remove('calc-animating');
+    animTimer = null;
+  }, 250);
   document.documentElement.classList.toggle('calc-open', calcOpen);
 
   if (calcOpen) {

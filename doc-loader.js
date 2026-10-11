@@ -76,7 +76,7 @@ function loadViaExtension(url) {
   });
 }
 
-function extractPageStats(vp, tc) {
+export function extractPageStats(vp, tc) {
   const width = vp.width;
   const height = vp.height;
   if (!tc || !tc.items) return { width, height, textLength: 0, wordCount: 0, numbers: [] };
@@ -91,8 +91,9 @@ function extractPageStats(vp, tc) {
     textLength += s.length;
     wordCount += s.split(/\s+/).length;
 
-    const x = item.transform?.[4] ?? 0;
-    const y = item.transform?.[5] ?? 0;
+    const rawX = item.transform?.[4] ?? 0;
+    const rawY = item.transform?.[5] ?? 0;
+    const [x, y] = vp.convertToViewportPoint ? vp.convertToViewportPoint(rawX, rawY) : [rawX, rawY];
     const inHeaderOrFooter = (y < height * 0.15) || (y > height * 0.85);
     if (inHeaderOrFooter) {
       const m = s.match(/^(?:[-—–\s]*|p(?:age|\.)\s*)(\d+)(?:[-—–\s]*)$/i);
@@ -197,13 +198,15 @@ export async function openDocument(src, { name, key, page = null, blob = null, r
     openFailed('Nie udało się otworzyć pliku: ' + (err?.message || err));
     return;
   }
-  if (req !== openSeq) { doc.destroy(); return; }
+  if (req !== openSeq) { doc.destroy().catch(() => {}); return; }
 
   try {
     const layoutHint = await detectDocumentLayout(doc);
+    if (req !== openSeq) { doc.destroy().catch(() => {}); return; }
     rememberFile(key, name, blob);
     await ctx.onDocumentReady({ doc, name, key, page, blob, layoutHint });
   } catch (e) {
+    doc.destroy().catch(() => {});
     console.error('Błąd inicjalizacji PDF:', e);
     ctx.flash('Błąd podczas wyświetlania: ' + (e?.message || e), 4000);
     return;
@@ -225,6 +228,7 @@ export async function openFromHash() {
           if (rec?.blob) { openStored(rec); return; }
         } catch {}
       }
+      history.replaceState?.({ welcome: true }, '', location.pathname);
     }
     ctx.closeDocument();
     setEmpty(true);
@@ -374,9 +378,13 @@ export function renderBookmarks() {
 }
 
 export function setEmpty(v) {
-  if (typeof document !== 'undefined') document.documentElement.classList.toggle('empty', v);
+  if (typeof document !== 'undefined') {
+    document.documentElement.classList.toggle('empty', v);
+    if (v) document.documentElement.classList.remove('nocursor');
+  }
   if (v) {
     if (ctx?.isCalcOpen?.()) ctx.setCalcOpen(false);
+    ctx?.resetCursor?.();
     renderRecent();
     renderBookmarks();
   }

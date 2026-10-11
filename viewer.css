@@ -250,6 +250,7 @@ html.gemini #hint { background: var(--ui-bg); color: var(--ui-text); font-family
   inset: auto;
   margin: 0 0 8px;
   position-anchor: --menu-nav;
+  inset-area: top;
   position-area: top;
   width: 270px;
   color: var(--ui-text);
@@ -269,6 +270,18 @@ html.gemini #hint { background: var(--ui-bg); color: var(--ui-text); font-family
 }
 .menu-popover:not(:popover-open) { opacity: 0; transform: translateY(6px); }
 @starting-style { .menu-popover:popover-open { opacity: 0; transform: translateY(6px); } }
+
+@supports not ((position-area: top) or (inset-area: top)) {
+  .menu-popover {
+    left: 0;
+    right: 0;
+    margin: 0 auto;
+    bottom: calc(64px + env(safe-area-inset-bottom, 0px));
+  }
+  html.mobile .menu-popover {
+    bottom: calc(74px + env(safe-area-inset-bottom, 0px));
+  }
+}
 
 .menu-item[hidden] { display: none; }   /* np. parowanie przy jednej stronie */
 

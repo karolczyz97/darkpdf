@@ -19,13 +19,25 @@ const HELP = 'Esc  strona główna\n→ ↓ Spacja PgDn  następne\n← ↑ PgUp
 
 export const zoomed = () => (typeof window !== 'undefined' ? (window.visualViewport?.scale || 1) > 1.01 : false);
 
-export function initInput(ctx) {
-  let cursorTimer = null;
-  function wakeCursor() {
+let cursorTimer = null;
+
+export function resetCursor() {
+  if (typeof document !== 'undefined') {
     document.documentElement.classList.remove('nocursor');
-    clearTimeout(cursorTimer);
+  }
+  clearTimeout(cursorTimer);
+  cursorTimer = null;
+}
+
+export function initInput(ctx) {
+  function wakeCursor() {
+    resetCursor();
     if (ctx.isPdfLoaded()) {
-      cursorTimer = setTimeout(() => document.documentElement.classList.add('nocursor'), 2000);
+      cursorTimer = setTimeout(() => {
+        if (ctx.isPdfLoaded() && typeof document !== 'undefined') {
+          document.documentElement.classList.add('nocursor');
+        }
+      }, 2000);
     }
   }
 
@@ -49,7 +61,7 @@ export function initInput(ctx) {
         return;
       }
       if (ctx.isCalcOpen()) {
-        ctx.setCalcOpen(false);
+        ctx.setCalcOpen(false, true);
         e.preventDefault();
         return;
       }
@@ -98,7 +110,7 @@ export function initInput(ctx) {
   window.addEventListener('click', (e) => {
     if (!ctx.isPdfLoaded()) return;
     if (String(window.getSelection())) return;
-    if (e.target?.closest?.('#menu, #calc-sidebar, #calc-resizer, #pw-dialog')) return;
+    if (e.target?.closest?.('#menu, #menu-popover, #calc-sidebar, #calc-resizer, #pw-dialog')) return;
     // Telefon: stuknięcie w lewą / prawą część strony przewraca, środek otwiera pasek.
     // Przybliżona strona przewija się palcem – wtedy stuknięcie tylko otwiera pasek.
     if (ctx.isMobile() && !zoomed()) {
@@ -117,7 +129,7 @@ export function initInput(ctx) {
   let lastWheel = 0, notch = 100, acc = 0;
   window.addEventListener('wheel', (e) => {
     if (e.ctrlKey) return;
-    if (e.target?.closest?.('#calc-sidebar, #pw-dialog')) return;
+    if (e.target?.closest?.('#menu, #menu-popover, #calc-sidebar, #calc-resizer, #pw-dialog')) return;
     if (!ctx.isPdfLoaded()) return;
 
     const stage = ctx.stage;
@@ -161,7 +173,7 @@ export function initInput(ctx) {
   let swipe = null;
   window.addEventListener('touchstart', (e) => {
     swipe = null;
-    if (e.touches.length !== 1 || e.target?.closest?.('#calc-sidebar, #menu, #pw-dialog')) return;
+    if (e.touches.length !== 1 || e.target?.closest?.('#menu, #menu-popover, #calc-sidebar, #calc-resizer, #pw-dialog')) return;
     const t = e.touches[0];
     const stage = ctx.stage;
     swipe = {

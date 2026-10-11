@@ -71,7 +71,7 @@ import {
   isPageInputFocused,
   isMenuHidden
 } from './menu-bar.js';
-import { initInput } from './input.js';
+import { initInput, resetCursor } from './input.js';
 
 // Pamięć podręczna aplikacji: po pierwszej wizycie czytnik otwiera się też offline
 if ('serviceWorker' in navigator && location.protocol === 'https:') {
@@ -149,6 +149,7 @@ function clearRenderCaches() {
 
 let resizeTimer;
 function rerenderSoon(ms = 120) {
+  if (!pdf) return;
   clearTimeout(resizeTimer);
   resizeTimer = setTimeout(() => { clearRenderCaches(); show(start); }, ms);
 }
@@ -283,12 +284,13 @@ function showError(e) {
 }
 
 async function show(s, { keepShown = false } = {}) {
+  if (!pdf) return;
   const token = ++showToken;
   start = s = spreadStartOf(s);
   const failed = (e) => { if (token === showToken && e?.name !== 'RenderingCancelledException') showError(e); };
   let lay;
   try { lay = await layoutSpread(s); } catch (e) { failed(e); return; }
-  if (token !== showToken) return;
+  if (token !== showToken || !pdf) return;
   const { a, b, scale, L, R, single } = lay;
   lastRenderedScale = scale;
   lastRenderedDpr = window.devicePixelRatio || 1;
@@ -488,9 +490,11 @@ function toggleFullscreen() {
 // ---------- zamknięcie dokumentu ----------
 function closeDocument() {
   if (!pdf) return;
+  clearTimeout(resizeTimer);
+  resetCursor();
   showToken++;
   clearCaches();
-  pdf.destroy();
+  pdf.destroy().catch(() => {});
   pdf = null;
   numPages = 0;
   fileKey = null;
@@ -617,6 +621,7 @@ window.addEventListener('resize', () => {
   stopStaleRendering();
   clearTimeout(resizeTimer);
   resizeTimer = setTimeout(() => {
+    if (!pdf) return;
     const isMob = isMobile();
     const mobChanged = isMob !== lastMobileState;
     lastMobileState = isMob;
@@ -702,6 +707,7 @@ initDocLoader({
   closeDocument,
   isCalcOpen,
   setCalcOpen,
+  resetCursor,
   onDocumentReady: async ({ doc, name, key, page, blob, layoutHint }) => {
     pdf?.destroy();
     pdf = doc;

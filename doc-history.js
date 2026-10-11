@@ -32,9 +32,14 @@ export function hasWelcomeState() {
 export function initDocHistory(context) {
   ctx = context;
 
-  if (!location.hash || location.hash === '#' || location.hash === '#doc') {
+  if (!location.hash || location.hash === '#') {
     history.replaceState({ welcome: true }, '', location.pathname);
     hadWelcomeState = true;
+  } else if (location.hash === '#doc') {
+    if (!history.state?.key) {
+      history.replaceState({ welcome: true }, '', location.pathname);
+      hadWelcomeState = true;
+    }
   } else if (location.hash.startsWith('#file=')) {
     const key = location.hash.slice(6).split('#')[0];
     history.replaceState({ doc: true, key }, '', location.href);
