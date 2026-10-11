@@ -196,11 +196,19 @@ html.dark #stage canvas {
 
 /* Warstwa tekstowa pdf.js: przezroczysty tekst nad stroną do zaznaczania i kopiowania */
 .textLayer {
-  position: absolute; inset: 0; overflow: clip; line-height: 1; text-align: initial;
+  position: absolute; top: 0; left: 0; overflow: clip; line-height: 1; text-align: initial;
   transform-origin: 0 0; caret-color: CanvasText; z-index: 2;
   -webkit-text-size-adjust: none; text-size-adjust: none; forced-color-adjust: none;
   user-select: text; -webkit-user-select: text;
-  font-family: sans-serif;
+}
+.textLayer[data-main-rotation="90"] {
+  transform: rotate(90deg) translateY(-100%);
+}
+.textLayer[data-main-rotation="180"] {
+  transform: rotate(180deg) translate(-100%, -100%);
+}
+.textLayer[data-main-rotation="270"] {
+  transform: rotate(270deg) translateX(-100%);
 }
 .textLayer :is(span, br) {
   color: transparent; position: absolute; white-space: pre; cursor: text; transform-origin: 0% 0%;

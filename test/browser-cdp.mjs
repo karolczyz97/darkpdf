@@ -83,10 +83,15 @@ test('rzeczywista przeglądarka: ładowanie viewer.js bez błędów, obsługa kl
     await send('Log.enable');
 
     // 1. Sprawdzamy inicjalizację aplikacji
-    const r1 = await send('Runtime.evaluate', {
-      expression: '({ title: document.title, empty: document.documentElement.classList.contains("empty") })',
-      returnByValue: true
-    });
+    let r1;
+    for (let i = 0; i < 25; i++) {
+      r1 = await send('Runtime.evaluate', {
+        expression: '({ title: document.title, empty: document.documentElement.classList.contains("empty") })',
+        returnByValue: true
+      });
+      if (r1.result.value.title === 'DarkPDF') break;
+      await new Promise(r => setTimeout(r, 100));
+    }
     assert.equal(r1.result.value.title, 'DarkPDF');
     assert.equal(r1.result.value.empty, true, 'Ekran startowy powinien mieć klasę empty');
 

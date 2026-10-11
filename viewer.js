@@ -372,10 +372,17 @@ async function textLayerFor(n, scale) {
 
   const tc = await textContent(n);
   const b = await pageBox(n);
+  const vp = page.getViewport({ scale, rotation: rotationOf(page) });
+  const bx = b?.x || 0;
+  const by = b?.y || 0;
+  div.style.setProperty('--scale-factor', String(scale));
+  div.style.left = (-bx * scale) + 'px';
+  div.style.top = (-by * scale) + 'px';
+
   await new pdfjsLib.TextLayer({
     textContentSource: tc,
     container: div,
-    viewport: page.getViewport({ scale, rotation: rotationOf(page), offsetX: -b.x * scale, offsetY: -b.y * scale })
+    viewport: vp
   }).render();
 
   const end = document.createElement('div');
