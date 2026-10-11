@@ -370,6 +370,7 @@ async function textLayerFor(n, scale) {
   const page = await pdf.getPage(n);
   const div = document.createElement('div');
   div.className = 'textLayer';
+  div.style.setProperty('--scale-factor', scale);
 
   const tc = await textContent(n);
   const b = await pageBox(n);
@@ -482,9 +483,14 @@ function setFitMode(mode) {
 }
 
 function toggleFullscreen() {
-  if (!document.fullscreenEnabled) { flash('Pełny ekran nie jest tu dostępny'); return; }
+  if (!document.fullscreenEnabled) {
+    setFitMode(fitMode === 'width' ? 'auto' : 'width');
+    return;
+  }
   const p = document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen();
-  p?.catch(() => {});
+  p?.catch(() => {
+    setFitMode(fitMode === 'width' ? 'auto' : 'width');
+  });
 }
 
 // ---------- zamknięcie dokumentu ----------
@@ -576,9 +582,10 @@ function act(k) {
 }
 
 window.addEventListener('dblclick', (e) => {
-  if (isMobile()) return;
+  if (window.matchMedia?.('(pointer: coarse) and not (pointer: fine)')?.matches && isMobile()) return;
   if (!pdf) return;
-  if (e.target?.closest?.('#menu, #calc-sidebar, #calc-resizer, #pw-dialog')) return;
+  if (e.target?.closest?.('#calc-sidebar, #calc-resizer, #pw-dialog')) return;
+  hideMenu(true);
   act('full');
 });
 
@@ -595,6 +602,8 @@ function fitNow() {
     const c = el.querySelector('canvas');
     if (c) { c.style.width = w; c.style.height = h; }
     else { el.style.width = w; el.style.height = h; }
+    const tl = el.querySelector('.textLayer');
+    if (tl) tl.style.setProperty('--scale-factor', l.scale);
   });
   centerX();
 }

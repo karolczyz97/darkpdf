@@ -131,6 +131,65 @@ test('rzeczywista przeglądarka: ładowanie viewer.js bez błędów, obsługa kl
     assert.equal(rPdf.result.value.hasCanvas, true, 'Na scenie powinno wyrenderować się płótno PDF');
     assert.ok(rPdf.result.value.title.includes('test-doc.pdf'), 'Tytuł powinien zawierać nazwę otwartego pliku');
 
+    // 4a. Warstwa tekstowa jest wyrównana z płótnem i zawiera tekst
+    const rTl = await send('Runtime.evaluate', {
+      expression: `(() => {
+        const p = document.querySelector('#stage .page');
+        const c = p?.querySelector('canvas');
+        const tl = p?.querySelector('.textLayer');
+        const span = tl?.querySelector('span');
+        const cRect = c?.getBoundingClientRect();
+        const sRect = span?.getBoundingClientRect();
+        return {
+          hasTl: Boolean(tl),
+          hasSpan: Boolean(span),
+          spanText: span?.textContent,
+          scaleDefined: tl?.style.getPropertyValue('--scale-factor') !== '' || p?.style.getPropertyValue('--scale-factor') !== '',
+          withinBounds: cRect && sRect && sRect.left >= cRect.left - 5 && sRect.right <= cRect.right + 5
+        };
+      })()`,
+      returnByValue: true
+    });
+    assert.equal(rTl.result.value.hasTl, true, 'Powinna istnieć warstwa tekstowa');
+    assert.equal(rTl.result.value.hasSpan, true, 'Powinien istnieć span tekstowy');
+    assert.equal(rTl.result.value.spanText, 'Hello world', 'Tekst w warstwie powinien odpowiadać PDF');
+    assert.equal(rTl.result.value.scaleDefined, true, 'Zmienna --scale-factor powinna być zdefiniowana');
+    assert.equal(rTl.result.value.withinBounds, true, 'Span powinien mieścić się w obszarze strony');
+
+    // 4b. Popover menu nie wyświetla się w lewym górnym rogu (0, 0)
+    const rPopPos = await send('Runtime.evaluate', {
+      expression: `(() => {
+        document.getElementById('stage').dispatchEvent(new MouseEvent('click', { bubbles: true, clientX: 400 }));
+        const pop = document.getElementById('menu-popover');
+        const nav = document.querySelector('.menu-nav');
+        const pRect = pop.getBoundingClientRect();
+        const nRect = nav.getBoundingClientRect();
+        return {
+          notAtZero: pRect.top > 0 || pRect.left > 0,
+          aboveNav: pRect.bottom <= nRect.top + 10,
+          maxHeightSet: window.getComputedStyle(pop).maxHeight !== 'none'
+        };
+      })()`,
+      returnByValue: true
+    });
+    assert.equal(rPopPos.result.value.notAtZero, true, 'Popover nie może być w lewym górnym rogu (0, 0)');
+    assert.equal(rPopPos.result.value.maxHeightSet, true, 'Popover powinien mieć zdefiniowany max-height');
+
+    // 4c. Dwuklik w stronę zamyka menu i wykonuje pełny ekran bez błędów
+    const rDblClick = await send('Runtime.evaluate', {
+      expression: `(() => {
+        const stage = document.getElementById('stage');
+        stage.dispatchEvent(new MouseEvent('dblclick', { bubbles: true, clientX: 400 }));
+        return {
+          ok: true,
+          menuHidden: document.getElementById('menu').hidden
+        };
+      })()`,
+      returnByValue: true
+    });
+    assert.equal(rDblClick.result.value.ok, true);
+    assert.equal(rDblClick.result.value.menuHidden, true, 'Dwuklik w stronę powinien ukryć menu');
+
     // 5. Otwieranie i zamykanie kalkulatora (klawisz K)
     const rCalc = await send('Runtime.evaluate', {
       expression: '(() => { window.dispatchEvent(new KeyboardEvent("keydown", { key: "k" })); return document.documentElement.classList.contains("calc-open"); })()',

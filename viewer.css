@@ -1,5 +1,6 @@
 /* MOTYW SYSTEMOWY: Kolory z systemu / Chrome PDF Viewer */
 :root {
+  --scale-factor: 1;
   color-scheme: dark;
   --ui-bg: rgba(24, 24, 24, .95);
   --ui-bg-solid: #1b1c1e;                      /* bezpieczny fallback tła */
@@ -156,7 +157,7 @@ html.fit-height #stage::-webkit-scrollbar {
 }
 #stage .page, #stage .blank { display: block; flex: none; position: relative; overflow: hidden; }
 /* Strony bez zaokrągleń rogów i bez cienia – brak szpar */
-#stage .page { border-radius: 0; }
+#stage .page { border-radius: 0; user-select: text; -webkit-user-select: text; }
 #stage canvas { display: block; background: #fff; box-shadow: none; }
 #stage .blank { visibility: hidden; }
 
@@ -197,7 +198,7 @@ html.dark #stage canvas {
 /* Warstwa tekstowa pdf.js: przezroczysty tekst nad stroną do zaznaczania i kopiowania */
 .textLayer {
   position: absolute; top: 0; left: 0; overflow: clip; line-height: 1; text-align: initial;
-  transform-origin: 0 0; caret-color: CanvasText; z-index: 0;
+  transform-origin: 0 0; caret-color: CanvasText; z-index: 2;
   -webkit-text-size-adjust: none; text-size-adjust: none; forced-color-adjust: none;
   user-select: text; -webkit-user-select: text;
   font-family: sans-serif;
@@ -224,8 +225,8 @@ html.gemini .textLayer ::selection { background: rgba(168, 199, 250, .38); }
 html.gemini #hint { background: var(--ui-bg); color: var(--ui-text); font-family: var(--ui-font); }
 .textLayer br::selection { background: transparent; }
 .textLayer .endOfContent {
-  display: block; position: absolute; inset: 100% 0 0; z-index: 0; cursor: default;
-  user-select: none; -webkit-user-select: none;
+  display: block; position: absolute; inset: 100% 0 0; z-index: -1; cursor: default;
+  user-select: none; -webkit-user-select: none; pointer-events: none;
 }
 .textLayer.selecting .endOfContent { top: 0; }
 
@@ -243,15 +244,17 @@ html.gemini #hint { background: var(--ui-bg); color: var(--ui-text); font-family
 #menu[hidden] { display: none; }
 #menu > * { pointer-events: auto; }
 
-/* Pionowy popover z opcjami – natywny [popover], zakotwiczony nad dolnym paskiem */
+/* Pionowy popover z opcjami – zakotwiczony nad dolnym paskiem nawigacji */
 .menu-nav { anchor-name: --menu-nav; }
 .menu-popover {
   position: fixed;
   inset: auto;
-  margin: 0 0 8px;
-  position-anchor: --menu-nav;
-  inset-area: top;
-  position-area: top;
+  bottom: calc(64px + env(safe-area-inset-bottom, 0px));
+  left: 50%;
+  transform: translate(-50%, 0);
+  margin: 0;
+  max-height: calc(100dvh - 84px);
+  overflow-y: auto;
   width: 270px;
   color: var(--ui-text);
   box-sizing: border-box;
@@ -268,18 +271,22 @@ html.gemini #hint { background: var(--ui-bg); color: var(--ui-text); font-family
   transform-origin: bottom center;
   transition: opacity .16s ease, transform .16s ease, display .16s allow-discrete, overlay .16s allow-discrete;
 }
-.menu-popover:not(:popover-open) { opacity: 0; transform: translateY(6px); }
-@starting-style { .menu-popover:popover-open { opacity: 0; transform: translateY(6px); } }
+.menu-popover:not(:popover-open) { opacity: 0; transform: translate(-50%, 6px); }
+@starting-style { .menu-popover:popover-open { opacity: 0; transform: translate(-50%, 6px); } }
+
+html.calc-open .menu-popover {
+  left: calc((100vw + var(--calc-w) + var(--resizer-w)) / 2);
+}
+html.mobile .menu-popover {
+  bottom: calc(74px + env(safe-area-inset-bottom, 0px));
+}
+html.mobile.calc-open .menu-popover {
+  left: 50%;
+}
 
 @supports not ((position-area: top) or (inset-area: top)) {
   .menu-popover {
-    left: 0;
-    right: 0;
     margin: 0 auto;
-    bottom: calc(64px + env(safe-area-inset-bottom, 0px));
-  }
-  html.mobile .menu-popover {
-    bottom: calc(74px + env(safe-area-inset-bottom, 0px));
   }
 }
 

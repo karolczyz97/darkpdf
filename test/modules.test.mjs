@@ -20,7 +20,8 @@ import {
   isPopoverOpen,
   isMenuHidden,
   setPopoverOpen,
-  hideMenu
+  hideMenu,
+  getLastMenuOpenTime
 } from '../menu-bar.js';
 
 import {
@@ -61,6 +62,7 @@ test('menu-bar.js: stan popovera, widoczności i wymuszonego ukrywania', () => {
   assert.equal(typeof isPinned(), 'boolean');
   assert.equal(typeof isPopoverOpen(), 'boolean');
   assert.equal(typeof isMenuHidden(), 'boolean');
+  assert.equal(typeof getLastMenuOpenTime(), 'number');
 
   setPopoverOpen(false);
   assert.equal(isPopoverOpen(), false);

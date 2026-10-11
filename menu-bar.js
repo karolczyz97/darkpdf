@@ -14,6 +14,7 @@ let buttonMap = null;
 
 let pinned = pref.get('menuPinned', false);
 let popoverOpen = pref.get('popoverOpen', true);
+let lastMenuOpenTime = 0;
 let menuTimer = null;
 let pageJumpTimer = null;
 let digitTriggeredFocus = false;
@@ -21,6 +22,7 @@ let digitTriggeredFocus = false;
 export const isPinned = () => pinned;
 export const isPopoverOpen = () => popoverOpen;
 export const isMenuHidden = () => !menu || menu.hidden;
+export const getLastMenuOpenTime = () => lastMenuOpenTime;
 export const isPageInputFocused = () => (typeof document !== 'undefined' ? document.activeElement === pageInput : false);
 
 // Pasek chowa się po 2 s bezczynności, jeśli nie jest najechany ani zablokowany kłódką
@@ -39,7 +41,9 @@ export function hideMenu(force = false) {
 
 export function showMenu() {
   if (!menu || !ctx?.isPdfLoaded()) return;
+  lastMenuOpenTime = Date.now();
   menu.hidden = false;
+  void menu?.offsetHeight;
   updateMenu();
   scheduleHide();
 }
@@ -49,7 +53,14 @@ export function showMenu() {
 export function syncPopover() {
   if (!popoverEl?.showPopover || !menu) return;
   const want = popoverOpen && !menu.hidden;
-  if (want !== popoverEl.matches(':popover-open')) want ? popoverEl.showPopover() : popoverEl.hidePopover();
+  if (want !== popoverEl.matches(':popover-open')) {
+    if (want) {
+      void menu?.offsetHeight;
+      try { popoverEl.showPopover(); } catch {}
+    } else {
+      try { popoverEl.hidePopover(); } catch {}
+    }
+  }
 }
 
 export function setPopoverOpen(open) {

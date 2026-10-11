@@ -111,6 +111,7 @@ export function initInput(ctx) {
     if (!ctx.isPdfLoaded()) return;
     if (String(window.getSelection())) return;
     if (e.target?.closest?.('#menu, #menu-popover, #calc-sidebar, #calc-resizer, #pw-dialog')) return;
+    if (e.detail >= 2) return;
     // Telefon: stuknięcie w lewą / prawą część strony przewraca, środek otwiera pasek.
     // Przybliżona strona przewija się palcem – wtedy stuknięcie tylko otwiera pasek.
     if (ctx.isMobile() && !zoomed()) {
