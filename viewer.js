@@ -35,7 +35,7 @@ const LO_QUALITY = 0.35;      // rozdzielczość szybkiego podglądu, gdy strona
 const PREFETCH_AHEAD = 3;     // ile rozkładówek do przodu renderować w tle
 const PREFETCH_BEHIND = 1;    // ile rozkładówek wstecz
 const TEXT_PAGES_AROUND = 2;  // tekst ilu stron przed/po trzymać w DOM dla czytników/Gemini
-const MARGIN = 8;             // margines wokół stron (px)
+const MARGIN = 0;             // margines wokół stron (px) – brak szpar
 const GAP = 0;                // odstęp między stronami (px) – strony sklejone ze sobą
 const CACHE_MAX = 24;         // ile wyrenderowanych stron trzymać w pamięci
 const CACHE_MAX_MOBILE = 10;  // telefon: iOS ma limit pamięci na płótna, po przekroczeniu strony robią się puste
@@ -278,9 +278,8 @@ const spreadLabel = (s = start) => geo.spreadLabel(spreadOf(s));
 // Skala rozkładówki w miejscu, które zostaje obok kalkulatora
 function fit(a, b, sa, sb) {
   const two = showTwo();
-  const isFitH = fitMode === 'height';
   const W = Math.max(120, window.innerWidth - getCalcStageWidth() - 2 * MARGIN - (two ? GAP : 0));
-  const H = Math.max(120, window.innerHeight - (isFitH ? 0 : 2 * MARGIN));
+  const H = Math.max(120, window.innerHeight - 2 * MARGIN);
   return { a, b: two ? b : null, ...geo.fitSpread(sa, sb, { W, H, two, fitMode }) };
 }
 
