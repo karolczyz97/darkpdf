@@ -13,6 +13,7 @@ export const pref = {
     } catch { return d; }
   },
   set(k, v) { try { localStorage.setItem(k, typeof v === 'boolean' ? (v ? '1' : '0') : String(v)); } catch {} },
+  remove(k) { try { localStorage.removeItem(k); } catch {} },
   json(k, d) { try { return JSON.parse(localStorage.getItem(k)) ?? d; } catch { return d; } },
   setJson(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} }
 };

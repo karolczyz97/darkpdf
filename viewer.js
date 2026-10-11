@@ -717,6 +717,7 @@ async function open(src, { name, key, page = null, blob = null, req }) {
     if (pref.get('calcOpen', false) && !isMobile()) setCalcOpen(true);
     show(spreadStartOf(p));
     if (pinned) showMenu();
+    updateDocHistory(key);
   } catch (e) {
     console.error('Błąd inicjalizacji PDF:', e);
     flash('Błąd podczas wyświetlania: ' + (e?.message || e), 4000);
@@ -740,6 +741,64 @@ function closeDocument() {
   menu.hidden = true;                   // także przypięty – bez pliku pasek nie ma czego pokazywać
   syncPopover();
 }
+
+// ---------- historia przeglądarki i powrót na ekran startowy ----------
+let hadWelcomeState = false;
+function initHistory() {
+  if (!location.hash || location.hash === '#' || location.hash === '#doc') {
+    history.replaceState({ welcome: true }, '', location.pathname);
+    hadWelcomeState = true;
+  } else if (location.hash.startsWith('#file=')) {
+    const key = location.hash.slice(6).split('#')[0];
+    history.replaceState({ doc: true, key }, '', location.href);
+  }
+}
+initHistory();
+
+function updateDocHistory(key) {
+  const targetHash = isRemoteKey(key) ? '#file=' + encodeURI(key) : '#doc';
+  const targetUrl = location.pathname + targetHash;
+  if (!history.state?.doc || history.state?.key !== key) {
+    history.pushState({ doc: true, key }, '', targetUrl);
+  }
+}
+
+function goHome() {
+  if (!pdf) return;
+  if (history.state?.doc && hadWelcomeState) {
+    history.back();
+  } else {
+    closeDocument();
+    setEmpty(true);
+    history.replaceState({ welcome: true }, '', location.pathname);
+    hadWelcomeState = true;
+  }
+}
+
+window.addEventListener('popstate', async (e) => {
+  const state = e.state;
+  const isDoc = Boolean(state?.doc || (location.hash && location.hash.startsWith('#file=')) || location.hash === '#doc');
+
+  if (!isDoc) {
+    if (pdf) {
+      closeDocument();
+      setEmpty(true);
+    }
+    return;
+  }
+
+  if (state?.doc && state?.key) {
+    if (state.key === fileKey && pdf) return;
+    if (isRemoteKey(state.key)) {
+      openUrl(state.key);
+    } else {
+      try {
+        const rec = await storedFile(state.key);
+        if (rec?.blob) openStored(rec);
+      } catch {}
+    }
+  }
+});
 
 // Okno hasła do zaszyfrowanego PDF-a → Promise z hasłem albo null (Anuluj, Esc)
 const pwDialog = document.getElementById('pw-dialog');
@@ -797,7 +856,20 @@ async function openFromHash() {
   const req = ++openSeq;
   const h = location.href;
   const i = h.indexOf('#file=');
-  if (i < 0) { closeDocument(); setEmpty(true); return; }
+  if (i < 0) {
+    if (location.hash === '#doc') {
+      if (pdf) return;
+      if (history.state?.key) {
+        try {
+          const rec = await storedFile(history.state.key);
+          if (rec?.blob) { openStored(rec); return; }
+        } catch {}
+      }
+    }
+    closeDocument();
+    setEmpty(true);
+    return;
+  }
   let url = h.slice(i + 6);
   if (/^[a-z]+%3A/i.test(url)) { try { url = decodeURIComponent(url); } catch {} }   // zepsute %… zostawiamy jak są
   const pm = /#page=(\d+)/.exec(url);
@@ -833,13 +905,9 @@ picker.accept = 'application/pdf,.pdf';
 picker.hidden = true;
 document.body.append(picker);
 
-// Plik z dysku lub z pamięci przeglądarki: adres bez #file=…, inaczej odświeżenie wróciłoby do pliku z sieci
-const clearFileHash = () => history.replaceState(null, '', location.pathname);
-
 async function openLocal(f) {
   if (!f) return;
   const req = ++openSeq;
-  clearFileHash();
   setEmpty(false);
   flash('Ładowanie…', 0);
   let data;
@@ -858,20 +926,39 @@ const welcome = document.getElementById('welcome');
 welcome.querySelector('.pick').addEventListener('click', (e) => { e.stopPropagation(); pickFile(); });
 
 // ---------- ekran startowy: ostatnie pliki i zakładki ----------
-// Wiersze na ekranie startowym: ostatnie pliki i zakładki wyglądają tak samo.
-function renderList(id, items, onPick) {
+// Wiersze na ekranie startowym: ostatnie pliki i zakładki z możliwością usunięcia wpisu.
+function renderList(id, items, onPick, onDelete = null) {
   const box = document.getElementById(id);
   box.replaceChildren();
   box.hidden = items.length === 0;
   for (const it of items.slice(0, 6)) {
-    const row = document.createElement('button');
-    row.type = 'button';
+    const row = document.createElement('div');
     row.className = 'recent-row';
-    row.innerHTML = '<span class="rn"></span><span class="rp"></span>';
-    row.querySelector('.rn').textContent = it.name;
-    row.querySelector('.rp').textContent = `str. ${it.page}`;
-    row.title = it.title || it.name;
-    row.addEventListener('click', (e) => { e.stopPropagation(); onPick(it); });
+
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'recent-btn';
+    btn.innerHTML = '<span class="rn"></span><span class="rp"></span>';
+    btn.querySelector('.rn').textContent = it.name;
+    btn.querySelector('.rp').textContent = `str. ${it.page}`;
+    btn.title = it.title || it.name;
+    btn.addEventListener('click', (e) => { e.stopPropagation(); onPick(it); });
+    row.append(btn);
+
+    if (onDelete) {
+      const del = document.createElement('button');
+      del.type = 'button';
+      del.className = 'recent-del';
+      del.title = 'Usuń z listy';
+      del.setAttribute('aria-label', `Usuń ${it.name} z listy`);
+      del.innerHTML = '<svg class="ic" aria-hidden="true" style="width:14px;height:14px"><use href="#i-close"/></svg>';
+      del.addEventListener('click', (e) => {
+        e.stopPropagation();
+        onDelete(it);
+      });
+      row.append(del);
+    }
+
     box.append(row);
   }
 }
@@ -879,7 +966,6 @@ function renderList(id, items, onPick) {
 // Plik zapisany w przeglądarce. Uszkodzony wpis (pusty albo nieczytelny blob) usuwamy z listy.
 async function openStored(rec, page = null) {
   const req = ++openSeq;
-  clearFileHash();
   setEmpty(false);
   let data = null;
   try { if (rec.blob.size) data = new Uint8Array(await rec.blob.arrayBuffer()); } catch {}
@@ -897,6 +983,22 @@ function openRecent(rec) {
   else if (rec?.blob) openStored(rec);
 }
 
+async function deleteRecent(rec) {
+  try { await forgetFile(rec.key); } catch (e) { console.warn('Nie udało się usunąć pliku:', e); }
+  pref.remove('pos:' + rec.key);
+  pref.remove('rot:' + rec.key);
+  pref.remove('two:' + rec.key);
+  pref.remove('pairing:' + rec.key);
+  await renderRecent();
+  flash('Usunięto z listy', 1200);
+}
+
+function deleteBookmark(m) {
+  toggleBookmark(m.key, m.name, m.page);
+  renderList('marks', bookmarks(), openBookmark, deleteBookmark);
+  flash('Usunięto zakładkę', 1200);
+}
+
 async function openBookmark(m) {
   let rec = null;
   try { rec = await storedFile(m.key); } catch {}
@@ -911,7 +1013,7 @@ async function renderRecent() {
   try { all = await recentFiles(); } catch {}
   lastRecent = all[0] || null;
   document.getElementById('recentHint').hidden = all.length === 0;
-  renderList('recent', all.map((r) => ({ ...r, page: pref.get('pos:' + r.key, 1), title: r.url || r.name })), openRecent);
+  renderList('recent', all.map((r) => ({ ...r, page: pref.get('pos:' + r.key, 1), title: r.url || r.name })), openRecent, deleteRecent);
 }
 
 function setEmpty(v) {
@@ -919,7 +1021,7 @@ function setEmpty(v) {
   if (v) {
     if (isCalcOpen()) setCalcOpen(false);
     renderRecent();
-    renderList('marks', bookmarks(), openBookmark);
+    renderList('marks', bookmarks(), openBookmark, deleteBookmark);
   }
 }
 window.addEventListener('dragover', (e) => { e.preventDefault(); welcome.classList.add('drag'); });
@@ -1088,6 +1190,7 @@ const WITHOUT_PDF = new Set(['open', 'pin', 'toggle-menu', 'full', 'dark', 'them
 function act(k) {
   if (!pdf && !WITHOUT_PDF.has(k)) return;
   switch (k) {
+    case 'home': goHome(); break;
     case 'prev': prev(); break;
     case 'next': next(); break;
     case 'open': pickFile(); break;
@@ -1293,7 +1396,7 @@ const KEY_ACTIONS = {
   d: 'dark', t: 'theme', p: 'pages', o: 'pairing', f: 'full', c: 'crop', r: 'rotate',
   k: 'calc', w: 'fit-w', h: 'fit-h', m: 'toggle-menu'
 };
-const HELP = '→ ↓ Spacja PgDn  następne\n← ↑ PgUp  poprzednie\nHome / End  początek / koniec\n' +
+const HELP = 'Esc  strona główna\n→ ↓ Spacja PgDn  następne\n← ↑ PgUp  poprzednie\nHome / End  początek / koniec\n' +
   'numer (lub Enter)  skok do strony\nShift + strzałka / scroll  skok o 10\nB  zakładka na tej stronie\n' +
   'M  menu opcji\nK  kalkulator z boku\nW  zablokuj szerokość 100%\nH  zablokuj wysokość 100%\n' +
   'C  przycinanie marginesów\nR  obrót o 90°\n' +
@@ -1322,6 +1425,11 @@ window.addEventListener('keydown', (e) => {
     }
     if (!menu.hidden && !pinned) {
       hideMenu();
+      e.preventDefault();
+      return;
+    }
+    if (pdf) {
+      goHome();
       e.preventDefault();
       return;
     }
