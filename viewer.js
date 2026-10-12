@@ -391,15 +391,8 @@ async function textLayerFor(n, scale) {
   return tlCache.set(k, div);
 }
 
-let prevSelectionRange = null;
-
 function resetSelectingTextLayers() {
-  prevSelectionRange = null;
-  for (const d of stage.querySelectorAll('.textLayer.selecting')) {
-    const end = d.querySelector('.endOfContent');
-    if (end) { d.append(end); end.style.width = end.style.height = end.style.userSelect = ''; }
-    d.classList.remove('selecting');
-  }
+  for (const d of stage.querySelectorAll('.textLayer.selecting')) d.classList.remove('selecting');
 }
 
 ['pointerup', 'pointercancel'].forEach((ev) => document.addEventListener(ev, resetSelectingTextLayers));
@@ -408,48 +401,17 @@ document.addEventListener('keyup', () => { if (!document.getSelection()?.toStrin
 
 document.addEventListener('selectionchange', () => {
   const selection = document.getSelection();
-  if (!selection || selection.rangeCount === 0 || selection.isCollapsed) { resetSelectingTextLayers(); return; }
-  const range = selection.getRangeAt(0);
-  let currentLayer = null;
-  for (const tl of stage.querySelectorAll('.textLayer')) {
-    if (range.intersectsNode(tl)) { tl.classList.add('selecting'); currentLayer = tl; }
-    else if (tl.classList.contains('selecting')) {
-      const end = tl.querySelector('.endOfContent');
-      if (end) { tl.append(end); end.style.width = end.style.height = end.style.userSelect = ''; }
-      tl.classList.remove('selecting');
+  if (!selection || selection.rangeCount === 0 || selection.isCollapsed) {
+    resetSelectingTextLayers();
+    return;
+  }
+  for (let i = 0; i < selection.rangeCount; i++) {
+    const range = selection.getRangeAt(i);
+    for (const tl of stage.querySelectorAll('.textLayer')) {
+      if (range.intersectsNode(tl)) tl.classList.add('selecting');
+      else tl.classList.remove('selecting');
     }
   }
-  if (!currentLayer) return;
-
-  const modifyStart = prevSelectionRange && (
-    range.compareBoundaryPoints(3 /* END_TO_END */, prevSelectionRange) === 0 ||
-    range.compareBoundaryPoints(1 /* START_TO_END */, prevSelectionRange) === 0
-  );
-
-  let anchor = modifyStart ? range.startContainer : range.endContainer;
-  if (anchor?.nodeType === 3) anchor = anchor.parentNode;
-  if (anchor?.classList?.contains('highlight')) anchor = anchor.parentNode;
-
-  if (!modifyStart && range.endOffset === 0 && anchor) {
-    while (anchor && !anchor.previousSibling && anchor.parentElement?.classList?.contains('textLayer') === false) {
-      anchor = anchor.parentNode;
-    }
-    if (anchor?.previousSibling) {
-      anchor = anchor.previousSibling;
-      while (anchor?.lastChild) anchor = anchor.lastChild;
-    }
-  }
-
-  const parentLayer = anchor?.parentElement?.closest('.textLayer');
-  const endDiv = parentLayer?.querySelector('.endOfContent');
-  if (endDiv && anchor?.parentElement) {
-    endDiv.style.width = parentLayer.style.width || '100%';
-    endDiv.style.height = parentLayer.style.height || '100%';
-    endDiv.style.userSelect = 'text';
-    anchor.parentElement.insertBefore(endDiv, modifyStart ? anchor : anchor.nextSibling);
-  }
-
-  prevSelectionRange = range.cloneRange();
 });
 
 async function updateText(s, token) {
