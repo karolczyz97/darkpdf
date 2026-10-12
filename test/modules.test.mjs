@@ -222,7 +222,7 @@ test('sw.js: moduły w CORE i podbita wersja CACHE', () => {
   assert.ok(swJs.includes("'doc-history.js'"), 'sw.js powinien cacheować doc-history.js');
   assert.ok(swJs.includes("'doc-loader.js'"), 'sw.js powinien cacheować doc-loader.js');
   assert.ok(swJs.includes("'input.js'"), 'sw.js powinien cacheować input.js');
-  assert.ok(swJs.includes("CACHE = 'darkpdf-v12'"), 'sw.js powinien mieć podbitą wersję CACHE (v12)');
+  assert.ok(/CACHE = 'darkpdf-v1[3-9]'/.test(swJs), 'sw.js powinien mieć podbitą wersję CACHE (v13+)');
 });
 
 test('viewer.css: fallback dla przeglądarek bez Anchor Positioning', () => {
@@ -244,6 +244,62 @@ test('input.js: funkcja resetCursor usuwa klasę nocursor', async () => {
   resetCursor();
   assert.equal(removed, 'nocursor');
   delete globalThis.document;
+});
+
+test('input.js: kliknięcie poza #stage (np. w kalkulatorze) nie wywołuje showMenu ani hideMenu', async () => {
+  const { initInput } = await import('../input.js');
+  let showCalled = false, hideCalled = false;
+  const stageEl = { id: 'stage' };
+  const listeners = {};
+  const origWindow = globalThis.window;
+  const origDoc = globalThis.document;
+  globalThis.window = {
+    addEventListener: (ev, fn) => { listeners[ev] = fn; },
+    getSelection: () => ''
+  };
+  globalThis.document = {
+    getElementById: (id) => (id === 'stage' ? stageEl : null),
+    documentElement: { classList: { remove: () => {} } }
+  };
+
+  initInput({
+    isPdfLoaded: () => true,
+    isPageInputFocused: () => false,
+    stage: stageEl,
+    isMobile: () => false,
+    isPinned: () => false,
+    isMenuHidden: () => true,
+    showMenu: () => { showCalled = true; },
+    hideMenu: () => { hideCalled = true; },
+    scheduleHide: () => {}
+  });
+
+  const clickFn = listeners['click'];
+  assert.ok(clickFn, 'Powinien być zarejestrowany listener click na window');
+
+  // Kliknięcie w element kalkulatora (poza #stage)
+  const calcBtn = {
+    closest: (sel) => null,
+    matches: (sel) => false
+  };
+  clickFn({
+    target: calcBtn,
+    composedPath: () => [calcBtn],
+    detail: 1
+  });
+  assert.equal(showCalled, false, 'Kliknięcie poza #stage nie powinno otworzyć menu');
+  assert.equal(hideCalled, false, 'Kliknięcie poza #stage nie powinno zamknąć menu');
+
+  // Kliknięcie wewnątrz #stage
+  clickFn({
+    target: stageEl,
+    composedPath: () => [stageEl],
+    detail: 1
+  });
+  assert.equal(showCalled, true, 'Kliknięcie wewnątrz #stage powinno wywołać showMenu');
+
+  if (origWindow) globalThis.window = origWindow; else delete globalThis.window;
+  if (origDoc) globalThis.document = origDoc; else delete globalThis.document;
 });
 
 test('calc-panel.js: preferencja calcOpen zapisywana tylko przy akcji użytkownika', async () => {

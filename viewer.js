@@ -585,7 +585,8 @@ function act(k) {
 window.addEventListener('dblclick', (e) => {
   if (window.matchMedia?.('(pointer: coarse) and not (pointer: fine)')?.matches && isMobile()) return;
   if (!pdf) return;
-  if (e.target?.closest?.('#calc-sidebar, #calc-resizer, #pw-dialog')) return;
+  const sel = '#menu, #menu-popover, #calc-sidebar, #calc-resizer, #pw-dialog, button';
+  if (e.target?.closest?.(sel) || (typeof e.composedPath === 'function' && e.composedPath().some((el) => el?.matches?.(sel)))) return;
   hideMenu(true);
   act('full');
 });

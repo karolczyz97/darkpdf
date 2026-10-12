@@ -116,6 +116,11 @@ export function initInput(ctx) {
   window.addEventListener('click', (e) => {
     if (!ctx.isPdfLoaded()) return;
     if (String(window.getSelection())) return;
+    const stage = ctx.stage || (typeof document !== 'undefined' ? document.getElementById('stage') : null);
+    if (!stage) return;
+    const isStageClick = e.target?.closest?.('#stage') ||
+      (typeof e.composedPath === 'function' && e.composedPath().some((el) => el === stage));
+    if (!isStageClick) return;
     if (isIgnoredTarget(e)) return;
     if (e.detail >= 2) return;
     // Telefon: stuknięcie w lewą / prawą część strony przewraca, środek otwiera pasek.

@@ -16,6 +16,8 @@ test('viewer.css zawiera poprawne reguły dla .textLayer i obrotów stron', () =
   assert.ok(css.includes('[data-main-rotation="180"]'), 'CSS powinien obsługiwać obrót 180 stopni');
   assert.ok(css.includes('[data-main-rotation="270"]'), 'CSS powinien obsługiwać obrót 270 stopni');
   assert.ok(css.includes('.textLayer br::selection') && css.includes('transparent !important'), 'br::selection powinien być transparentny w każdym motywie');
+  assert.ok(!css.includes('.textLayer br::selection,\nhtml.dark .textLayer br::selection,\nhtml.gemini .textLayer br::selection,\n.textLayer br::-moz-selection'), '::-moz-selection nie może być w tej samej liście selektorów co ::selection');
+  assert.ok(css.includes('.textLayer br {') && css.includes('width: 0;') && css.includes('height: 0;'), '.textLayer br powinien mieć zerowe wymiary');
 });
 
 test('viewer.js przekazuje --scale-factor, przesunięcia cięcia i obrót do TextLayer', () => {
