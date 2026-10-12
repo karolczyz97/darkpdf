@@ -276,7 +276,22 @@ export async function openLocal(f) {
   openDocument({ data }, { name: f.name, key: `local:${f.name}:${f.size}`, blob: f, req });
 }
 
-export function pickFile() {
+export async function pickFile() {
+  if (typeof window !== 'undefined' && 'showOpenFilePicker' in window) {
+    try {
+      const [handle] = await window.showOpenFilePicker({
+        types: [{ description: 'Pliki PDF', accept: { 'application/pdf': ['.pdf'] } }],
+        multiple: false
+      });
+      if (handle) {
+        const file = await handle.getFile();
+        await openLocal(file);
+        return;
+      }
+    } catch (err) {
+      if (err?.name === 'AbortError') return;
+    }
+  }
   if (!picker) return;
   picker.value = '';
   picker.click();

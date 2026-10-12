@@ -232,11 +232,6 @@ html.dark .textLayer br::selection,
 html.gemini .textLayer br::selection {
   background: transparent !important;
 }
-.textLayer br::-moz-selection,
-html.dark .textLayer br::-moz-selection,
-html.gemini .textLayer br::-moz-selection {
-  background: transparent !important;
-}
 .textLayer .endOfContent {
   display: block; position: absolute; inset: 100% 0 0; z-index: -1; cursor: default;
   user-select: none; -webkit-user-select: none;
@@ -261,11 +256,10 @@ html.gemini .textLayer br::-moz-selection {
 .menu-nav { anchor-name: --menu-nav; }
 .menu-popover {
   position: fixed;
+  position-anchor: --menu-nav;
+  position-area: top;
+  margin: 0 0 8px 0;
   inset: auto;
-  bottom: calc(64px + env(safe-area-inset-bottom, 0px));
-  left: 50%;
-  transform: translate(-50%, 0);
-  margin: 0;
   max-height: calc(100dvh - 84px);
   overflow-y: auto;
   width: 270px;
@@ -277,29 +271,33 @@ html.gemini .textLayer br::-moz-selection {
   border: 1px solid var(--ui-line);
   box-shadow: 0 10px 32px rgba(0, 0, 0, .55), 0 2px 8px rgba(0, 0, 0, .35);
   backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
   display: flex;
   flex-direction: column;
   gap: 2px;
   transform-origin: bottom center;
   transition: opacity .16s ease, transform .16s ease, display .16s allow-discrete, overlay .16s allow-discrete;
 }
-.menu-popover:not(:popover-open) { opacity: 0; transform: translate(-50%, 6px); }
-@starting-style { .menu-popover:popover-open { opacity: 0; transform: translate(-50%, 6px); } }
-
-html.calc-open .menu-popover {
-  left: calc((100vw + var(--calc-w) + var(--resizer-w)) / 2);
-}
-html.mobile .menu-popover {
-  bottom: calc(74px + env(safe-area-inset-bottom, 0px));
-}
-html.mobile.calc-open .menu-popover {
-  left: 50%;
-}
+.menu-popover:not(:popover-open) { opacity: 0; transform: translateY(6px); }
+@starting-style { .menu-popover:popover-open { opacity: 0; transform: translateY(6px); } }
 
 @supports not ((position-area: top) or (inset-area: top)) {
   .menu-popover {
+    bottom: calc(64px + env(safe-area-inset-bottom, 0px));
+    left: 50%;
+    transform: translate(-50%, 0);
     margin: 0 auto;
+  }
+  .menu-popover:not(:popover-open) { opacity: 0; transform: translate(-50%, 6px); }
+  @starting-style { .menu-popover:popover-open { opacity: 0; transform: translate(-50%, 6px); } }
+
+  html.calc-open .menu-popover {
+    left: calc((100vw + var(--calc-w) + var(--resizer-w)) / 2);
+  }
+  html.mobile .menu-popover {
+    bottom: calc(74px + env(safe-area-inset-bottom, 0px));
+  }
+  html.mobile.calc-open .menu-popover {
+    left: 50%;
   }
 }
 
@@ -388,7 +386,6 @@ html.mobile.calc-open .menu-popover {
   border: 1px solid var(--ui-line);
   box-shadow: 0 4px 18px rgba(0, 0, 0, .45);
   backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
   font: 13px var(--ui-font);
   color: var(--ui-text);
   box-sizing: border-box;
