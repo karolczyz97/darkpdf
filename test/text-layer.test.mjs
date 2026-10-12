@@ -15,6 +15,7 @@ test('viewer.css zawiera poprawne reguły dla .textLayer i obrotów stron', () =
   assert.ok(css.includes('[data-main-rotation="90"]'), 'CSS powinien obsługiwać obrót 90 stopni');
   assert.ok(css.includes('[data-main-rotation="180"]'), 'CSS powinien obsługiwać obrót 180 stopni');
   assert.ok(css.includes('[data-main-rotation="270"]'), 'CSS powinien obsługiwać obrót 270 stopni');
+  assert.ok(css.includes('.textLayer br::selection') && css.includes('transparent !important'), 'br::selection powinien być transparentny w każdym motywie');
 });
 
 test('viewer.js przekazuje --scale-factor, przesunięcia cięcia i obrót do TextLayer', () => {
