@@ -388,14 +388,68 @@ async function textLayerFor(n, scale) {
   const end = document.createElement('div');
   end.className = 'endOfContent';
   div.append(end);
-  div.addEventListener('pointerdown', () => div.classList.add('selecting'));
   return tlCache.set(k, div);
 }
 
-['pointerup', 'pointercancel'].forEach((ev) => {
-  document.addEventListener(ev, () => {
-    for (const d of stage.querySelectorAll('.textLayer.selecting')) d.classList.remove('selecting');
-  });
+let prevSelectionRange = null;
+
+function resetSelectingTextLayers() {
+  prevSelectionRange = null;
+  for (const d of stage.querySelectorAll('.textLayer.selecting')) {
+    const end = d.querySelector('.endOfContent');
+    if (end) { d.append(end); end.style.width = end.style.height = end.style.userSelect = ''; }
+    d.classList.remove('selecting');
+  }
+}
+
+['pointerup', 'pointercancel'].forEach((ev) => document.addEventListener(ev, resetSelectingTextLayers));
+window.addEventListener('blur', resetSelectingTextLayers);
+document.addEventListener('keyup', () => { if (!document.getSelection()?.toString()) resetSelectingTextLayers(); });
+
+document.addEventListener('selectionchange', () => {
+  const selection = document.getSelection();
+  if (!selection || selection.rangeCount === 0 || selection.isCollapsed) { resetSelectingTextLayers(); return; }
+  const range = selection.getRangeAt(0);
+  let currentLayer = null;
+  for (const tl of stage.querySelectorAll('.textLayer')) {
+    if (range.intersectsNode(tl)) { tl.classList.add('selecting'); currentLayer = tl; }
+    else if (tl.classList.contains('selecting')) {
+      const end = tl.querySelector('.endOfContent');
+      if (end) { tl.append(end); end.style.width = end.style.height = end.style.userSelect = ''; }
+      tl.classList.remove('selecting');
+    }
+  }
+  if (!currentLayer) return;
+
+  const modifyStart = prevSelectionRange && (
+    range.compareBoundaryPoints(3 /* END_TO_END */, prevSelectionRange) === 0 ||
+    range.compareBoundaryPoints(1 /* START_TO_END */, prevSelectionRange) === 0
+  );
+
+  let anchor = modifyStart ? range.startContainer : range.endContainer;
+  if (anchor?.nodeType === 3) anchor = anchor.parentNode;
+  if (anchor?.classList?.contains('highlight')) anchor = anchor.parentNode;
+
+  if (!modifyStart && range.endOffset === 0 && anchor) {
+    while (anchor && !anchor.previousSibling && anchor.parentElement?.classList?.contains('textLayer') === false) {
+      anchor = anchor.parentNode;
+    }
+    if (anchor?.previousSibling) {
+      anchor = anchor.previousSibling;
+      while (anchor?.lastChild) anchor = anchor.lastChild;
+    }
+  }
+
+  const parentLayer = anchor?.parentElement?.closest('.textLayer');
+  const endDiv = parentLayer?.querySelector('.endOfContent');
+  if (endDiv && anchor?.parentElement) {
+    endDiv.style.width = parentLayer.style.width || '100%';
+    endDiv.style.height = parentLayer.style.height || '100%';
+    endDiv.style.userSelect = 'text';
+    anchor.parentElement.insertBefore(endDiv, modifyStart ? anchor : anchor.nextSibling);
+  }
+
+  prevSelectionRange = range.cloneRange();
 });
 
 async function updateText(s, token) {
@@ -675,47 +729,24 @@ initCalcPanel({
 });
 
 initMenuBar({
-  pref,
-  isPdfLoaded: () => Boolean(pdf),
-  getNumPages: () => numPages,
-  getSpreadLabel: () => spreadLabel(),
-  getSpreadStartOf: (p) => spreadStartOf(p),
-  getCurrentStart: () => start,
-  goToSpread: (s) => go(s),
-  onAction: (k) => act(k),
-  isCalcOpen,
-  getFitMode: () => fitMode,
-  getTwo: () => two,
-  showTwo: () => showTwo(),
-  getPairing: () => pairing,
-  getCrop: () => crop,
-  getColorMode,
-  getColorLabel: (m) => COLOR_LABELS[m],
-  getPalette,
-  getPaletteLabel: (p) => PALETTE_LABELS[p],
-  isPortraitPhone,
-  flash
+  pref, flash, isCalcOpen, isPortraitPhone,
+  isPdfLoaded: () => Boolean(pdf), getNumPages: () => numPages,
+  getSpreadLabel: () => spreadLabel(), getSpreadStartOf: (p) => spreadStartOf(p),
+  getCurrentStart: () => start, goToSpread: (s) => go(s), onAction: (k) => act(k),
+  getFitMode: () => fitMode, getTwo: () => two, showTwo: () => showTwo(),
+  getPairing: () => pairing, getCrop: () => crop,
+  getColorMode, getColorLabel: (m) => COLOR_LABELS[m],
+  getPalette, getPaletteLabel: (p) => PALETTE_LABELS[p]
 });
 
 initDocHistory({
-  isPdfLoaded: () => Boolean(pdf),
-  getFileKey: () => fileKey,
-  closeDocument,
-  setEmpty,
-  openUrl,
-  openStored
+  isPdfLoaded: () => Boolean(pdf), getFileKey: () => fileKey,
+  closeDocument, setEmpty, openUrl, openStored
 });
 
 initDocLoader({
-  PDFJS,
-  pdfjsLib,
-  flash,
-  hideHint,
+  PDFJS, pdfjsLib, flash, hideHint, closeDocument, isCalcOpen, setCalcOpen, resetCursor,
   isPdfLoaded: () => Boolean(pdf),
-  closeDocument,
-  isCalcOpen,
-  setCalcOpen,
-  resetCursor,
   onDocumentReady: async ({ doc, name, key, page, blob, layoutHint }) => {
     pdf?.destroy();
     pdf = doc;
@@ -748,35 +779,11 @@ initDocLoader({
 });
 
 initInput({
-  isPdfLoaded: () => Boolean(pdf),
-  isMobile,
-  isPopoverOpen,
-  setPopoverOpen,
-  isMenuHidden,
-  isPinned,
-  hideMenu,
-  showMenu,
-  scheduleHide,
-  isCalcOpen,
-  setCalcOpen,
-  goHome,
-  getLastRecent,
-  openRecent,
-  focusPageInputWithDigit,
-  isPageInputFocused,
-  pickFile,
-  act,
-  next,
-  prev,
-  flip,
-  go,
-  toggleMark,
-  flash,
-  getSpreadStartOf: (p) => spreadStartOf(p),
-  getNumPages: () => numPages,
-  getFitMode: () => fitMode,
-  stage,
-  isPasswordOpen
+  isPdfLoaded: () => Boolean(pdf), isMobile, isPopoverOpen, setPopoverOpen,
+  isMenuHidden, isPinned, hideMenu, showMenu, scheduleHide, isCalcOpen, setCalcOpen,
+  goHome, getLastRecent, openRecent, focusPageInputWithDigit, isPageInputFocused,
+  pickFile, act, next, prev, flip, go, toggleMark, flash, stage, isPasswordOpen,
+  getSpreadStartOf: (p) => spreadStartOf(p), getNumPages: () => numPages, getFitMode: () => fitMode
 });
 
 openFromHash();

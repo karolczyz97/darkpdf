@@ -156,7 +156,7 @@ html.fit-height #stage::-webkit-scrollbar {
 }
 #stage .page, #stage .blank { display: block; flex: none; position: relative; overflow: hidden; }
 /* Strony bez zaokrągleń rogów i bez cienia – brak szpar */
-#stage .page { border-radius: 0; user-select: text; -webkit-user-select: text; }
+#stage .page { border-radius: 0; user-select: none; -webkit-user-select: none; }
 #stage canvas { display: block; background: #fff; box-shadow: none; }
 #stage .blank { visibility: hidden; }
 
@@ -239,7 +239,7 @@ html.gemini .textLayer br::-moz-selection {
 }
 .textLayer .endOfContent {
   display: block; position: absolute; inset: 100% 0 0; z-index: -1; cursor: default;
-  user-select: none; -webkit-user-select: none; pointer-events: none;
+  user-select: none; -webkit-user-select: none;
 }
 .textLayer.selecting .endOfContent { top: 0; }
 
