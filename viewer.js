@@ -132,9 +132,13 @@ let layoutGen = 0;
 const rotationOf = (page) => (page.rotate + rot + 360) % 360;
 async function pageBox(n) {
   if (!pdf || !n || n < 1 || n > pdf.numPages) return null;
+  const cached = sizeCache.get(n);
+  if (cached) return cached;
   const page = await pdf.getPage(n);
   const vp = page.getViewport({ scale: 1, rotation: rotationOf(page) });
-  return { w: vp.width, h: vp.height };
+  const box = { w: vp.width, h: vp.height };
+  sizeCache.set(n, box);
+  return box;
 }
 
 function clearRenderCaches() {
