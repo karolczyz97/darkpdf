@@ -152,7 +152,9 @@ export function initCalcPanel(context) {
 
   sidebar = document.getElementById('calc-sidebar');
   sidebar.inert = true;
+  sidebar.addEventListener('click', (e) => e.stopPropagation());
   const resizer = document.getElementById('calc-resizer');
+  resizer.addEventListener('click', (e) => e.stopPropagation());
   calcContainer = document.getElementById('calc-container');
 
   applyCalcWidth(ctx.pref.get('calcWidth', 440));

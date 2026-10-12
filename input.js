@@ -107,10 +107,16 @@ export function initInput(ctx) {
   });
 
   // ---------- kliknięcia i stuknięcia w stronę ----------
+  const isIgnoredTarget = (e) => {
+    const sel = '#menu, #menu-popover, #calc-sidebar, #calc-resizer, #pw-dialog, button';
+    if (e.target?.closest?.(sel)) return true;
+    return typeof e.composedPath === 'function' && e.composedPath().some((el) => el?.matches?.(sel));
+  };
+
   window.addEventListener('click', (e) => {
     if (!ctx.isPdfLoaded()) return;
     if (String(window.getSelection())) return;
-    if (e.target?.closest?.('#menu, #menu-popover, #calc-sidebar, #calc-resizer, #pw-dialog')) return;
+    if (isIgnoredTarget(e)) return;
     if (e.detail >= 2) return;
     // Telefon: stuknięcie w lewą / prawą część strony przewraca, środek otwiera pasek.
     // Przybliżona strona przewija się palcem – wtedy stuknięcie tylko otwiera pasek.
@@ -130,7 +136,7 @@ export function initInput(ctx) {
   let lastWheel = 0, notch = 100, acc = 0;
   window.addEventListener('wheel', (e) => {
     if (e.ctrlKey) return;
-    if (e.target?.closest?.('#menu, #menu-popover, #calc-sidebar, #calc-resizer, #pw-dialog')) return;
+    if (isIgnoredTarget(e)) return;
     if (!ctx.isPdfLoaded()) return;
 
     const stage = ctx.stage;
@@ -174,7 +180,7 @@ export function initInput(ctx) {
   let swipe = null;
   window.addEventListener('touchstart', (e) => {
     swipe = null;
-    if (e.touches.length !== 1 || e.target?.closest?.('#menu, #menu-popover, #calc-sidebar, #calc-resizer, #pw-dialog')) return;
+    if (e.touches.length !== 1 || isIgnoredTarget(e)) return;
     const t = e.touches[0];
     const stage = ctx.stage;
     swipe = {
