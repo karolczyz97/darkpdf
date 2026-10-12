@@ -6,14 +6,14 @@ const SWIPE_PX = 50;          // tyle px ruchu palca to już przesunięcie, a ni
 const SWIPE_MS = 700;         // dłuższy ruch to przewijanie albo zaznaczanie, nie przewracanie
 
 const KEY_ACTIONS = {
-  d: 'dark', t: 'theme', p: 'pages', o: 'pairing', f: 'full', c: 'crop', r: 'rotate',
+  d: 'dark', t: 'theme', p: 'pages', o: 'pairing', f: 'full', r: 'rotate',
   k: 'calc', w: 'fit-w', h: 'fit-h', m: 'toggle-menu'
 };
 
 const HELP = 'Esc  strona główna\n→ ↓ Spacja PgDn  następne\n← ↑ PgUp  poprzednie\nHome / End  początek / koniec\n' +
   'numer (lub Enter)  skok do strony\nShift + strzałka / scroll  skok o 10\nB  zakładka na tej stronie\n' +
   'M  menu opcji\nK  kalkulator z boku\nW  zablokuj szerokość 100%\nH  zablokuj wysokość 100%\n' +
-  'C  przycinanie marginesów\nR  obrót o 90°\n' +
+  'R  obrót o 90°\n' +
   'P  jedna / dwie strony\nD  tryb: ciemny / jasny / auto\nT  motyw: Gemini / systemowy\nO  pary nieparzyste / parzyste\n' +
   'F  pełny ekran\ndwuklik  pełny ekran\nCtrl+O  otwórz plik\nkliknięcie  pasek z przyciskami';
 

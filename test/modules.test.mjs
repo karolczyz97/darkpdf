@@ -409,7 +409,6 @@ test('menu-bar.js: buttonMap buforuje elementy przycisków i preferuje pozycje z
     getTwo: () => true,
     showTwo: () => true,
     getPairing: () => 'odd',
-    getCrop: () => true,
     isPortraitPhone: () => false
   };
   initMenuBar(mockCtx);

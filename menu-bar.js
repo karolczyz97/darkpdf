@@ -100,8 +100,7 @@ export function updateMenu() {
     ['pages', ctx.getTwo() ? 'Jedna strona' : 'Dwie strony'],
     ['pairing', ctx.getPairing() === 'odd' ? 'Pary 1–2' : 'Pary 1, 2–3'],
     ['dark', ctx.getColorLabel(colorMode)],
-    ['theme', ctx.getPaletteLabel(palette)],
-    ['crop', ctx.getCrop() ? 'Z marginesami' : 'Przytnij marginesy']
+    ['theme', ctx.getPaletteLabel(palette)]
   ];
   for (const [k, text, active] of labels) {
     const item = buttonMap?.get(k);

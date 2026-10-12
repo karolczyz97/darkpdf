@@ -1,7 +1,6 @@
 // viewer.js – czytnik DarkPDF: stan dokumentu, renderowanie stron, układ rozkładówek i koordynacja modułów.
 // Moduły składowe:
 // - layout.js: geometria rozkładówek, dopasowanie i wykrywanie układu
-// - crop.js: silnik badania marginesów stron
 // - library.js: IndexedDB i pamięć ostatnio czytanych pozycji
 // - calc-panel.js: boczny kalkulator naukowy
 // - theme.js: tryby ciemny/jasny, motyw Gemini i filtry SVG
@@ -17,7 +16,6 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = PDFJS + 'build/pdf.worker.min.mjs';
 
 import { pref, lru } from './util.js';
 import * as geo from './layout.js';
-import { createCropper } from './crop.js';
 import { toggleBookmark } from './library.js';
 import {
   initCalcPanel,
@@ -105,7 +103,6 @@ const showTwo = () => two && !isPortraitPhone();
 let lastMobileState = isMobile();
 document.documentElement.classList.toggle('mobile', isMobile());
 
-let crop = pref.get('crop', true);         // przycinanie białych marginesów
 let rot = 0;                               // obrót stron: 0, 90, 180, 270
 let pairing = 'odd';                       // 'odd' = 1–2, 3–4…   'even' = 1, 2–3, 4–5…
 let pdf = null, numPages = 0, start = 1;
@@ -122,7 +119,7 @@ applyFitClasses();
 // ---------- pamięć podręczna ----------
 const releaseCanvas = (c) => setTimeout(() => { if (!c.isConnected) { c.width = 0; c.height = 0; } }, 1000);
 
-const sizeCache = lru();             // nr strony -> obszar do pokazania
+const sizeCache = lru();             // nr strony -> rozmiar strony { w, h }
 const canvasCache = lru(() => (isMobile() ? CACHE_MAX_MOBILE : CACHE_MAX), releaseCanvas);   // klucz -> gotowa strona
 const loCache = lru(LO_CACHE_MAX, releaseCanvas);   // klucz -> szybki podgląd
 const tlCache = lru(CACHE_MAX);      // klucz -> warstwa tekstowa
@@ -132,14 +129,13 @@ const pending = new Map();           // klucz -> trwające renderowanie { promis
 
 let layoutGen = 0;
 
-const cropper = createCropper({
-  doc: () => pdf,
-  rotation: () => rot,
-  enabled: () => crop,
-  onRefine: () => { sizeCache.clear(); clearRenderCaches(); show(start); }   // dokładniejsze cięcie z pełnej próbki
-});
-const pageBox = (n) => cropper.pageBox(n);
-const rotationOf = (page) => cropper.rotationOf(page);
+const rotationOf = (page) => (page.rotate + rot + 360) % 360;
+async function pageBox(n) {
+  if (!pdf || !n || n < 1 || n > pdf.numPages) return null;
+  const page = await pdf.getPage(n);
+  const vp = page.getViewport({ scale: 1, rotation: rotationOf(page) });
+  return { w: vp.width, h: vp.height };
+}
 
 function clearRenderCaches() {
   layoutGen++;
@@ -156,7 +152,6 @@ function rerenderSoon(ms = 120) {
 
 function resetLayout() {
   sizeCache.clear();
-  cropper.reset();
   clearRenderCaches();
 }
 
@@ -238,8 +233,7 @@ function renderPage(n, scale, q = 1) {
     const b = await pageBox(n);
     check();
     const vp = page.getViewport({
-      scale: scale * dpr, rotation: rotationOf(page),
-      offsetX: -b.x * scale * dpr, offsetY: -b.y * scale * dpr
+      scale: scale * dpr, rotation: rotationOf(page)
     });
     const canvas = document.createElement('canvas');
     canvas.width = Math.max(1, Math.floor(b.w * scale * dpr));
@@ -371,13 +365,8 @@ async function textLayerFor(n, scale) {
   div.className = 'textLayer';
 
   const tc = await textContent(n);
-  const b = await pageBox(n);
   const vp = page.getViewport({ scale, rotation: rotationOf(page) });
-  const bx = b?.x || 0;
-  const by = b?.y || 0;
   div.style.setProperty('--scale-factor', String(scale));
-  div.style.left = (-bx * scale) + 'px';
-  div.style.top = (-by * scale) + 'px';
 
   await new pdfjsLib.TextLayer({
     textContentSource: tc,
@@ -556,12 +545,6 @@ function act(k) {
     case 'full':
       toggleFullscreen();
       break;
-    case 'crop':
-      crop = !crop;
-      pref.set('crop', crop);
-      flash(crop ? 'Marginesy przycięte' : 'Pełne strony');
-      relayout();
-      break;
     case 'rotate':
       rot = (rot + 90) % 360;
       pref.set('rot:' + fileKey, rot);
@@ -696,7 +679,7 @@ initMenuBar({
   getSpreadLabel: () => spreadLabel(), getSpreadStartOf: (p) => spreadStartOf(p),
   getCurrentStart: () => start, goToSpread: (s) => go(s), onAction: (k) => act(k),
   getFitMode: () => fitMode, getTwo: () => two, showTwo: () => showTwo(),
-  getPairing: () => pairing, getCrop: () => crop,
+  getPairing: () => pairing,
   getColorMode, getColorLabel: (m) => COLOR_LABELS[m],
   getPalette, getPaletteLabel: (p) => PALETTE_LABELS[p]
 });

@@ -1,6 +1,6 @@
 # DarkPDF
 
-Minimalny czytnik PDF: dwie strony obok siebie, tryb ciemny, przycinanie marginesów, kalkulator z boku.
+Minimalny czytnik PDF: dwie strony obok siebie, tryb ciemny, kalkulator z boku.
 Działa jako strona na GitHub Pages (https://karolczyz97.github.io/darkpdf/), także offline.
 
 ## Praca lokalna
@@ -22,8 +22,7 @@ npm test      # testy geometrii czytnika (Node 20+)
 | Plik | Co robi |
 |---|---|
 | `viewer.js` | stan dokumentu, renderowanie stron, otwieranie plików, menu, klawisze i gesty |
-| `layout.js` | czysta geometria: rozkładówki, skala, wspólne przycięcie marginesów (testowana) |
-| `crop.js` | wykrywanie marginesów na miniaturach stron |
+| `layout.js` | czysta geometria: rozkładówki i skala strony (testowana) |
 | `library.js` | ostatnio otwierane pliki (IndexedDB) i zakładki |
 | `calc-panel.js` | panel kalkulatora i rozdzielacz |
 | `util.js` | ustawienia w localStorage, pamięć LRU |

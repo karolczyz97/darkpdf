@@ -3,8 +3,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   spreadStartOf, spreadOf, nextStart, prevStart, spreadLabel, pickScale, fitSpread, heightFitWidth,
-  isFullBleed, cutsContent, cropCandidatePages, commonBox, contentBounds, paperColor,
-  inferPairing, inferTwoPages
+  paperColor, inferPairing, inferTwoPages
 } from '../layout.js';
 import { lru, mapConcurrent } from '../util.js';
 
@@ -108,61 +107,6 @@ test('szerokość PDF-a dopasowanego do wysokości (panel kalkulatora)', () => {
   assert.equal(heightFitWidth(null, null, { H: 400, two: true, gap: 4 }), null);
 });
 
-const FULL = { width: 600, height: 800 };
-const box = (x, y, r, bt) => ({ x, y, r, bt });
-
-test('strona na całą stronę i ucinanie treści', () => {
-  assert.ok(isFullBleed(box(0, 0, 600, 800), FULL));
-  assert.ok(!isFullBleed(box(50, 50, 550, 750), FULL));
-  const common = { x: 50, y: 50, w: 500, h: 700 };
-  assert.ok(!cutsContent(box(55, 60, 545, 740), common, FULL));
-  assert.ok(!cutsContent(box(45, 45, 555, 755), common, FULL));   // w tolerancji 1,5%
-  assert.ok(cutsContent(box(10, 60, 545, 740), common, FULL));    // rysunek w lewym marginesie
-  assert.ok(cutsContent(box(0, 0, 600, 800), common, FULL));      // zdjęcie na całą stronę
-});
-
-test('strony do ustalenia wspólnego przycięcia', () => {
-  assert.deepEqual(cropCandidatePages(3, 0, 28), []);
-  assert.deepEqual(cropCandidatePages(3, 10, 28), [1, 3, 5, 7, 9]);
-  assert.deepEqual(cropCandidatePages(2, 10, 28), [2, 4, 6, 8, 10]);
-  assert.deepEqual(cropCandidatePages(1, 1, 28), [1]);
-  assert.deepEqual(cropCandidatePages(50, 10, 28), [2, 4, 6, 8, 10]);   // numer spoza dokumentu
-  const pages = cropCandidatePages(500, 1000, 28);
-  assert.equal(pages.length, 28);
-  assert.ok(pages.every((p) => p % 2 === 0 && p >= 1 && p <= 1000));
-  assert.deepEqual(pages, [...new Set(pages)].sort((a, b) => a - b));
-  for (const p of [498, 500, 502]) assert.ok(pages.includes(p));      // sąsiedztwo bieżącej strony
-  assert.ok(pages[0] < 100 && pages.at(-1) > 900);                     // i cały dokument
-  assert.equal(cropCandidatePages(7, 1000, 6).length, 6);
-});
-
-test('wspólne pole treści grupy stron', () => {
-  assert.equal(commonBox([], FULL), null);
-  assert.equal(commonBox([null, null], FULL), null);
-  assert.deepEqual(commonBox([box(60, 70, 540, 730), box(50, 80, 550, 720)], FULL), { x: 50, y: 70, w: 500, h: 660 });
-  // okładka na całą stronę nie psuje przycięcia reszty
-  const normal = [box(60, 70, 540, 730), box(55, 75, 545, 725), box(58, 72, 542, 728)];
-  assert.deepEqual(commonBox([box(0, 0, 600, 800), ...normal], FULL), { x: 55, y: 70, w: 490, h: 660 });
-  // przy 10+ stronach jedna skrajna (pieczątka w marginesie) nie rozszerza przycięcia
-  const many = Array.from({ length: 12 }, () => box(60, 70, 540, 730));
-  many[3] = box(5, 70, 540, 730);
-  assert.deepEqual(commonBox(many, FULL), { x: 60, y: 70, w: 480, h: 660 });
-  // podejrzanie mało treści – lepiej nie przycinać
-  assert.equal(commonBox([box(280, 380, 320, 420)], FULL), null);
-});
-
-test('pole treści z pikseli miniatury', () => {
-  const W = 20, H = 10;
-  const img = () => new Uint8ClampedArray(W * H * 4).fill(255);
-  const dark = (d, x, y) => { const i = (y * W + x) * 4; d[i] = d[i + 1] = d[i + 2] = 0; };
-  const d = img();
-  for (let y = 2; y <= 5; y++) for (let x = 4; x <= 9; x++) dark(d, x, y);
-  assert.deepEqual(contentBounds(d, W, H, { step: 1 }), { x0: 4, x1: 9, y0: 2, y1: 5 });
-  assert.equal(contentBounds(img(), W, H, { step: 1 }), null);          // pusta strona
-  const dust = img();
-  dark(dust, 15, 8);                                                    // pojedyncza kropka ze skanu
-  assert.equal(contentBounds(dust, W, H, { step: 1 }), null);
-});
 
 test('kolor kartki do wyrównania przed odwróceniem kolorów', () => {
   const page = (fill) => {
