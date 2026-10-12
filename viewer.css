@@ -154,9 +154,10 @@ html.fit-height #stage {
 html.fit-height #stage::-webkit-scrollbar {
   display: none;
 }
-#stage .page, #stage .blank { display: block; flex: none; position: relative; overflow: hidden; }
-/* Strony bez zaokrągleń rogów i bez cienia – brak szpar */
+#stage .page, #stage .blank { display: block; flex: none; position: relative; overflow: hidden; margin: 0; }
+/* Strony bez zaokrągleń rogów i bez cienia – brak szpar (1px nałożenia eliminuje subpikselowe szpary w przeglądarce) */
 #stage .page { border-radius: 0; user-select: none; -webkit-user-select: none; }
+#stage .page.has-left { margin-left: -1px; }
 #stage canvas { display: block; background: #fff; box-shadow: none; }
 #stage .blank { visibility: hidden; }
 

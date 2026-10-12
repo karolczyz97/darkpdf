@@ -231,6 +231,12 @@ test('viewer.css: fallback dla przeglądarek bez Anchor Positioning', () => {
   assert.ok(css.includes('margin: 0 auto;'), 'viewer.css powinien zerować marginesy w fallbacku dla równego odstępu');
 });
 
+test('viewer.css: brak szpary między stronami w widoku dwóch stron (.has-left margin-left)', () => {
+  const css = readFileSync(new URL('../viewer.css', import.meta.url), 'utf8');
+  assert.ok(/\.has-left\s*\{\s*margin-left:\s*-1px;?\s*\}/.test(css), 'viewer.css powinien nakładać prawą stronę o 1px (.has-left) aby wyeliminować subpikselowe szpary');
+});
+
+
 test('input.js: funkcja resetCursor usuwa klasę nocursor', async () => {
   const { resetCursor } = await import('../input.js');
   let removed = null;
