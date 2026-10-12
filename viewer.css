@@ -501,7 +501,8 @@ html.empty #welcome { display: flex; }
   border: 1px dashed var(--ui-line); border-radius: 16px; background: rgba(255, 255, 255, .025);
   font: 14px/1.5 var(--ui-font); color: var(--ui-text);
 }
-#welcome.drag .card { border-color: var(--ui-accent); border-style: solid; background: var(--ui-accent-soft); }
+#welcome.drag .card, body.dragging-file #welcome .card { border-color: var(--ui-accent); border-style: solid; background: var(--ui-accent-soft); }
+body.dragging-file #stage { outline: 2px dashed var(--ui-accent); outline-offset: -6px; }
 #welcome .logo { font-size: 21px; font-weight: 600; letter-spacing: .04em; }
 #welcome .lead { margin: 8px 0 20px; color: var(--ui-text-dim); }
 #welcome .pick {

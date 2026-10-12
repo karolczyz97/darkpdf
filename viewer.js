@@ -74,7 +74,7 @@ import {
 import { initInput, resetCursor } from './input.js';
 
 // Pamięć podręczna aplikacji: po pierwszej wizycie czytnik otwiera się też offline
-if ('serviceWorker' in navigator && location.protocol === 'https:') {
+if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1')) {
   navigator.serviceWorker.register(new URL('sw.js', import.meta.url)).catch(() => {});
 }
 

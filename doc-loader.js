@@ -424,12 +424,33 @@ export function initDocLoader(context) {
   welcome = document.getElementById('welcome');
   welcome.querySelector('.pick').addEventListener('click', (e) => { e.stopPropagation(); pickFile(); });
 
-  window.addEventListener('dragover', (e) => { e.preventDefault(); welcome.classList.add('drag'); });
-  window.addEventListener('dragleave', () => welcome.classList.remove('drag'));
+  let dragCount = 0;
+  window.addEventListener('dragenter', (e) => {
+    if (e.dataTransfer?.types?.includes('Files')) {
+      e.preventDefault();
+      if (++dragCount === 1) {
+        welcome?.classList.add('drag');
+        document.body.classList.add('dragging-file');
+      }
+    }
+  });
+  window.addEventListener('dragover', (e) => {
+    if (e.dataTransfer?.types?.includes('Files')) e.preventDefault();
+  });
+  window.addEventListener('dragleave', () => {
+    if (--dragCount <= 0) {
+      dragCount = 0;
+      welcome?.classList.remove('drag');
+      document.body.classList.remove('dragging-file');
+    }
+  });
   window.addEventListener('drop', (e) => {
     e.preventDefault();
-    welcome.classList.remove('drag');
-    openLocal(e.dataTransfer.files[0]);
+    dragCount = 0;
+    welcome?.classList.remove('drag');
+    document.body.classList.remove('dragging-file');
+    const f = e.dataTransfer?.files?.[0];
+    if (f) openLocal(f);
   });
 
   window.addEventListener('hashchange', openFromHash);

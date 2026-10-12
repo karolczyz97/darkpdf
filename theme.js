@@ -82,6 +82,7 @@ export function applyTheme() {
     document.documentElement.classList.toggle('dark', isDark);
     document.documentElement.classList.toggle('gemini', isDark && palette === 'gemini');
     syncPageColors();
+    document.querySelector('meta[name="theme-color"]')?.setAttribute('content', isDark ? '#131314' : '#ffffff');
   }
   if (notifyChange) notifyChange();
 }
