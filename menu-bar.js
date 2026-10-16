@@ -14,7 +14,6 @@ let buttonMap = null;
 
 let pinned = pref.get('menuPinned', false);
 let popoverOpen = pref.get('popoverOpen', true);
-let lastMenuOpenTime = 0;
 let menuTimer = null;
 let pageJumpTimer = null;
 let digitTriggeredFocus = false;
@@ -22,13 +21,12 @@ let digitTriggeredFocus = false;
 export const isPinned = () => pinned;
 export const isPopoverOpen = () => popoverOpen;
 export const isMenuHidden = () => !menu || menu.hidden;
-export const getLastMenuOpenTime = () => lastMenuOpenTime;
 export const isPageInputFocused = () => (typeof document !== 'undefined' ? document.activeElement === pageInput : false);
 
 // Pasek chowa się po 2 s bezczynności, jeśli nie jest najechany ani zablokowany kłódką
 export function scheduleHide() {
   clearTimeout(menuTimer);
-  if (!menu || pinned || menu.hidden || menu.matches(':hover') || isPageInputFocused()) return;
+  if (!menu || pinned || menu.hidden || menu.matches(':hover, :focus-within')) return;
   menuTimer = setTimeout(hideMenu, 2000);
 }
 
@@ -41,7 +39,6 @@ export function hideMenu(force = false) {
 
 export function showMenu() {
   if (!menu || !ctx?.isPdfLoaded()) return;
-  lastMenuOpenTime = Date.now();
   menu.hidden = false;
   void menu?.offsetHeight;
   updateMenu();

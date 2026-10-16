@@ -17,6 +17,9 @@ const HELP = 'Esc  strona główna\n→ ↓ Spacja PgDn  następne\n← ↑ PgUp
   'P  jedna / dwie strony\nD  tryb: ciemny / jasny / auto\nT  motyw: Gemini / systemowy\nO  pary nieparzyste / parzyste\n' +
   'F  pełny ekran\ndwuklik  pełny ekran\nCtrl+O  otwórz plik\nkliknięcie  pasek z przyciskami';
 
+// Kontrolki, w których kliknięcia, kółko i gesty nie przewracają stron
+export const CONTROLS_SELECTOR = '#menu, #menu-popover, #calc-sidebar, #calc-resizer, #pw-dialog, button';
+
 export const zoomed = () => (typeof window !== 'undefined' ? (window.visualViewport?.scale || 1) > 1.01 : false);
 
 let cursorTimer = null;
@@ -50,9 +53,12 @@ export function initInput(ctx) {
     if (ctx.isPageInputFocused()) return;
     if (e.target?.closest?.('#pw-dialog')) return;
     if (e.target?.closest?.('#calc-sidebar') && e.key.length === 1 && !/^[a-z?]$/i.test(e.key)) return;   // cyfry i działania z panelu idą do kalkulatora
+    if (e.target?.closest?.('#calc-sidebar') && ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Home', 'End', 'PageUp', 'PageDown', 'Enter', 'Backspace'].includes(e.key)) return;
     if ((e.ctrlKey || e.metaKey) && (e.key === 'o' || e.key === 'O')) { e.preventDefault(); ctx.pickFile(); return; }
     if (e.ctrlKey || e.metaKey || e.altKey) return;
     const k = e.key;
+    // Spacja naciska przycisk wybrany Tabem; po kliknięciu myszą dalej przewraca stronę
+    if (k === ' ' && e.target?.closest?.('button')?.matches(':focus-visible')) return;
 
     if (k === 'Escape') {
       if (ctx.isPopoverOpen() && !ctx.isMenuHidden()) {     // schowany pasek = schowane menu opcji; Esc idzie dalej
@@ -70,7 +76,7 @@ export function initInput(ctx) {
         e.preventDefault();
         return;
       }
-      if (ctx.isPdfLoaded()) {
+      if (ctx.isPdfLoaded() || ctx.isDocumentLoading?.()) {
         ctx.goHome();
         e.preventDefault();
         return;
@@ -108,9 +114,8 @@ export function initInput(ctx) {
 
   // ---------- kliknięcia i stuknięcia w stronę ----------
   const isIgnoredTarget = (e) => {
-    const sel = '#menu, #menu-popover, #calc-sidebar, #calc-resizer, #pw-dialog, button';
-    if (e.target?.closest?.(sel)) return true;
-    return typeof e.composedPath === 'function' && e.composedPath().some((el) => el?.matches?.(sel));
+    if (e.target?.closest?.(CONTROLS_SELECTOR)) return true;
+    return typeof e.composedPath === 'function' && e.composedPath().some((el) => el?.matches?.(CONTROLS_SELECTOR));
   };
 
   window.addEventListener('click', (e) => {

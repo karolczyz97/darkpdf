@@ -1,16 +1,20 @@
 // DarkPDF – pamięć podręczna aplikacji, dzięki której czytnik działa bez internetu.
 // Pliki aplikacji: najpierw z sieci (zawsze świeże, bez ręcznych ?v=), bez sieci – ostatnia zapisana wersja.
 // pdf.js w lib/pdfjs się nie zmienia, więc bierzemy go od razu z pamięci.
-const CACHE = 'darkpdf-v19';
+const CACHE = 'darkpdf-v21';
 const CORE = [
   './',
   'index.html',
   'theme.css',
+  'fonts/google-sans-flex-latin.woff2',
+  'fonts/google-sans-flex-latin-ext.woff2',
   'viewer.css',
   'viewer.js',
   'theme.js',
   'menu-bar.js',
   'doc-history.js',
+  'doc-url.js',
+  'extension-loader.js',
   'doc-loader.js',
   'input.js',
   'util.js',
@@ -30,10 +34,12 @@ self.addEventListener('install', (e) => {
 
 self.addEventListener('activate', (e) => {
   e.waitUntil((async () => {
-    for (const k of await caches.keys()) if (k !== CACHE) await caches.delete(k);
+    for (const k of await caches.keys()) if (k.startsWith('darkpdf-') && k !== CACHE) await caches.delete(k);
     await self.clients.claim();
   })());
 });
+
+const cachedClients = new Set();   // karty, których strona przyszła z cache (wolna sieć albo offline)
 
 self.addEventListener('fetch', (e) => {
   const req = e.request;
@@ -58,16 +64,21 @@ self.addEventListener('fetch', (e) => {
       if (res.ok) cache.put(req, res.clone());
       return res;
     }
+    const hit = await cache.match(req, { ignoreSearch: true });
+    // Strona podana z cache bierze z cache także swoje pliki – nowe moduły nie mieszają się ze starymi
+    if (hit && cachedClients.has(e.clientId)) return hit;
+    const navigate = req.mode === 'navigate';
     try {
       // no-cache: przeglądarka pyta serwer, czy plik się zmienił (GitHub Pages trzyma pliki 10 min),
-      // więc po wdrożeniu od razu widać nową wersję wszystkich plików naraz
-      const res = await fetch(req, { cache: 'no-cache' });
-      if (res.ok) cache.put(req, res.clone());
+      // więc po wdrożeniu od razu widać nową wersję wszystkich plików naraz.
+      // Limit 2 s tylko dla samej strony: przy wolnej sieci cała aplikacja startuje z cache.
+      const res = await fetch(req, { cache: 'no-cache', signal: hit && navigate ? AbortSignal.timeout(2000) : undefined });
+      if (res.ok) await cache.put(req, res.clone()).catch(() => {});
       return res;
     } catch (err) {
-      const hit = await cache.match(req, { ignoreSearch: true });   // adres z ?… też się nada
-      if (hit) return hit;
-      throw err;
+      if (!hit) throw err;
+      if (navigate && e.resultingClientId) cachedClients.add(e.resultingClientId);
+      return hit;
     }
   })());
 });

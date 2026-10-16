@@ -28,10 +28,14 @@ let animTimer = null;
 // KaTeX (ładne wzory w drugiej linii) ładujemy dopiero przy pierwszym otwarciu kalkulatora,
 // żeby nie spowalniał otwierania samego PDF-a
 const KATEX = 'https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/';
+const KATEX_SRI = {   // sumy plików z CDN: podmieniony plik się nie wykona
+  js: 'sha384-7zkQWkzuo3B5mTepMUcHkMB5jZaolc2xDwL6VFqjFALcbeS9Ggm/Yr2r3Dy4lfFg',
+  css: 'sha384-nB0miv6/jRmo5UMMR1wu3Gz6NLsoTkbqJghGIsx//Rlm+ZU03BU6SQNC66uf4l5+'
+};
 function loadKatex() {
   if (window.katex || document.getElementById('katex-js')) return;
-  const css = Object.assign(document.createElement('link'), { rel: 'stylesheet', href: KATEX + 'katex.min.css', crossOrigin: 'anonymous' });
-  const js = Object.assign(document.createElement('script'), { id: 'katex-js', src: KATEX + 'katex.min.js', crossOrigin: 'anonymous', defer: true });
+  const css = Object.assign(document.createElement('link'), { rel: 'stylesheet', href: KATEX + 'katex.min.css', integrity: KATEX_SRI.css, crossOrigin: 'anonymous' });
+  const js = Object.assign(document.createElement('script'), { id: 'katex-js', src: KATEX + 'katex.min.js', integrity: KATEX_SRI.js, crossOrigin: 'anonymous', defer: true });
   js.onload = () => window.onKatexLoaded?.();
   document.head.append(css, js);
 }

@@ -122,6 +122,15 @@ export function clearPaperCache() {
   paperCache.clear();
 }
 
+export function prunePaperFilters() {
+  const used = new Set(paperCache.values());
+  for (const [key, filter] of paperFilters) {
+    if (used.has(filter)) continue;
+    document.getElementById('paper-' + key)?.remove();
+    paperFilters.delete(key);
+  }
+}
+
 export function initTheme({ onThemeChange = null, flash = null } = {}) {
   pageFilters = document.getElementById('page-filters');
   notifyChange = onThemeChange;

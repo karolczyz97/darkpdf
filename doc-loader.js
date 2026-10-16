@@ -2,9 +2,12 @@
 
 import { pref } from './util.js';
 import * as geo from './layout.js';
+import { fileRoute, fileHash } from './doc-url.js';
+import { loadViaExtension } from './extension-loader.js';
 import {
   isRemoteKey,
   rememberFile,
+  identifyLocalFile,
   recentFiles,
   storedFile,
   forgetFile,
@@ -14,6 +17,8 @@ import {
 
 let ctx = null;
 let openSeq = 0;
+let openController = null;
+let loadingTask = null;
 let lastRecent = null;
 
 let pwDialog = null;
@@ -23,6 +28,26 @@ let welcome = null;
 
 export const getLastRecent = () => lastRecent;
 export const isPasswordOpen = () => Boolean(pwDialog?.open);
+export const isDocumentLoading = () => openController !== null;
+
+export function cancelDocumentLoad() {
+  openSeq++;
+  openController?.abort();
+  openController = null;
+  loadingTask?.destroy().catch(() => {});
+  loadingTask = null;
+  if (pwDialog?.open) pwDialog.close();
+}
+
+function beginLoad() {
+  cancelDocumentLoad();
+  openController = new AbortController();
+  return { req: openSeq, signal: openController.signal };
+}
+
+function finishLoad(req) {
+  if (req === openSeq) openController = null;
+}
 
 function nameFromUrl(u) {
   try {
@@ -45,35 +70,6 @@ function askPassword(wrong) {
   return new Promise((resolve) =>
     pwDialog.addEventListener('close', () => resolve(pwDialog.returnValue === 'ok' ? pwInput.value : null), { once: true })
   );
-}
-
-// Plik z sieci pobiera wtyczka DarkPDF (strona sama nie ominie CORS); odpowiada przez postMessage
-function loadViaExtension(url) {
-  return new Promise((resolve, reject) => {
-    let answered = false;
-    const timer = setTimeout(() => {
-      if (!answered) { window.removeEventListener('message', onMsg); reject(new Error('NOEXT')); }
-    }, 3000);
-    function onMsg(e) {
-      if (e.source !== window || e.data?.source !== 'zen-ext') return;
-      answered = true;
-      clearTimeout(timer);
-      const m = e.data;
-      if (m.type === 'progress') {
-        ctx.flash(m.total
-          ? `Ładowanie… ${Math.min(99, Math.round(m.loaded / m.total * 100))}%`
-          : `Ładowanie… ${(m.loaded / 1048576).toFixed(1)} MB`, 0);
-      } else if (m.type === 'data') {
-        window.removeEventListener('message', onMsg);
-        resolve(new Uint8Array(m.buffer));
-      } else if (m.type === 'error') {
-        window.removeEventListener('message', onMsg);
-        reject(new Error(m.message));
-      }
-    }
-    window.addEventListener('message', onMsg);
-    window.postMessage({ source: 'zen-page', type: 'load', url }, location.origin);
-  });
 }
 
 export function extractPageStats(vp, tc) {
@@ -166,9 +162,9 @@ async function detectDocumentLayout(doc) {
 }
 
 // src – źródło dla pdf.js ({ data }); blob – oryginalny plik z dysku do zapamiętania; req – numer żądania
-export async function openDocument(src, { name, key, page = null, blob = null, req }) {
+export async function openDocument(src, { name, key, page = null, blob = null, legacyKey = null, req }) {
   ctx.flash('Ładowanie…', 0);
-  let doc, task, cancelled = false;
+  let doc, task, cancelled = false, installed = false, activating = false;
   try {
     task = ctx.pdfjsLib.getDocument({
       ...src,
@@ -177,56 +173,60 @@ export async function openDocument(src, { name, key, page = null, blob = null, r
       standardFontDataUrl: ctx.PDFJS + 'standard_fonts/',
       isEvalSupported: false
     });
+    loadingTask = task;
     // PDF z hasłem: pdf.js pyta przez task.onPassword (ta sama nazwa jako opcja getDocument() jest ignorowana)
     task.onPassword = (update, reason) => {
+      if (req !== openSeq) return;
       ctx.hideHint();
       askPassword(reason === ctx.pdfjsLib.PasswordResponses.INCORRECT_PASSWORD).then((pw) => {
+        if (req !== openSeq) return;
         if (pw === null) { cancelled = true; update(new Error('Anulowano')); return; }
         ctx.flash('Ładowanie…', 0);
         update(pw);
       });
     };
     doc = await task.promise;
-  } catch (err) {
-    task?.destroy().catch(() => {});
-    if (req !== openSeq) return;          // w międzyczasie wybrano inny plik
-    if (cancelled) {                      // rezygnacja z hasła to nie błąd – zostaje to, co było otwarte
+    if (req !== openSeq) return;
+    const layoutHint = await detectDocumentLayout(doc);
+    if (req !== openSeq) return;
+    const saved = await rememberFile(key, name, blob, legacyKey);
+    if (req !== openSeq) return;
+    if (saved && legacyKey && history.state?.key === legacyKey) {
+      history.replaceState({ ...history.state, key }, '', location.href);
+    }
+    activating = true;
+    await ctx.onDocumentReady({ doc, name, key, page, blob, layoutHint });
+    installed = true;
+    if (req !== openSeq) return;
+    ctx.hideHint();
+    if (!saved) ctx.flash('Plik otwarto, ale nie udało się zapisać go w historii. Otwórz go ponownie z dysku, jeśli będzie potrzebny offline.', 5000);
+  } catch (error) {
+    if (req !== openSeq) return;
+    if (cancelled) {
       ctx.hideHint();
       setEmpty(!ctx.isPdfLoaded());
-      return;
+    } else {
+      if (activating) ctx.closeDocument();
+      openFailed('Nie udało się otworzyć pliku: ' + (error?.message || error));
     }
-    openFailed('Nie udało się otworzyć pliku: ' + (err?.message || err));
-    return;
+  } finally {
+    if (loadingTask === task) loadingTask = null;
+    if (!installed) {
+      if (doc) doc.destroy().catch(() => {});
+      else task?.destroy().catch(() => {});
+    }
+    finishLoad(req);
   }
-  if (req !== openSeq) { doc.destroy().catch(() => {}); return; }
-
-  try {
-    const layoutHint = await detectDocumentLayout(doc);
-    if (req !== openSeq) { doc.destroy().catch(() => {}); return; }
-    rememberFile(key, name, blob);
-    await ctx.onDocumentReady({ doc, name, key, page, blob, layoutHint });
-  } catch (e) {
-    doc.destroy().catch(() => {});
-    console.error('Błąd inicjalizacji PDF:', e);
-    ctx.flash('Błąd podczas wyświetlania: ' + (e?.message || e), 4000);
-    return;
-  }
-  ctx.hideHint();
 }
 
 // Adres z wtyczki: …/darkpdf/#file=https://…/plik.pdf#page=12
 export async function openFromHash() {
-  const req = ++openSeq;
-  const h = location.href;
-  const i = h.indexOf('#file=');
-  if (i < 0) {
+  const route = fileRoute(location.hash);
+  if (!route) {
     if (location.hash === '#doc') {
-      if (ctx.isPdfLoaded()) return;
       if (history.state?.key) {
-        try {
-          const rec = await storedFile(history.state.key);
-          if (rec?.blob) { openStored(rec); return; }
-        } catch {}
+        if (ctx.isPdfLoaded() && ctx.getFileKey?.() === history.state.key) return;
+        return openStoredKey(history.state.key);
       }
       history.replaceState?.({ welcome: true }, '', location.pathname);
     }
@@ -234,46 +234,51 @@ export async function openFromHash() {
     setEmpty(true);
     return;
   }
-  let url = h.slice(i + 6);
-  if (/^[a-z]+%3A/i.test(url)) { try { url = decodeURIComponent(url); } catch {} }   // zepsute %… zostawiamy jak są
-  const pm = /#page=(\d+)/.exec(url);
-  const clean = url.split('#')[0];
+  const { req, signal } = beginLoad();
+  const { url: clean, page } = route;
   setEmpty(false);
   ctx.flash('Ładowanie…', 0);
   try {
-    const data = await loadViaExtension(clean);
+    const data = await loadViaExtension(clean, { signal, onProgress: (m) => {
+      if (req !== openSeq) return;
+      ctx.flash(m.total
+        ? `Ładowanie… ${Math.min(99, Math.round(m.loaded / m.total * 100))}%`
+        : `Ładowanie… ${(m.loaded / 1048576).toFixed(1)} MB`, 0);
+    } });
     if (req !== openSeq) return;
-    openDocument({ data }, { name: nameFromUrl(clean), key: clean, page: pm ? +pm[1] : null, req });
+    await openDocument({ data }, { name: nameFromUrl(clean), key: clean, page, req });
   } catch (err) {
     if (req !== openSeq) return;
-    openFailed(err.message === 'NOEXT'
-      ? 'Brak wtyczki DarkPDF – wybierz plik ręcznie'
-      : 'Nie udało się pobrać pliku: ' + err.message);
-  }
+    const messages = {
+      NOEXT: 'Brak wtyczki DarkPDF – wybierz plik ręcznie',
+      EXTTIMEOUT: 'Pobieranie zatrzymało się. Odśwież stronę przed ponowną próbą lub wybierz plik ręcznie.',
+      EXTUPDATE: 'Wtyczka nie rozpoznaje przerwanych żądań. Odśwież stronę przed ponowną próbą lub wybierz plik ręcznie.'
+    };
+    openFailed(messages[err.message] || 'Nie udało się pobrać pliku: ' + err.message);
+  } finally { finishLoad(req); }
 }
 
-// Plik z sieci otwieramy przez adres (#file=…). Ten sam adres co teraz (np. ponowna próba po błędzie)
-// nie wywołuje hashchange – wtedy otwieramy wprost.
+// Zapis trasy i rozpoczęcie żądania są synchroniczne: Escape może anulować je już w tym samym kroku.
 export function openUrl(url, page = null) {
-  const before = location.href;
-  location.hash = '#file=' + url + (page ? '#page=' + page : '');
-  if (location.href === before) openFromHash();
+  const hash = fileHash(url, page);
+  if (location.hash !== hash) history.pushState({ doc: true, key: url }, '', location.pathname + hash);
+  return openFromHash();
 }
 
 export async function openLocal(f) {
   if (!f) return;
-  const req = ++openSeq;
+  const { req } = beginLoad();
   setEmpty(false);
   ctx.flash('Ładowanie…', 0);
-  let data;
   try {
-    data = new Uint8Array(await f.arrayBuffer());
+    const data = new Uint8Array(await f.arrayBuffer());
+    if (req !== openSeq) return;
+    const identity = await identifyLocalFile(f.name, data);
+    if (req !== openSeq) return;
+    await openDocument({ data }, { name: f.name, ...identity, blob: f, req });
   } catch (e) {
-    if (req === openSeq) openFailed('Nie udało się odczytać pliku: ' + (e?.message || e));
-    return;
-  }
-  if (req !== openSeq) return;
-  openDocument({ data }, { name: f.name, key: `local:${f.name}:${f.size}`, blob: f, req });
+    if (req === openSeq) openFailed('Nie udało się otworzyć pliku: ' + (e?.message || e));
+  } finally { finishLoad(req); }
 }
 
 export async function pickFile() {
@@ -303,6 +308,12 @@ function renderList(id, items, onPick, onDelete = null) {
   if (!box) return;
   box.replaceChildren();
   box.hidden = items.length === 0;
+  if (box.dataset.title && items.length) {
+    const title = document.createElement('div');
+    title.className = 'list-title';
+    title.textContent = box.dataset.title;
+    box.append(title);
+  }
   for (const it of items.slice(0, 6)) {
     const row = document.createElement('div');
     row.className = 'recent-row';
@@ -323,7 +334,7 @@ function renderList(id, items, onPick, onDelete = null) {
       del.className = 'recent-del';
       del.title = 'Usuń z listy';
       del.setAttribute('aria-label', `Usuń ${it.name} z listy`);
-      del.innerHTML = '<svg class="ic" aria-hidden="true" style="width:14px;height:14px"><use href="#i-close"/></svg>';
+      del.innerHTML = '<svg class="ic" aria-hidden="true"><use href="#i-close"/></svg>';
       del.addEventListener('click', (e) => {
         e.stopPropagation();
         onDelete(it);
@@ -336,23 +347,42 @@ function renderList(id, items, onPick, onDelete = null) {
 }
 
 // Plik zapisany w przeglądarce. Uszkodzony wpis (pusty albo nieczytelny blob) usuwamy z listy.
-export async function openStored(rec, page = null) {
-  const req = ++openSeq;
+export async function openStoredKey(key, page = null) {
+  const load = beginLoad();
+  try {
+    const rec = await storedFile(key);
+    if (load.req !== openSeq) return;
+    if (rec?.blob) await openStored(rec, page, load);
+    else if (isRemoteKey(key)) return openUrl(key, page);
+    else ctx.flash('Ten plik nie jest już zapisany – otwórz go z dysku', 3000);
+  } catch (error) {
+    if (load.req === openSeq) openFailed('Nie udało się odczytać historii: ' + (error?.message || error));
+  } finally { finishLoad(load.req); }
+}
+
+export async function openStored(rec, page = null, load = beginLoad()) {
+  const { req } = load;
   setEmpty(false);
-  let data = null;
-  try { if (rec.blob.size) data = new Uint8Array(await rec.blob.arrayBuffer()); } catch {}
-  if (req !== openSeq) return;
-  if (!data) {
-    await forgetFile(rec.key).catch(() => {});
-    openFailed('Zapisany plik jest uszkodzony lub niedostępny – otwórz go ponownie z dysku');
-    return;
-  }
-  openDocument({ data }, { name: rec.name, key: rec.key, page, blob: rec.blob, req });
+  try {
+    let data = null;
+    try { if (rec.blob.size) data = new Uint8Array(await rec.blob.arrayBuffer()); } catch {}
+    if (req !== openSeq) return;
+    if (!data) {
+      await forgetFile(rec.key).catch(() => {});
+      if (req === openSeq) openFailed('Zapisany plik jest uszkodzony lub niedostępny – otwórz go ponownie z dysku');
+      return;
+    }
+    const identity = await identifyLocalFile(rec.name, data, rec.key);
+    if (req !== openSeq) return;
+    await openDocument({ data }, { name: rec.name, ...identity, page, blob: rec.blob, req });
+  } catch (e) {
+    if (req === openSeq) openFailed('Nie udało się otworzyć pliku: ' + (e?.message || e));
+  } finally { finishLoad(req); }
 }
 
 export function openRecent(rec) {
-  if (rec?.url) openUrl(rec.url);
-  else if (rec?.blob) openStored(rec);
+  if (rec?.url) return openUrl(rec.url);
+  if (rec?.blob) return openStored(rec);
 }
 
 async function deleteRecent(rec) {
@@ -371,12 +401,8 @@ function deleteBookmark(m) {
   ctx.flash('Usunięto zakładkę', 1200);
 }
 
-async function openBookmark(m) {
-  let rec = null;
-  try { rec = await storedFile(m.key); } catch {}
-  if (rec?.blob) openStored(rec, m.page);
-  else if (isRemoteKey(m.key)) openUrl(m.key, m.page);
-  else ctx.flash('Ten plik nie jest już zapisany – otwórz go z dysku', 3000);
+function openBookmark(m) {
+  return openStoredKey(m.key, m.page);
 }
 
 export async function renderRecent() {

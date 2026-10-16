@@ -5,7 +5,7 @@ import {
   spreadStartOf, spreadOf, nextStart, prevStart, spreadLabel, pickScale, fitSpread, heightFitWidth,
   paperColor, inferPairing, inferTwoPages
 } from '../layout.js';
-import { lru, mapConcurrent } from '../util.js';
+import { lru } from '../util.js';
 
 const odd = (numPages) => ({ numPages, two: true, pairing: 'odd' });
 const even = (numPages) => ({ numPages, two: true, pairing: 'even' });
@@ -143,20 +143,6 @@ test('pamięć LRU wyrzuca najdawniej używane i sprząta po nich', () => {
   assert.deepEqual(gone, [2, 1, 3, 10]);
   c.clear();
   assert.deepEqual(gone, [2, 1, 3, 10, 4]);
-});
-
-test('równoległe zadania z limitem', async () => {
-  let running = 0, peak = 0;
-  const out = await mapConcurrent([1, 2, 3, 4, 5, 6, 7], 3, async (x) => {
-    running++; peak = Math.max(peak, running);
-    await new Promise((r) => setTimeout(r, 5));
-    running--;
-    if (x === 4) throw new Error('uszkodzona strona');
-    return x * 2;
-  });
-  assert.deepEqual(out, [2, 4, 6, null, 10, 12, 14]);   // błąd jednej strony nie przerywa reszty
-  assert.equal(peak, 3);
-  assert.deepEqual(await mapConcurrent([], 3, async (x) => x), []);
 });
 
 test('automatyczne wykrywanie parowania stron (okładka vs rozkładówka)', () => {

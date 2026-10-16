@@ -8,7 +8,7 @@
 // - doc-loader.js: ładowanie plików, okno hasła i ekran powitalny
 // - menu-bar.js: dolny pasek opcji, menu i skok do strony
 // - input.js: skróty klawiatury, kółko myszy, touchpad i gesty dotykowe
-// - util.js: localStorage, LRU cache i współbieżność
+// - util.js: localStorage i pamięć LRU
 
 const PDFJS = new URL('lib/pdfjs/', import.meta.url).href;
 const pdfjsLib = await import(PDFJS + 'build/pdf.min.mjs');
@@ -34,6 +34,7 @@ import {
   togglePalette,
   paperFilterOf,
   clearPaperCache,
+  prunePaperFilters,
   getColorMode,
   getPalette,
   COLOR_LABELS,
@@ -47,13 +48,14 @@ import {
 import {
   initDocLoader,
   openFromHash,
-  openUrl,
-  openStored,
+  openStoredKey,
   openRecent,
   pickFile,
   setEmpty,
   getLastRecent,
-  isPasswordOpen
+  isPasswordOpen,
+  isDocumentLoading,
+  cancelDocumentLoad
 } from './doc-loader.js';
 import {
   initMenuBar,
@@ -69,7 +71,7 @@ import {
   isPageInputFocused,
   isMenuHidden
 } from './menu-bar.js';
-import { initInput, resetCursor } from './input.js';
+import { initInput, resetCursor, CONTROLS_SELECTOR } from './input.js';
 
 // Pamięć podręczna aplikacji: po pierwszej wizycie czytnik otwiera się też offline
 if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1')) {
@@ -85,6 +87,10 @@ const MARGIN = 0;             // margines wokół stron (px) – brak szpar
 const GAP = 0;                // odstęp między stronami (px) – strony sklejone ze sobą
 const CACHE_MAX = 24;         // ile wyrenderowanych stron trzymać w pamięci
 const CACHE_MAX_MOBILE = 10;  // telefon: iOS ma limit pamięci na płótna
+const CACHE_MIN = 4;          // tyle stron zostaje zawsze (bieżąca rozkładówka i sąsiednie)
+const CANVAS_BUDGET = 1024 * 2 ** 20;        // bajty na gotowe strony (4 B na piksel)
+const CANVAS_BUDGET_TOUCH = 256 * 2 ** 20;   // tablet/telefon: Safari ma łącznie ~384 MB na płótna
+const MAX_CANVAS_PIXELS = 2 ** 25;           // jedna strona najwyżej tyle pikseli (domyślny limit pdf.js)
 const LO_CACHE_MAX = 60;      // ile szybkich podglądów trzymać w pamięci
 const TITLE = document.title || 'DarkPDF';
 
@@ -119,8 +125,18 @@ applyFitClasses();
 // ---------- pamięć podręczna ----------
 const releaseCanvas = (c) => setTimeout(() => { if (!c.isConnected) { c.width = 0; c.height = 0; } }, 1000);
 
+// Limit stron zależy też od ich wielkości: 24 strony w 4K albo w „Szerokość 100%” to kilka GB pamięci
+const touchMq = matchMedia('(pointer: coarse)');
+let lastCanvasBytes = 0;
+function canvasCacheMax() {
+  const max = isMobile() ? CACHE_MAX_MOBILE : CACHE_MAX;
+  if (!lastCanvasBytes) return max;
+  const budget = touchMq.matches ? CANVAS_BUDGET_TOUCH : CANVAS_BUDGET;
+  return Math.max(CACHE_MIN, Math.min(max, Math.floor(budget / lastCanvasBytes)));
+}
+
 const sizeCache = lru();             // nr strony -> rozmiar strony { w, h }
-const canvasCache = lru(() => (isMobile() ? CACHE_MAX_MOBILE : CACHE_MAX), releaseCanvas);   // klucz -> gotowa strona
+const canvasCache = lru(canvasCacheMax, releaseCanvas);   // klucz -> gotowa strona
 const loCache = lru(LO_CACHE_MAX, releaseCanvas);   // klucz -> szybki podgląd
 const tlCache = lru(CACHE_MAX);      // klucz -> warstwa tekstowa
 const tcCache = lru();               // nr strony -> Promise<textContent>
@@ -134,7 +150,9 @@ async function pageBox(n) {
   if (!pdf || !n || n < 1 || n > pdf.numPages) return null;
   const cached = sizeCache.get(n);
   if (cached) return cached;
-  const page = await pdf.getPage(n);
+  const doc = pdf, gen = layoutGen;
+  const page = await doc.getPage(n);
+  if (doc !== pdf || gen !== layoutGen) throw cancelled();
   const vp = page.getViewport({ scale: 1, rotation: rotationOf(page) });
   const box = { w: vp.width, h: vp.height };
   sizeCache.set(n, box);
@@ -164,6 +182,20 @@ function clearCaches() {
   tcCache.clear();
   textCache.clear();
   clearPaperCache();
+  usedPages.clear();
+}
+
+// pdf.js trzyma zdekodowane obrazy strony aż do cleanup() – przy skanach pamięć rosła z każdą odwiedzoną stroną.
+// Gotowe płótna zostają w canvasCache; po powrocie strona po prostu dekoduje się od nowa.
+const usedPages = new Set();
+function releaseFarPages(s) {
+  const from = s - 2 * (PREFETCH_BEHIND + 1), to = s + 2 * (PREFETCH_AHEAD + 2);
+  const doc = pdf;
+  for (const n of usedPages) {
+    if (n >= from && n <= to) continue;
+    usedPages.delete(n);
+    doc?.getPage(n).then((p) => p.cleanup()).catch(() => {});
+  }
 }
 
 function relayout() {
@@ -233,9 +265,11 @@ function renderPage(n, scale, q = 1) {
   job.promise = (async () => {
     const page = await pdf.getPage(n);
     check();
-    const dpr = q === 1 ? (window.devicePixelRatio || 1) : q;
+    usedPages.add(n);
     const b = await pageBox(n);
     check();
+    const wantDpr = q === 1 ? (window.devicePixelRatio || 1) : q;
+    const dpr = Math.min(wantDpr, Math.sqrt(MAX_CANVAS_PIXELS / (b.w * scale * b.h * scale)));
     const vp = page.getViewport({
       scale: scale * dpr, rotation: rotationOf(page)
     });
@@ -256,6 +290,7 @@ function renderPage(n, scale, q = 1) {
       canvas.height = 0;
       throw e;
     }
+    if (q === 1) lastCanvasBytes = canvas.width * canvas.height * 4;
     const paper = paperFilterOf(n, canvas);
     if (paper) canvas.style.setProperty('--paper', paper);
     return cache.set(k, canvas);
@@ -314,6 +349,7 @@ async function show(s, { keepShown = false } = {}) {
     stage.replaceChildren(...(single
       ? [shown[0] || blank(L, scale)]
       : [shown[0] || blank(L, scale), shown[1] || blank(R, scale)]));
+    prunePaperFilters();
     stage.scrollTop = 0;
     centerX();
     document.title = `${geo.spreadLabel([a, b])} / ${numPages} – ${fileName}`;
@@ -343,19 +379,28 @@ async function show(s, { keepShown = false } = {}) {
     return;
   }
   pref.set('pos:' + fileKey, a || b);
-  prefetch(s, token).catch(() => {}).then(() => updateText(s, token)).catch(() => {});
+  prefetch(s, token).catch(() => {}).then(() => {
+    if (token === showToken) releaseFarPages(s);
+    return updateText(s, token);
+  }).catch(() => {});
 }
 
 // ---------- warstwa tekstowa i dostępność ----------
 function textContent(n) {
-  if (!tcCache.has(n)) tcCache.set(n, pdf.getPage(n).then((p) => p.getTextContent()));
+  if (!tcCache.has(n)) {
+    const p = pdf.getPage(n).then((page) => page.getTextContent());
+    p.catch(() => { if (tcCache.get(n) === p) tcCache.delete(n); });   // chwilowy błąd nie zostaje na stałe
+    tcCache.set(n, p);
+  }
   return tcCache.get(n);
 }
 
 function pageText(n) {
   if (!textCache.has(n)) {
-    textCache.set(n, textContent(n).then((tc) => tc.items.filter((it) => 'str' in it)
-      .map((it) => it.str + (it.hasEOL ? '\n' : '')).join('').replace(/[ \t]+\n/g, '\n').trim()));
+    const p = textContent(n).then((tc) => tc.items.filter((it) => 'str' in it)
+      .map((it) => it.str + (it.hasEOL ? '\n' : '')).join('').replace(/[ \t]+\n/g, '\n').trim());
+    p.catch(() => { if (textCache.get(n) === p) textCache.delete(n); });
+    textCache.set(n, p);
   }
   return textCache.get(n);
 }
@@ -505,6 +550,8 @@ function toggleFullscreen() {
 
 // ---------- zamknięcie dokumentu ----------
 function closeDocument() {
+  cancelDocumentLoad();
+  hideHint();
   if (!pdf) return;
   clearTimeout(resizeTimer);
   resetCursor();
@@ -515,6 +562,7 @@ function closeDocument() {
   numPages = 0;
   fileKey = null;
   stage.replaceChildren();
+  prunePaperFilters();
   textLayer.replaceChildren();
   document.title = TITLE;
   hideMenu(true);
@@ -545,6 +593,7 @@ function act(k) {
       break;
     case 'toggle-menu':
       setPopoverOpen(!isPopoverOpen());
+      if (isPopoverOpen() && isMenuHidden()) showMenu();   // M przy schowanym pasku pokazuje menu, a nie przestawia go po cichu
       break;
     case 'full':
       toggleFullscreen();
@@ -575,7 +624,6 @@ function act(k) {
       if (!showTwo()) break;
       const anchor = spreadOf(start).find(Boolean);
       pairing = pairing === 'odd' ? 'even' : 'odd';
-      pref.set('pairing', pairing);
       pref.set('pairing:' + fileKey, pairing);
       flash(pairing === 'odd' ? 'Pary: 1–2, 3–4, 5–6…' : 'Pary: 1, 2–3, 4–5…');
       go(spreadStartOf(anchor));
@@ -588,7 +636,7 @@ function act(k) {
 window.addEventListener('dblclick', (e) => {
   if (window.matchMedia?.('(pointer: coarse) and not (pointer: fine)')?.matches && isMobile()) return;
   if (!pdf) return;
-  const sel = '#menu, #menu-popover, #calc-sidebar, #calc-resizer, #pw-dialog, button';
+  const sel = CONTROLS_SELECTOR;
   if (e.target?.closest?.(sel) || (typeof e.composedPath === 'function' && e.composedPath().some((el) => el?.matches?.(sel)))) return;
   hideMenu(true);
   act('full');
@@ -606,6 +654,7 @@ function fitNow() {
     const c = el.querySelector('canvas');
     if (c) { c.style.width = w; c.style.height = h; }
     else { el.style.width = w; el.style.height = h; }
+    el.querySelector('.textLayer')?.style.setProperty('--scale-factor', String(l.scale));
   });
   centerX();
 }
@@ -690,14 +739,16 @@ initMenuBar({
 
 initDocHistory({
   isPdfLoaded: () => Boolean(pdf), getFileKey: () => fileKey,
-  closeDocument, setEmpty, openUrl, openStored
+  closeDocument, setEmpty, openStoredKey
 });
 
 initDocLoader({
   PDFJS, pdfjsLib, flash, hideHint, closeDocument, isCalcOpen, setCalcOpen, resetCursor,
   isPdfLoaded: () => Boolean(pdf),
+  getFileKey: () => fileKey,
   onDocumentReady: async ({ doc, name, key, page, blob, layoutHint }) => {
-    pdf?.destroy();
+    pdf?.destroy().catch(() => {});
+    showToken++;
     pdf = doc;
     document.documentElement.classList.remove('empty');
     hideMenu();
@@ -732,6 +783,7 @@ initInput({
   isMenuHidden, isPinned, hideMenu, showMenu, scheduleHide, isCalcOpen, setCalcOpen,
   goHome, getLastRecent, openRecent, focusPageInputWithDigit, isPageInputFocused,
   pickFile, act, next, prev, flip, go, toggleMark, flash, stage, isPasswordOpen,
+  isDocumentLoading,
   getSpreadStartOf: (p) => spreadStartOf(p), getNumPages: () => numPages, getFitMode: () => fitMode
 });
 

@@ -22,7 +22,8 @@ const MIME = {
   '.svg': 'image/svg+xml',
   '.png': 'image/png',
   '.pdf': 'application/pdf',
-  '.ttf': 'font/ttf'
+  '.ttf': 'font/ttf',
+  '.woff2': 'font/woff2'
 };
 
 function send(res, code, text, headers = {}) {

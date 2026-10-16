@@ -35,13 +35,13 @@
 /* MOTYW GEMINI: Oficjalne tokeny projektowe Google Gemini (gemini.google.com i panel boczny Chrome) */
 html.gemini {
   color-scheme: dark;
-  --ui-bg: rgba(19, 19, 20, .96);             /* --gem-sys-color--surface (#131314) */
-  --ui-bg-solid: var(--gem-surface);
+  --ui-bg: var(--gem-menu);
+  --ui-bg-solid: var(--gem-menu);
   --ui-stage-bg: var(--gem-bg);
   --page-ink: var(--gem-text);
   --ui-resizer-bg: var(--gem-line);
   --ui-text: var(--gem-text);
-  --ui-text-strong: #ffffff;
+  --ui-text-strong: var(--gem-text);
   --ui-text-dim: var(--gem-text-dim);
   --ui-line: rgba(255, 255, 255, .08);         /* --gem-sys-color--outline-variant subtelny */
   --ui-hover: var(--gem-hover);
@@ -174,12 +174,16 @@ html.dark #stage canvas {
   top: 12px;
   left: 50%;
   transform: translateX(-50%);
-  padding: 6px 12px;
-  border-radius: 6px;
+  padding: 10px 16px;
+  border-radius: 16px;
   background: rgba(0, 0, 0, .78);
   color: #eee;
   font: 13px/1.4 system-ui, sans-serif;
-  white-space: pre;
+  white-space: pre-wrap;
+  max-width: calc(100vw - 32px);
+  max-height: calc(100dvh - 32px);
+  overflow: auto;
+  box-sizing: border-box;
   pointer-events: none;
   z-index: 1;
 }
@@ -263,18 +267,17 @@ html.gemini .textLayer br::selection {
   inset: auto;
   max-height: calc(100dvh - 84px);
   overflow-y: auto;
-  width: 270px;
+  width: min(292px, calc(100vw - 24px));
   color: var(--ui-text);
   box-sizing: border-box;
-  padding: 5px;
-  border-radius: 14px;
+  padding: 8px;
+  border-radius: var(--gem-radius-menu, 20px);
   background: var(--ui-bg-solid);
-  border: 1px solid var(--ui-line);
-  box-shadow: 0 10px 32px rgba(0, 0, 0, .55), 0 2px 8px rgba(0, 0, 0, .35);
-  backdrop-filter: blur(16px);
+  border: 0;
+  box-shadow: var(--gem-menu-shadow, 0 0 20px rgba(0, 0, 0, .28));
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 0;
   transform-origin: bottom center;
   transition: opacity .16s ease, transform .16s ease, display .16s allow-discrete, overlay .16s allow-discrete;
 }
@@ -307,27 +310,28 @@ html.gemini .textLayer br::selection {
 .menu-section {
   display: flex;
   flex-direction: column;
-  gap: 1px;
+  gap: 0;
 }
 
 .menu-divider {
   height: 1px;
   background: var(--ui-line);
-  margin: 3px 6px;
+  margin: 6px;
   border: 0;
 }
 
 .menu-item {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
   width: 100%;
-  padding: 6px 10px;
-  border-radius: 7px;
+  min-height: 36px;
+  padding: 8px 10px;
+  border-radius: var(--gem-radius-item, 12px);
   border: 0;
   background: transparent;
   color: var(--ui-text);
-  font: 13px var(--ui-font);
+  font: 14px/20px var(--ui-font);
   cursor: pointer;
   text-align: left;
   box-sizing: border-box;
@@ -348,7 +352,7 @@ html.gemini .textLayer br::selection {
   width: 18px;
   height: 18px;
   flex-shrink: 0;
-  color: var(--ui-text-dim);
+  color: var(--ui-text);
 }
 .menu-item:hover .icon,
 .menu-item.active .icon {
@@ -357,7 +361,7 @@ html.gemini .textLayer br::selection {
 .menu-item .label-text {
   flex: 1;
   min-width: 0;
-  font-weight: 450;
+  font-weight: 400;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -367,10 +371,9 @@ html.gemini .textLayer br::selection {
   font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
   font-size: 11px;
   color: var(--ui-text-dim);
-  background: var(--ui-fill);
-  border: 1px solid var(--ui-line);
-  border-radius: 4px;
-  padding: 1px 5px;
+  background: transparent;
+  border: 0;
+  padding: 0 2px;
   line-height: 1.3;
   flex-shrink: 0;
 }
@@ -380,26 +383,29 @@ html.gemini .textLayer br::selection {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 3px;
-  padding: 3px 5px;
-  border-radius: 20px;
+  gap: 4px;
+  padding: 6px;
+  border-radius: var(--gem-radius-field, 24px);
   background: var(--ui-bg-solid);
-  border: 1px solid var(--ui-line);
-  box-shadow: 0 4px 18px rgba(0, 0, 0, .45);
-  backdrop-filter: blur(14px);
+  border: 0;
+  box-shadow: var(--gem-menu-shadow, 0 0 20px rgba(0, 0, 0, .28));
   font: 13px var(--ui-font);
   color: var(--ui-text);
   box-sizing: border-box;
 }
 
+/* Okrągłe przyciski z ikoną jak w Gemini */
 .menu-nav button {
   background: none;
   border: 0;
   color: var(--ui-text);
   font: inherit;
   cursor: pointer;
-  border-radius: 14px;
-  padding: 4px 8px;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  padding: 0;
+  flex: none;
   white-space: nowrap;
   transition: background .12s, color .12s;
   display: inline-flex;
@@ -411,29 +417,10 @@ html.gemini .textLayer br::selection {
   color: var(--ui-text-strong);
 }
 
-.menu-pin, .menu-toggle {
-  width: 28px;
-  height: 28px;
-  min-width: 28px;
-  max-width: 28px;
-  padding: 0 !important;
-  border-radius: 14px;
-  color: var(--ui-text-dim);
-  cursor: pointer;
-  display: inline-flex !important;
-  align-items: center;
-  justify-content: center;
-  transition: color .15s, background .15s;
-  flex-shrink: 0;
-  box-sizing: border-box;
-}
-.menu-pin:hover, .menu-toggle:hover {
-  color: var(--ui-text-strong) !important;
-  background: var(--ui-hover) !important;
-}
-.menu-pin.pinned, .menu-toggle.open {
-  color: var(--ui-accent) !important;
-  background: var(--ui-accent-soft) !important;
+.menu-pin, .menu-toggle { color: var(--ui-text-dim); }
+.menu-nav .menu-pin.pinned, .menu-nav .menu-toggle.open {
+  color: var(--ui-accent);
+  background: var(--ui-accent-soft);
 }
 
 .menu-pin .icon-unlocked { display: block; }
@@ -453,9 +440,9 @@ html.gemini .textLayer br::selection {
   padding: 0 4px;
 }
 .page-input {
-  background: var(--ui-fill);
-  border: 1px solid var(--ui-line);
-  border-radius: 6px;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 12px;
   color: var(--ui-text-strong);
   font: inherit;
   font-size: 13px;
@@ -463,7 +450,7 @@ html.gemini .textLayer br::selection {
   font-weight: 500;
   text-align: center;
   width: 56px;
-  padding: 2px 4px;
+  padding: 5px 4px;
   outline: none;
   transition: border-color .15s, background .15s;
 }
@@ -484,9 +471,9 @@ html.gemini .textLayer br::selection {
 .menu-nav [data-tip]::after {
   content: attr(data-tip) "  " attr(data-key);
   position: absolute; left: 50%; bottom: calc(100% + 10px); z-index: 10;
-  padding: 5px 10px; border-radius: 6px; white-space: pre;
-  background: var(--ui-bg-solid); border: 1px solid var(--ui-line);
-  box-shadow: 0 4px 14px rgba(0, 0, 0, .5);
+  padding: 6px 10px; border-radius: 8px; white-space: pre;
+  background: var(--ui-bg-solid); border: 0;
+  box-shadow: var(--gem-menu-shadow, 0 0 20px rgba(0, 0, 0, .28));
   color: var(--ui-text-strong); font: 12px/1.2 var(--ui-font);
   pointer-events: none; opacity: 0; transform: translate(-50%, 4px);
   transition: opacity .12s ease, transform .12s ease;
@@ -494,30 +481,47 @@ html.gemini .textLayer br::selection {
 .menu-nav [data-tip]:hover::after { opacity: 1; transform: translate(-50%, 0); transition-delay: .1s; }
 .menu-popover:popover-open ~ .menu-nav [data-tip]::after { display: none; }   /* nie zasłaniamy otwartego menu */
 
-/* ---- ekran startowy ---- */
+/* ---- ekran startowy (układ jak strona główna Gemini: powitanie, duże pole, lista „Ostatnie”) ---- */
 #welcome { position: fixed; inset: 0; z-index: 4; display: none; align-items: center; align-items: safe center; justify-content: center; padding: 24px; overflow-y: auto; }
+#welcome, .menu-popover { scrollbar-width: thin; scrollbar-color: var(--ui-hover) transparent; }
 html.empty #welcome { display: flex; }
+html:not(.dark) #welcome { background: var(--ui-bg-solid); }   /* tryb jasny: biała strona startowa zamiast szarego tła czytnika */
 #welcome .card {
   width: 100%; max-width: 720px; padding: 32px 28px 22px; text-align: center;
-  border: 1px dashed var(--ui-line); border-radius: 16px; background: rgba(255, 255, 255, .025);
+  border-radius: var(--gem-radius-menu, 20px);
   font: 14px/1.5 var(--ui-font); color: var(--ui-text);
 }
-#welcome.drag .card, body.dragging-file #welcome .card { border-color: var(--ui-accent); border-style: solid; background: var(--ui-accent-soft); }
+#welcome.drag .card, body.dragging-file #welcome .card { outline: 2px dashed var(--ui-accent); outline-offset: -2px; background: var(--ui-accent-soft); }
 body.dragging-file #stage { outline: 2px dashed var(--ui-accent); outline-offset: -6px; }
-#welcome .logo { font-size: 21px; font-weight: 600; letter-spacing: .04em; }
-#welcome .lead { margin: 8px 0 20px; color: var(--ui-text-dim); }
-#welcome .pick {
-  padding: 10px 20px; border: 0; border-radius: 9px; background: #ececec; color: #1a1a1a;
-  font: 600 14px system-ui, sans-serif; cursor: pointer;
+#welcome .logo { font-size: 40px; line-height: 1.2; font-weight: 500; letter-spacing: -.5px; }
+/* Gradient powitania Gemini – tylko na nazwie aplikacji */
+html.gemini #welcome .logo {
+  background: linear-gradient(74deg, #4285f4 0%, #9b72cb 45%, #d96570 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
 }
-#welcome .pick:hover { background: #fff; }
+#welcome .lead { margin: 10px 0 24px; color: var(--ui-text-dim); font-size: 15px; }
+/* Przycisk wyboru pliku wygląda jak pole „Zapytaj Gemini”: szeroka pigułka z ikoną */
+#welcome .pick {
+  display: flex; align-items: center; gap: 14px;
+  width: min(560px, 100%); min-height: 60px; margin: 0 auto; padding: 8px 24px 8px 10px;
+  border: 0; border-radius: 30px; background: var(--ui-fill); color: var(--ui-text);
+  font: 400 16px var(--ui-font); text-align: left; cursor: pointer;
+  transition: background .15s ease;
+}
+#welcome .pick .pick-ic {
+  display: inline-flex; align-items: center; justify-content: center; flex: none;
+  width: 40px; height: 40px; border-radius: 50%; background: var(--ui-accent-soft); color: var(--ui-accent);
+}
+#welcome .pick:hover { background: var(--ui-hover); }
 #welcome .keys-sections {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
   gap: 16px 24px;
-  margin-top: 22px;
-  padding-top: 18px;
-  border-top: 1px solid rgba(255, 255, 255, .08);
+  margin-top: 28px;
+  padding-top: 20px;
+  border-top: 1px solid var(--ui-line);
   text-align: left;
 }
 #welcome .keys-col {
@@ -530,11 +534,10 @@ body.dragging-file #stage { outline: 2px dashed var(--ui-accent); outline-offset
   flex-direction: column;
   gap: 7px;
 }
-#welcome .keys-title {
-  font: 600 11px var(--ui-font);
-  text-transform: uppercase;
-  letter-spacing: .7px;
-  color: var(--ui-accent);
+#welcome .keys-title,
+.list-title {
+  font: 500 14px var(--ui-font);
+  color: var(--ui-text);
   padding-left: 2px;
 }
 /* Wiersz skrótu: ta sama ikona co w menu, opis, klawisze */
@@ -544,11 +547,11 @@ body.dragging-file #stage { outline: 2px dashed var(--ui-accent); outline-offset
   gap: 10px;
   align-items: center;
   color: var(--ui-text);
-  font-size: 12.5px;
+  font-size: 13px;
 }
 #welcome .k-row .ic { color: var(--ui-text-dim); }
 #welcome .k-keys { display: flex; align-items: center; gap: 3px; color: var(--ui-text-dim); white-space: nowrap; }
-#welcome .k-keys em { font-style: normal; font-size: 11.5px; color: var(--ui-text-dim); }
+#welcome .k-keys em { font-style: normal; font-size: 12px; color: var(--ui-text-dim); }
 #welcome kbd {
   min-width: 22px;
   text-align: center;
@@ -556,44 +559,43 @@ body.dragging-file #stage { outline: 2px dashed var(--ui-accent); outline-offset
   font: 11.5px ui-monospace, "Cascadia Mono", Consolas, monospace;
   color: var(--ui-text);
   background: var(--ui-fill);
-  border: 1px solid var(--ui-line);
-  border-radius: 5px;
-  padding: 2px 6px;
+  border: 0;
+  border-radius: 6px;
+  padding: 3px 6px;
   white-space: nowrap;
 }
-#welcome .foot { margin: 18px 0 0; font-size: 12px; color: #6f6f6f; }
+#welcome .foot { margin: 18px 0 0; font-size: 12px; color: var(--ui-text-dim); }
 
-/* ---- ostatnio otwierane i zakładki na ekranie startowym ---- */
-#recent, #marks { display: flex; flex-direction: column; gap: 4px; margin-top: 20px; text-align: left; }
+/* ---- ostatnio otwierane i zakładki na ekranie startowym (jak lista „Ostatnie” w Gemini) ---- */
+#recent, #marks { display: flex; flex-direction: column; gap: 2px; width: min(560px, 100%); margin: 24px auto 0; text-align: left; }
 #recent[hidden], #marks[hidden] { display: none; }
+.list-title { padding: 0 16px 6px; }
 .recent-row {
   display: flex; align-items: center; width: 100%;
-  border-radius: 8px; background: var(--ui-fill);
+  border-radius: 20px; background: transparent;
   transition: background .12s ease;
 }
 .recent-row:hover { background: var(--ui-hover); }
 .recent-btn {
-  display: flex; align-items: baseline; gap: 10px; flex: 1; min-width: 0; padding: 7px 10px;
-  border: 0; background: transparent; color: var(--ui-text); font: 13px var(--ui-font);
-  cursor: pointer; text-align: left; border-radius: 8px 0 0 8px;
+  display: flex; align-items: baseline; gap: 10px; flex: 1; min-width: 0; padding: 9px 16px;
+  border: 0; background: transparent; color: var(--ui-text); font: 14px var(--ui-font);
+  cursor: pointer; text-align: left; border-radius: 20px;
 }
 .recent-btn:hover { color: var(--ui-text-strong); }
 .recent-btn .rn { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .recent-btn .rp { flex: none; color: var(--ui-text-dim); font-size: 12px; }
 .recent-del {
   flex: none; display: inline-flex; align-items: center; justify-content: center;
-  width: 28px; height: 28px; margin-right: 4px; padding: 0;
-  border: 0; border-radius: 6px; background: transparent;
+  width: 32px; height: 32px; margin-right: 4px; padding: 0;
+  border: 0; border-radius: 50%; background: transparent;
   color: var(--ui-text-dim); cursor: pointer;
-  opacity: 0.6; transition: color .15s ease, background .15s ease, opacity .15s ease;
+  opacity: 0; transition: color .15s ease, background .15s ease, opacity .15s ease;
 }
-.recent-del .ic { width: 14px; height: 14px; pointer-events: none; }
-.recent-row:hover .recent-del { opacity: 0.9; }
-.recent-del:hover {
-  background: rgba(239, 68, 68, 0.15);
-  color: #ef4444;
-  opacity: 1;
-}
+.recent-del .ic { width: 16px; height: 16px; pointer-events: none; }
+/* Jak w Gemini: krzyżyk pojawia się przy najechaniu; na dotyku i przy fokusie klawiatury widać go zawsze */
+.recent-row:hover .recent-del, .recent-del:focus-visible { opacity: 1; }
+@media (hover: none) { .recent-del { opacity: .8; } }
+.recent-del:hover { background: color-mix(in srgb, var(--ui-text) 12%, transparent); color: var(--ui-text-strong); }
 
 /* ---- wskaźnik postępu przy prawej krawędzi ---- */
 #prog {
@@ -724,6 +726,9 @@ html.mobile .menu-nav [data-tip]::after { display: none; }   /* na telefonie dym
 html.mobile #calc-resizer { display: none; }
 html.mobile #calc-sidebar { width: 100vw; max-width: none; min-width: 0; border-radius: 0; }
 html.mobile.calc-open #stage { left: 0; border-radius: 0; }
+/* Popover jest w top layer: na telefonie nie może zasłaniać pełnoekranowego kalkulatora. */
+html.mobile.calc-open #menu,
+html.mobile.calc-open .menu-popover { visibility: hidden; pointer-events: none; }
 #calc-close {
   align-items: center; gap: 8px; margin: 8px; padding: 10px 14px; align-self: flex-start;
   border: 1px solid var(--ui-line); border-radius: 20px; background: var(--ui-fill);
@@ -736,21 +741,27 @@ html.mobile #stage { touch-action: manipulation; }
 
 /* Hasło do zaszyfrowanego PDF-a */
 #pw-dialog {
-  width: min(360px, calc(100vw - 32px)); box-sizing: border-box; padding: 20px 20px 16px;
-  border: 1px solid var(--ui-line); border-radius: 12px;
+  width: min(360px, calc(100vw - 32px)); box-sizing: border-box; padding: 24px;
+  border: 0; border-radius: var(--gem-radius-menu, 20px);
   background: var(--ui-bg-solid); color: var(--ui-text); font: 14px/1.5 var(--ui-font);
 }
 #pw-dialog::backdrop { background: rgba(0, 0, 0, .5); }
 #pw-msg { margin: 0 0 12px; }
 #pw-input {
   width: 100%; box-sizing: border-box; padding: 8px 10px;
-  border: 1px solid var(--ui-line); border-radius: 8px; background: var(--ui-fill); color: var(--ui-text); font: inherit;
+  border: 1px solid transparent; border-radius: var(--gem-radius-item, 12px); background: var(--ui-fill); color: var(--ui-text); font: inherit;
 }
 #pw-input:focus { outline: 2px solid var(--ui-accent); outline-offset: 1px; }
 #pw-dialog .pw-buttons { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; }
 #pw-dialog button {
-  padding: 7px 14px; border: 1px solid var(--ui-line); border-radius: 8px;
+  padding: 8px 16px; border: 0; border-radius: var(--gem-radius-field, 24px);
   background: transparent; color: var(--ui-text); font: inherit; cursor: pointer;
 }
 #pw-dialog button:hover { background: var(--ui-hover); }
-#pw-dialog #pw-ok { border-color: var(--ui-accent); color: var(--ui-accent); font-weight: 600; }
+#pw-dialog #pw-ok { background: var(--ui-accent-soft); color: var(--ui-accent); font-weight: 500; }
+
+/* Fokus kontrolek ma być widoczny również przy obsłudze klawiaturą. */
+:is(.menu-item, .menu-nav button, .recent-btn, .recent-del, #welcome .pick, #pw-dialog button, #calc-close):focus-visible {
+  outline: 2px solid var(--ui-accent);
+  outline-offset: -2px;
+}

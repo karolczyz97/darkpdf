@@ -1,3 +1,22 @@
+/* Google Sans Flex z Google Fonts, SIL OFL 1.1 (fonts/OFL.txt).
+   Lokalnie: ten sam krój i polskie znaki także bez internetu. */
+@font-face {
+  font-family: 'Google Sans Flex';
+  font-style: normal;
+  font-weight: 400 700;
+  font-display: swap;
+  src: url('fonts/google-sans-flex-latin-ext.woff2') format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+  font-family: 'Google Sans Flex';
+  font-style: normal;
+  font-weight: 400 700;
+  font-display: swap;
+  src: url('fonts/google-sans-flex-latin.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
 /* Wspólna paleta Gemini dla DarkPDF i kalkulatora.
    Kolor zmieniasz tutaj i zmienia się w obu aplikacjach.
    Wartości odczytane z gemini.google.com i panelu bocznego Gemini w Chrome. */
@@ -6,7 +25,8 @@
   --gem-surface: #131314;      /* --gem-sys-color--surface */
   --gem-fill: #1e1f20;         /* --gem-sys-color--surface-container */
   --gem-fill-2: #1f2022;
-  --gem-hover: #282a2c;        /* --gem-sys-color--surface-container-high */
+  --gem-menu: #1f1f1f;        /* menu Gemini i panelu Chrome */
+  --gem-hover: #303030;
   --gem-hover-2: #3c4043;
   --gem-line: #2c2c2c;         /* separator */
   --gem-text: #e3e3e3;         /* --gem-sys-color--on-surface */
@@ -17,4 +37,8 @@
   --gem-accent-line: #3b5a8c;
   --gem-err: #f2b8b5;
   --gem-font: "Google Sans Flex", "Google Sans", "Helvetica Neue", system-ui, sans-serif;
+  --gem-radius-menu: 20px;
+  --gem-radius-item: 12px;
+  --gem-radius-field: 24px;
+  --gem-menu-shadow: 0 0 20px rgba(0, 0, 0, .28);
 }

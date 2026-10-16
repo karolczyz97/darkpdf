@@ -6,8 +6,35 @@ import { pref } from './util.js';
 const RECENT_MAX = 8;     // tyle plików trzymamy w pamięci przeglądarki
 const MARKS_MAX = 30;     // tyle zakładek pamiętamy
 
-// Klucz pliku z sieci to jego adres; plik z dysku ma klucz „local:nazwa:rozmiar”
+// Klucz pliku z sieci to jego adres; lokalny plik identyfikuje skrót jego zawartości.
 export const isRemoteKey = (key) => /^(https?|file):/i.test(key);
+
+export async function localFileKey(data) {
+  const hash = await crypto.subtle.digest('SHA-256', data);
+  return 'local:sha256:' + [...new Uint8Array(hash)].map((b) => b.toString(16).padStart(2, '0')).join('');
+}
+
+export async function identifyLocalFile(name, data, oldKey = `local:${name}:${data.byteLength}`) {
+  const key = await localFileKey(data);
+  let legacyKey = null;
+  if (oldKey !== key) {
+    try {
+      const old = await storedFile(oldKey);
+      if (old?.blob && await localFileKey(await old.blob.arrayBuffer()) === key) legacyKey = oldKey;
+    } catch {}                 // brak dostępu do bazy nie blokuje odczytania PDF-a
+  }
+  return { key, legacyKey };
+}
+
+function migratePreferences(oldKey, key) {
+  for (const prefix of ['pos:', 'rot:', 'two:', 'pairing:']) {
+    const value = pref.get(prefix + oldKey);
+    if (value !== undefined && pref.get(prefix + key) === undefined) pref.set(prefix + key, value);
+    pref.remove(prefix + oldKey);
+  }
+  const marks = bookmarks().map((m) => m.key === oldKey ? { ...m, key } : m);
+  pref.setJson('bookmarks', marks.filter((m, i) => marks.findIndex((other) => other.key === m.key && other.page === m.page) === i));
+}
 
 // ---------- IndexedDB ----------
 let dbPromise = null;     // jedno połączenie na całą sesję
@@ -37,15 +64,25 @@ async function transaction(mode, fn) {
 }
 
 // Zapamiętuje plik (blob z dysku albo sam adres z sieci); najstarsze ponad RECENT_MAX wypadają
-export async function rememberFile(key, name, blob) {
+export async function rememberFile(key, name, blob, legacyKey = null) {
   try {
     const rec = { key, name, ts: Date.now() };
     if (isRemoteKey(key)) rec.url = key;
     else if (blob?.size) rec.blob = blob;
-    else return;                             // pusty plik nie ma czego pamiętać
-    await transaction('readwrite', (st) => st.put(rec));
-    for (const old of (await recentFiles()).slice(RECENT_MAX)) await forgetFile(old.key);
-  } catch {}
+    else return false;
+    await transaction('readwrite', (st) => {
+      const put = st.put(rec);
+      if (legacyKey) st.delete(legacyKey);
+      const all = st.getAll();
+      all.onsuccess = () => {
+        const others = all.result.filter((r) => r.key !== key).sort((a, b) => b.ts - a.ts);
+        for (const old of others.slice(RECENT_MAX - 1)) st.delete(old.key);
+      };
+      return put;
+    });
+    if (legacyKey) migratePreferences(legacyKey, key);
+    return true;
+  } catch { return false; }
 }
 
 // Zapamiętane pliki, najnowsze pierwsze
@@ -59,7 +96,10 @@ export const forgetFile = (key) => transaction('readwrite', (st) => st.delete(ke
 
 // ---------- zakładki ----------
 // [{ key, name, page, ts }], najnowsze pierwsze
-export const bookmarks = () => pref.json('bookmarks', []);
+export const bookmarks = () => {
+  const value = pref.json('bookmarks', []);
+  return Array.isArray(value) ? value.filter((m) => m && typeof m.key === 'string' && typeof m.name === 'string' && Number.isInteger(m.page) && m.page > 0) : [];
+};
 
 // Dodaje albo usuwa zakładkę; zwraca true, gdy dodano
 export function toggleBookmark(key, name, page) {
