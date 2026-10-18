@@ -118,16 +118,30 @@ export function initInput(ctx) {
     return typeof e.composedPath === 'function' && e.composedPath().some((el) => el?.matches?.(CONTROLS_SELECTOR));
   };
 
+  let selectionPress = null;
+  window.addEventListener('pointerdown', (e) => {
+    selectionPress = e.pointerType === 'mouse' && e.button === 0 ? { id: e.pointerId, x: e.clientX, y: e.clientY, dragged: false } : null;
+  }, { passive: true });
+  window.addEventListener('pointermove', (e) => {
+    if (!selectionPress || e.pointerId !== selectionPress.id || !(e.buttons & 1)) return;
+    if (Math.hypot(e.clientX - selectionPress.x, e.clientY - selectionPress.y) > 5) selectionPress.dragged = true;
+  }, { passive: true });
+  window.addEventListener('pointercancel', () => { selectionPress = null; }, { passive: true });
+
   window.addEventListener('click', (e) => {
+    const dragged = e.detail > 0 && selectionPress?.dragged;
+    selectionPress = null;
     if (!ctx.isPdfLoaded()) return;
-    if (String(window.getSelection())) return;
+    if (dragged) return;
+    // Szybkie kliknięcia w puste miejsce mogą zaznaczyć najbliższe słowo.
+    // Menu pomijamy tylko przy celowym zaznaczaniu tekstu lub kliknięciu z klawiatury.
+    if (String(window.getSelection()) && (!e.detail || e.target?.closest?.('.textLayer span'))) return;
     const stage = ctx.stage || (typeof document !== 'undefined' ? document.getElementById('stage') : null);
     if (!stage) return;
     const isStageClick = e.target?.closest?.('#stage') ||
       (typeof e.composedPath === 'function' && e.composedPath().some((el) => el === stage));
     if (!isStageClick) return;
     if (isIgnoredTarget(e)) return;
-    if (e.detail >= 2) return;
     // Telefon: stuknięcie w lewą / prawą część strony przewraca, środek otwiera pasek.
     // Przybliżona strona przewija się palcem – wtedy stuknięcie tylko otwiera pasek.
     if (ctx.isMobile() && !zoomed()) {

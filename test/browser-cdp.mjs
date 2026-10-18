@@ -252,6 +252,53 @@ test('rzeczywista przeglądarka: ładowanie viewer.js bez błędów, obsługa kl
       expression: "document.getElementById('stage').dispatchEvent(new MouseEvent('click', { bubbles: true, clientX: 400 }))"
     });
 
+    // Szybkie kliknięcia w to samo puste miejsce przełączają menu bez ruszania myszy.
+    const clickPoint = await send('Runtime.evaluate', {
+      expression: `(async () => {
+        for (let i = 0; i < 30 && document.documentElement.classList.contains('calc-animating'); i++) {
+          await new Promise(resolve => setTimeout(resolve, 20));
+        }
+        const rect = document.getElementById('stage').getBoundingClientRect();
+        return { x: rect.right - 12, y: rect.top + 12 };
+      })()`, awaitPromise: true, returnByValue: true
+    });
+    await send('Input.dispatchMouseEvent', { type: 'mouseMoved', ...clickPoint.result.value });
+    for (const clickCount of [1, 2, 3, 4]) {
+      await send('Input.dispatchMouseEvent', { type: 'mousePressed', ...clickPoint.result.value, button: 'left', buttons: 1, clickCount });
+      await send('Input.dispatchMouseEvent', { type: 'mouseReleased', ...clickPoint.result.value, button: 'left', buttons: 0, clickCount });
+      const menuState = await send('Runtime.evaluate', {
+        expression: `({
+          hidden: document.getElementById('menu').hidden,
+          open: document.getElementById('menu-popover').matches(':popover-open')
+        })`, returnByValue: true
+      });
+      assert.equal(menuState.result.value.hidden, clickCount % 2 === 0, `Kliknięcie ${clickCount} musi przełączyć pasek bez ruchu myszy`);
+      assert.equal(menuState.result.value.open, clickCount % 2 !== 0, `Kliknięcie ${clickCount} musi przełączyć menu opcji bez ruchu myszy`);
+    }
+
+    // Zaznaczanie przez przeciąganie nadal nie otwiera menu, także po puszczeniu poza tekstem.
+    for (const outside of [false, true]) {
+      const textPoint = await send('Runtime.evaluate', {
+        expression: `(() => {
+          window.getSelection().removeAllRanges();
+          const rect = document.querySelector('#stage .textLayer span').getBoundingClientRect();
+          return { x: rect.left + 3, y: rect.top + rect.height / 2, endX: rect.right - 3 };
+        })()`, returnByValue: true
+      });
+      const { x, y, endX } = textPoint.result.value;
+      const destinationX = outside ? clickPoint.result.value.x : endX;
+      await send('Input.dispatchMouseEvent', { type: 'mouseMoved', x, y });
+      await send('Input.dispatchMouseEvent', { type: 'mousePressed', x, y, button: 'left', buttons: 1, clickCount: 1 });
+      await send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: destinationX, y, button: 'left', buttons: 1 });
+      await send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: destinationX, y, button: 'left', buttons: 0, clickCount: 1 });
+      const selection = await send('Runtime.evaluate', {
+        expression: '({ text: String(window.getSelection()), hidden: document.getElementById("menu").hidden })', returnByValue: true
+      });
+      if (!outside) assert.ok(selection.result.value.text.length > 0, 'Przeciąganie po tekście powinno go zaznaczać');
+      assert.equal(selection.result.value.hidden, true, 'Zaznaczanie tekstu nie może otwierać menu');
+    }
+    await send('Runtime.evaluate', { expression: 'window.getSelection().removeAllRanges()' });
+
     // 5. Otwieranie i zamykanie kalkulatora (klawisz K)
     const rCalc = await send('Runtime.evaluate', {
       expression: '(() => { window.dispatchEvent(new KeyboardEvent("keydown", { key: "k" })); return document.documentElement.classList.contains("calc-open"); })()',
