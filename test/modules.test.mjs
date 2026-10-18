@@ -358,6 +358,7 @@ test('menu-bar.js: buttonMap buforuje elementy przycisków i preferuje pozycje z
   const origDoc = globalThis.document;
   globalThis.document = {
     getElementById: (id) => (id === 'menu' ? mockMenu : { showPopover: () => {}, hidePopover: () => {}, matches: () => false }),
+    addEventListener: () => {},
     activeElement: null
   };
   const mockCtx = {

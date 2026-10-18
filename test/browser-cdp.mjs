@@ -213,6 +213,41 @@ test('rzeczywista przeglądarka: ładowanie viewer.js bez błędów, obsługa kl
     });
     assert.equal(rPopPos.result.value.notAtZero, true, 'Popover nie może być w lewym górnym rogu (0, 0)');
     assert.equal(rPopPos.result.value.maxHeightSet, true, 'Popover powinien mieć zdefiniowany max-height');
+
+    // Otwarte menu zachowuje położenie nad paskiem po wejściu i wyjściu z pełnego ekranu.
+    for (const withCalc of [false, true]) {
+      if (withCalc) await send('Runtime.evaluate', {
+        expression: "window.dispatchEvent(new KeyboardEvent('keydown', { key: 'k' }))"
+      });
+      for (const fullscreen of [true, false]) {
+        await send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'f', code: 'KeyF', windowsVirtualKeyCode: 70 });
+        await send('Input.dispatchKeyEvent', { type: 'keyUp', key: 'f', code: 'KeyF', windowsVirtualKeyCode: 70 });
+        const position = await send('Runtime.evaluate', {
+          expression: `(async () => {
+            for (let i = 0; i < 30 && Boolean(document.fullscreenElement) !== ${fullscreen}; i++) {
+              await new Promise(resolve => setTimeout(resolve, 50));
+            }
+            await new Promise(resolve => setTimeout(resolve, 200));
+            const pop = document.getElementById('menu-popover');
+            const p = pop.getBoundingClientRect();
+            const n = document.querySelector('.menu-nav').getBoundingClientRect();
+            return {
+              fullscreen: Boolean(document.fullscreenElement), open: pop.matches(':popover-open'),
+              centerDiff: Math.abs(p.left + p.width / 2 - n.left - n.width / 2),
+              gap: n.top - p.bottom, top: p.top, left: p.left
+            };
+          })()`, awaitPromise: true, returnByValue: true
+        });
+        const state = position.result.value;
+        assert.equal(state.fullscreen, fullscreen, 'F powinno przełączyć rzeczywisty pełny ekran');
+        assert.equal(state.open, true, 'Otwarte menu powinno pozostać otwarte');
+        assert.ok(state.top > 0 && state.left > 0 && state.centerDiff < 2 && Math.abs(state.gap - 8) < 2,
+          `Menu musi pozostać nad paskiem (kalkulator=${withCalc}, fullscreen=${fullscreen}): ${JSON.stringify(state)}`);
+      }
+    }
+    await send('Runtime.evaluate', {
+      expression: "window.dispatchEvent(new KeyboardEvent('keydown', { key: 'k' }))"
+    });
     await send('Runtime.evaluate', {
       expression: "document.getElementById('stage').dispatchEvent(new MouseEvent('click', { bubbles: true, clientX: 400 }))"
     });

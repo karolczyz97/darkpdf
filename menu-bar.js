@@ -172,6 +172,13 @@ export function initMenuBar(context) {
   pageInput = menu.querySelector('.page-input');
   totalSpan = menu.querySelector('.total');
 
+  document.addEventListener('fullscreenchange', () => {
+    if (!popoverEl?.showPopover) return;
+    // Pełny ekran zmienia kolejność warstw; menu musi ponownie znaleźć się nad kotwicą.
+    if (popoverEl.matches(':popover-open')) popoverEl.hidePopover();
+    syncPopover();
+  });
+
   buttonMap = new Map();
   for (const b of menu.querySelectorAll('[data-k]')) {
     if (!buttonMap.has(b.dataset.k) || b.classList.contains('menu-item')) {
