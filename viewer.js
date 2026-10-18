@@ -633,7 +633,17 @@ function act(k) {
   if (!isMenuHidden()) showMenu();
 }
 
+const FULLSCREEN_CLICK_MAX_MS = 300;
+let fullscreenMouseDownAt = null;
+window.addEventListener('mousedown', (e) => {
+  if (e.button === 0) fullscreenMouseDownAt = e.timeStamp;
+});
+
 window.addEventListener('dblclick', (e) => {
+  // Przeglądarka emituje dwuklik także po długim drugim naciśnięciu i puszczeniu.
+  const held = fullscreenMouseDownAt !== null && e.timeStamp - fullscreenMouseDownAt >= FULLSCREEN_CLICK_MAX_MS;
+  fullscreenMouseDownAt = null;
+  if (held) return;
   if (window.matchMedia?.('(pointer: coarse) and not (pointer: fine)')?.matches && isMobile()) return;
   if (!pdf || String(window.getSelection())) return;
   const sel = CONTROLS_SELECTOR;

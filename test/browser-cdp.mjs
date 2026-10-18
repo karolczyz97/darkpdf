@@ -254,6 +254,37 @@ test('rzeczywista przeglądarka: ładowanie viewer.js bez błędów, obsługa kl
         assert.equal(selection.result.value.calls, 0, 'Zaznaczanie tekstu nie może uruchamiać pełnego ekranu');
       }
 
+      // Przytrzymanie drugiego kliknięcia na pustym obszarze też nie jest skrótem pełnego ekranu.
+      const blankBounds = await send('Runtime.evaluate', {
+        expression: `(() => {
+          window.getSelection().removeAllRanges();
+          // Jak w skanie PDF: brak dostępnego tekstu do zaznaczenia.
+          document.querySelector('#stage .textLayer').style.visibility = 'hidden';
+          const rect = document.querySelector('#stage .page').getBoundingClientRect();
+          return { x: rect.left + 20, y: rect.top + 20 };
+        })()`, returnByValue: true
+      });
+      const blank = blankBounds.result.value;
+      for (const hold of [true, false]) {
+        await send('Input.dispatchMouseEvent', { type: 'mouseMoved', ...blank });
+        for (const clickCount of [1, 2]) {
+          await send('Input.dispatchMouseEvent', { type: 'mousePressed', ...blank, button: 'left', buttons: 1, clickCount });
+          if (hold && clickCount === 2) await new Promise(resolve => setTimeout(resolve, 600));
+          await send('Input.dispatchMouseEvent', { type: 'mouseReleased', ...blank, button: 'left', buttons: 0, clickCount });
+        }
+        const gesture = await send('Runtime.evaluate', {
+          expression: '({ text: String(window.getSelection()), calls: window.fullscreenProbe.calls, doubleClicks: window.fullscreenProbe.doubleClicks })',
+          returnByValue: true
+        });
+        assert.equal(gesture.result.value.text, '', 'Na pustym obszarze nie powinno być zaznaczenia');
+        assert.equal(gesture.result.value.doubleClicks, hold ? 3 : 4, 'Przeglądarka powinna wygenerować dwuklik także po przytrzymaniu');
+        assert.equal(gesture.result.value.calls, hold ? 0 : 1,
+          hold ? 'Przytrzymanie bez zaznaczenia nie może uruchamiać pełnego ekranu' : 'Szybki dwuklik po przytrzymaniu powinien nadal działać');
+      }
+      await send('Runtime.evaluate', {
+        expression: "document.querySelector('#stage .textLayer').style.removeProperty('visibility')"
+      });
+
       // Bez zaznaczenia skrót dwukliku nadal działa, a kontrolki są pomijane.
       const fullscreen = await send('Runtime.evaluate', {
         expression: `(() => {
@@ -271,7 +302,7 @@ test('rzeczywista przeglądarka: ładowanie viewer.js bez błędów, obsługa kl
           return { afterControl, afterPage, afterKey: window.fullscreenProbe.calls, menuHidden };
         })()`, returnByValue: true
       });
-      assert.deepEqual(fullscreen.result.value, { afterControl: 0, afterPage: 1, afterKey: 2, menuHidden: true },
+      assert.deepEqual(fullscreen.result.value, { afterControl: 1, afterPage: 2, afterKey: 3, menuHidden: true },
         'Dwuklik poza tekstem i klawisz F powinny nadal uruchamiać pełny ekran');
     } finally {
       await send('Runtime.evaluate', {
@@ -280,6 +311,7 @@ test('rzeczywista przeglądarka: ładowanie viewer.js bez błędów, obsługa kl
           window.removeEventListener('dblclick', window.fullscreenProbe.onDoubleClick);
           delete window.fullscreenProbe;
           window.getSelection().removeAllRanges();
+          document.querySelector('#stage .textLayer').style.removeProperty('visibility');
         })()`
       });
     }
