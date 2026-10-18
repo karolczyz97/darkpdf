@@ -276,6 +276,30 @@ test('rzeczywista przeglądarka: ładowanie viewer.js bez błędów, obsługa kl
       assert.equal(menuState.result.value.open, clickCount % 2 !== 0, `Kliknięcie ${clickCount} musi przełączyć menu opcji bez ruchu myszy`);
     }
 
+    // Kliknięcia w tekst nie zmieniają menu, nawet zanim powstanie zaznaczenie słowa.
+    for (const visible of [false, true]) {
+      const textClick = await send('Runtime.evaluate', {
+        expression: `(async () => {
+          window.getSelection().removeAllRanges();
+          const menu = await import('./menu-bar.js');
+          ${visible ? 'menu.showMenu()' : 'menu.hideMenu(true)'};
+          const rect = document.querySelector('#stage .textLayer span').getBoundingClientRect();
+          return { x: rect.left + 3, y: rect.top + rect.height / 2 };
+        })()`, awaitPromise: true, returnByValue: true
+      });
+      await send('Input.dispatchMouseEvent', { type: 'mouseMoved', ...textClick.result.value });
+      for (const clickCount of [1, 2]) {
+        await send('Input.dispatchMouseEvent', { type: 'mousePressed', ...textClick.result.value, button: 'left', buttons: 1, clickCount });
+        await send('Input.dispatchMouseEvent', { type: 'mouseReleased', ...textClick.result.value, button: 'left', buttons: 0, clickCount });
+        const textState = await send('Runtime.evaluate', {
+          expression: '({ hidden: document.getElementById("menu").hidden, text: String(window.getSelection()) })', returnByValue: true
+        });
+        assert.equal(textState.result.value.hidden, !visible, `Kliknięcie ${clickCount} w tekst nie może zmieniać widoczności menu`);
+        if (clickCount === 2) assert.ok(textState.result.value.text.length > 0, 'Natywne zaznaczenie słowa musi nadal działać');
+      }
+    }
+    await send('Runtime.evaluate', { expression: "import('./menu-bar.js').then(menu => menu.hideMenu(true))", awaitPromise: true });
+
     // Zaznaczanie przez przeciąganie nadal nie otwiera menu, także po puszczeniu poza tekstem.
     for (const outside of [false, true]) {
       const textPoint = await send('Runtime.evaluate', {

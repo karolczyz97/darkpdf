@@ -134,7 +134,7 @@ export function initInput(ctx) {
     if (!ctx.isPdfLoaded()) return;
     if (dragged) return;
     // Klikanie w puste miejsce przełącza menu; zaznaczanie tekstu go nie zmienia.
-    if (String(window.getSelection()) && e.target?.closest?.('.textLayer span')) return;
+    if (e.target?.closest?.('.textLayer span')) return;
     const stage = ctx.stage || (typeof document !== 'undefined' ? document.getElementById('stage') : null);
     if (!stage) return;
     const isStageClick = e.target?.closest?.('#stage') ||
