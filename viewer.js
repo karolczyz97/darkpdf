@@ -71,7 +71,7 @@ import {
   isPageInputFocused,
   isMenuHidden
 } from './menu-bar.js';
-import { initInput, resetCursor, CONTROLS_SELECTOR } from './input.js';
+import { initInput, resetCursor } from './input.js';
 
 // Pamięć podręczna aplikacji: po pierwszej wizycie czytnik otwiera się też offline
 if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1')) {
@@ -632,25 +632,6 @@ function act(k) {
   }
   if (!isMenuHidden()) showMenu();
 }
-
-const FULLSCREEN_CLICK_MAX_MS = 300;
-let fullscreenMouseDownAt = null;
-window.addEventListener('mousedown', (e) => {
-  if (e.button === 0) fullscreenMouseDownAt = e.timeStamp;
-});
-
-window.addEventListener('dblclick', (e) => {
-  // Przeglądarka emituje dwuklik także po długim drugim naciśnięciu i puszczeniu.
-  const held = fullscreenMouseDownAt !== null && e.timeStamp - fullscreenMouseDownAt >= FULLSCREEN_CLICK_MAX_MS;
-  fullscreenMouseDownAt = null;
-  if (held) return;
-  if (window.matchMedia?.('(pointer: coarse) and not (pointer: fine)')?.matches && isMobile()) return;
-  if (!pdf || String(window.getSelection())) return;
-  const sel = CONTROLS_SELECTOR;
-  if (e.target?.closest?.(sel) || (typeof e.composedPath === 'function' && e.composedPath().some((el) => el?.matches?.(sel)))) return;
-  hideMenu(true);
-  act('full');
-});
 
 // ---------- dopasowanie i skalowanie okna ----------
 function fitNow() {

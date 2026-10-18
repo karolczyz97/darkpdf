@@ -15,10 +15,10 @@ const HELP = 'Esc  strona główna\n→ ↓ Spacja PgDn  następne\n← ↑ PgUp
   'M  menu opcji\nK  kalkulator z boku\nW  zablokuj szerokość 100%\nH  zablokuj wysokość 100%\n' +
   'R  obrót o 90°\n' +
   'P  jedna / dwie strony\nD  tryb: ciemny / jasny / auto\nT  motyw: Gemini / systemowy\nO  pary nieparzyste / parzyste\n' +
-  'F  pełny ekran\ndwuklik  pełny ekran\nCtrl+O  otwórz plik\nkliknięcie  pasek z przyciskami';
+  'F  pełny ekran\nCtrl+O  otwórz plik\nkliknięcie  pasek z przyciskami';
 
 // Kontrolki, w których kliknięcia, kółko i gesty nie przewracają stron
-export const CONTROLS_SELECTOR = '#menu, #menu-popover, #calc-sidebar, #calc-resizer, #pw-dialog, button';
+const CONTROLS_SELECTOR = '#menu, #menu-popover, #calc-sidebar, #calc-resizer, #pw-dialog, button';
 
 export const zoomed = () => (typeof window !== 'undefined' ? (window.visualViewport?.scale || 1) > 1.01 : false);
 

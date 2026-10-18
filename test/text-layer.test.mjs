@@ -24,11 +24,4 @@ test('viewer.js przekazuje --scale-factor i obrót do TextLayer', () => {
   // Warstwa tekstowa ustawia --scale-factor wymagany przez pdf.js 4.x
   assert.ok(js.includes("'--scale-factor'"), 'TextLayer powinien przekazywać --scale-factor');
   assert.ok(js.includes('rotation: rotationOf(page)'), 'TextLayer powinien uwzględniać obrót');
-
-  // Dwuklik nie powinien bezsensownie niszczyć zaznaczenia słowa
-  assert.ok(!js.includes('window.getSelection()?.removeAllRanges();'), 'Dwuklik nie powinien kasować zaznaczenia słowa');
-  // Resizer kalkulatora jest chroniony przed przypadkowym pełnym ekranem
-  const input = readFileSync(new URL('../input.js', import.meta.url), 'utf8');
-  assert.match(input, /CONTROLS_SELECTOR = '[^']*#calc-resizer/, 'Wspólny selektor kontrolek powinien obejmować pasek resizera');
-  assert.ok(js.includes('const sel = CONTROLS_SELECTOR;'), 'Dwuklik powinien ignorować kliknięcie w kontrolki (także resizer)');
 });
