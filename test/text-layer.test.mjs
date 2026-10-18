@@ -25,8 +25,6 @@ test('viewer.js przekazuje --scale-factor i obrót do TextLayer', () => {
   assert.ok(js.includes("'--scale-factor'"), 'TextLayer powinien przekazywać --scale-factor');
   assert.ok(js.includes('rotation: rotationOf(page)'), 'TextLayer powinien uwzględniać obrót');
 
-  // Dwuklik nie jest blokowany przez getSelection()
-  assert.ok(!js.includes('if (!pdf || String(window.getSelection())) return;'), 'Dwuklik nie powinien być blokowany zaznaczeniem tekstu');
   // Dwuklik nie powinien bezsensownie niszczyć zaznaczenia słowa
   assert.ok(!js.includes('window.getSelection()?.removeAllRanges();'), 'Dwuklik nie powinien kasować zaznaczenia słowa');
   // Resizer kalkulatora jest chroniony przed przypadkowym pełnym ekranem

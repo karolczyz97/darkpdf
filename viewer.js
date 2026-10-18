@@ -635,7 +635,7 @@ function act(k) {
 
 window.addEventListener('dblclick', (e) => {
   if (window.matchMedia?.('(pointer: coarse) and not (pointer: fine)')?.matches && isMobile()) return;
-  if (!pdf) return;
+  if (!pdf || String(window.getSelection())) return;
   const sel = CONTROLS_SELECTOR;
   if (e.target?.closest?.(sel) || (typeof e.composedPath === 'function' && e.composedPath().some((el) => el?.matches?.(sel)))) return;
   hideMenu(true);

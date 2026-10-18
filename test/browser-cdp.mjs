@@ -120,7 +120,7 @@ test('rzeczywista przeglądarka: ładowanie viewer.js bez błędów, obsługa kl
         expression: '({ title: document.title, empty: document.documentElement.classList.contains("empty") })',
         returnByValue: true
       });
-      if (r1.result.value.title === 'DarkPDF') break;
+      if (r1.result.value.title === 'DarkPDF' && r1.result.value.empty) break;
       await new Promise(r => setTimeout(r, 100));
     }
     assert.equal(r1.result.value.title, 'DarkPDF');
@@ -214,20 +214,75 @@ test('rzeczywista przeglądarka: ładowanie viewer.js bez błędów, obsługa kl
     assert.equal(rPopPos.result.value.notAtZero, true, 'Popover nie może być w lewym górnym rogu (0, 0)');
     assert.equal(rPopPos.result.value.maxHeightSet, true, 'Popover powinien mieć zdefiniowany max-height');
 
-    // 4c. Dwuklik w stronę zamyka menu i wykonuje pełny ekran bez błędów
-    const rDblClick = await send('Runtime.evaluate', {
+    // 4c. Natywne zaznaczanie słowa i dwuklik z przeciąganiem nie uruchamiają pełnego ekranu.
+    await send('Runtime.evaluate', {
       expression: `(() => {
-        const stage = document.getElementById('stage');
-        stage.dispatchEvent(new MouseEvent('dblclick', { bubbles: true, clientX: 400 }));
-        return {
-          ok: true,
-          menuHidden: document.getElementById('menu').hidden
-        };
-      })()`,
-      returnByValue: true
+        window.fullscreenProbe = { calls: 0, doubleClicks: 0 };
+        window.fullscreenProbe.original = document.documentElement.requestFullscreen;
+        document.documentElement.requestFullscreen = () => { window.fullscreenProbe.calls++; return Promise.resolve(); };
+        window.fullscreenProbe.onDoubleClick = () => window.fullscreenProbe.doubleClicks++;
+        window.addEventListener('dblclick', window.fullscreenProbe.onDoubleClick);
+      })()`
     });
-    assert.equal(rDblClick.result.value.ok, true);
-    assert.equal(rDblClick.result.value.menuHidden, true, 'Dwuklik w stronę powinien ukryć menu');
+    try {
+      for (const drag of [false, true]) {
+        const textBounds = await send('Runtime.evaluate', {
+          expression: `(() => {
+            window.getSelection().removeAllRanges();
+            const rect = document.querySelector('#stage .textLayer span').getBoundingClientRect();
+            return { x: rect.left + 3, endX: rect.right - 3, y: rect.top + rect.height / 2 };
+          })()`, returnByValue: true
+        });
+        const { x, endX, y } = textBounds.result.value;
+        await send('Input.dispatchMouseEvent', { type: 'mouseMoved', x, y });
+        for (const clickCount of [1, 2]) {
+          await send('Input.dispatchMouseEvent', { type: 'mousePressed', x, y, button: 'left', buttons: 1, clickCount });
+          if (drag && clickCount === 2) {
+            await new Promise(resolve => setTimeout(resolve, 600));
+            await send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: endX, y, button: 'left', buttons: 1 });
+          }
+          await send('Input.dispatchMouseEvent', {
+            type: 'mouseReleased', x: drag && clickCount === 2 ? endX : x, y, button: 'left', buttons: 0, clickCount
+          });
+        }
+        const selection = await send('Runtime.evaluate', {
+          expression: '({ text: String(window.getSelection()), calls: window.fullscreenProbe.calls, doubleClicks: window.fullscreenProbe.doubleClicks })',
+          returnByValue: true
+        });
+        assert.ok(selection.result.value.text.length > 0, 'Gest myszy powinien zaznaczyć tekst PDF');
+        assert.equal(selection.result.value.doubleClicks, drag ? 2 : 1, 'Przeglądarka powinna wygenerować dwuklik po puszczeniu myszy');
+        assert.equal(selection.result.value.calls, 0, 'Zaznaczanie tekstu nie może uruchamiać pełnego ekranu');
+      }
+
+      // Bez zaznaczenia skrót dwukliku nadal działa, a kontrolki są pomijane.
+      const fullscreen = await send('Runtime.evaluate', {
+        expression: `(() => {
+          window.getSelection().removeAllRanges();
+          document.getElementById('calc-resizer').dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
+          const afterControl = window.fullscreenProbe.calls;
+          document.getElementById('stage').dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
+          const afterPage = window.fullscreenProbe.calls;
+          const menuHidden = document.getElementById('menu').hidden;
+          const text = document.querySelector('#stage .textLayer span');
+          const range = document.createRange();
+          range.selectNodeContents(text);
+          window.getSelection().addRange(range);
+          window.dispatchEvent(new KeyboardEvent('keydown', { key: 'f' }));
+          return { afterControl, afterPage, afterKey: window.fullscreenProbe.calls, menuHidden };
+        })()`, returnByValue: true
+      });
+      assert.deepEqual(fullscreen.result.value, { afterControl: 0, afterPage: 1, afterKey: 2, menuHidden: true },
+        'Dwuklik poza tekstem i klawisz F powinny nadal uruchamiać pełny ekran');
+    } finally {
+      await send('Runtime.evaluate', {
+        expression: `(() => {
+          document.documentElement.requestFullscreen = window.fullscreenProbe.original;
+          window.removeEventListener('dblclick', window.fullscreenProbe.onDoubleClick);
+          delete window.fullscreenProbe;
+          window.getSelection().removeAllRanges();
+        })()`
+      });
+    }
 
     // 5. Otwieranie i zamykanie kalkulatora (klawisz K)
     const rCalc = await send('Runtime.evaluate', {
@@ -239,6 +294,8 @@ test('rzeczywista przeglądarka: ładowanie viewer.js bez błędów, obsługa kl
     // Skalowanie podczas przeciągania: warstwa tekstowa zmienia się natychmiast, przed kolejnym renderem.
     const rResize = await send('Runtime.evaluate', {
       expression: `(async () => {
+        // Dopasowanie do szerokości gwarantuje zmianę skali wraz z szerokością panelu.
+        window.dispatchEvent(new KeyboardEvent('keydown', { key: 'w' }));
         for (let i = 0; i < 30; i++) {
           if (document.querySelector('#stage .textLayer span')) break;
           await new Promise(r => setTimeout(r, 50));
