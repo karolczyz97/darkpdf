@@ -276,7 +276,7 @@ test('rzeczywista przeglądarka: ładowanie viewer.js bez błędów, obsługa kl
       assert.equal(menuState.result.value.open, clickCount % 2 !== 0, `Kliknięcie ${clickCount} musi przełączyć menu opcji bez ruchu myszy`);
     }
 
-    // Kliknięcia w tekst nie zmieniają menu, nawet zanim powstanie zaznaczenie słowa.
+    // Kliknięcie w tekst chowa widoczne menu, ale nie otwiera schowanego.
     for (const visible of [false, true]) {
       const textClick = await send('Runtime.evaluate', {
         expression: `(async () => {
@@ -294,7 +294,7 @@ test('rzeczywista przeglądarka: ładowanie viewer.js bez błędów, obsługa kl
         const textState = await send('Runtime.evaluate', {
           expression: '({ hidden: document.getElementById("menu").hidden, text: String(window.getSelection()) })', returnByValue: true
         });
-        assert.equal(textState.result.value.hidden, !visible, `Kliknięcie ${clickCount} w tekst nie może zmieniać widoczności menu`);
+        assert.equal(textState.result.value.hidden, true, `Kliknięcie ${clickCount} w tekst musi pozostawić menu schowane`);
         if (clickCount === 2) assert.ok(textState.result.value.text.length > 0, 'Natywne zaznaczenie słowa musi nadal działać');
       }
     }
@@ -329,6 +329,26 @@ test('rzeczywista przeglądarka: ładowanie viewer.js bez błędów, obsługa kl
       returnByValue: true
     });
     assert.equal(rCalc.result.value, true, 'Klawisz K powinien otworzyć panel kalkulatora');
+
+    const outsideMenu = await send('Runtime.evaluate', {
+      expression: `(async () => {
+        const menu = await import('./menu-bar.js');
+        menu.showMenu();
+        const toggle = document.querySelector('.menu-toggle');
+        toggle.click();
+        const buttonWorks = !menu.isMenuHidden() && !menu.isPopoverOpen();
+        toggle.click();
+        const dismissed = [];
+        for (const target of [document.getElementById('calc-expr'), document.body]) {
+          menu.showMenu();
+          target.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+          dismissed.push(menu.isMenuHidden());
+        }
+        return { buttonWorks, dismissed, calcOpen: document.documentElement.classList.contains('calc-open') };
+      })()`, awaitPromise: true, returnByValue: true
+    });
+    assert.deepEqual(outsideMenu.result.value, { buttonWorks: true, dismissed: [true, true], calcOpen: true },
+      'Przyciski menu muszą działać, a kliknięcia w kalkulator i tło muszą chować menu');
 
     // Skalowanie podczas przeciągania: warstwa tekstowa zmienia się natychmiast, przed kolejnym renderem.
     const rResize = await send('Runtime.evaluate', {

@@ -133,7 +133,17 @@ export function initInput(ctx) {
     selectionPress = null;
     if (!ctx.isPdfLoaded()) return;
     if (dragged) return;
-    // Klikanie w puste miejsce przełącza menu; zaznaczanie tekstu go nie zmienia.
+    if (!ctx.isMenuHidden()) {
+      const menuSelector = '#menu, #menu-popover';
+      const insideMenu = e.target?.closest?.(menuSelector) ||
+        (typeof e.composedPath === 'function' && e.composedPath().some((el) => el?.matches?.(menuSelector)));
+      if (!insideMenu) {
+        if (ctx.isPinned()) ctx.setPopoverOpen(false);
+        else ctx.hideMenu();
+      }
+      return;
+    }
+    // Schowane menu otwieramy tylko kliknięciem w puste miejsce czytnika.
     if (e.target?.closest?.('.textLayer span')) return;
     const stage = ctx.stage || (typeof document !== 'undefined' ? document.getElementById('stage') : null);
     if (!stage) return;
@@ -152,8 +162,8 @@ export function initInput(ctx) {
       if (ctx.isPopoverOpen()) ctx.setPopoverOpen(false);
       return;
     }
-    ctx.isMenuHidden() ? ctx.showMenu() : ctx.hideMenu();
-  });
+    ctx.showMenu();
+  }, { capture: true });
 
   // ---------- kółko myszy i gesty touchpad ----------
   let lastWheel = 0, notch = 100, acc = 0;

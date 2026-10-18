@@ -216,7 +216,7 @@ test('strzałki i Enter na przycisku kalkulatora nie przechodzą do nawigacji PD
   assert.equal(flips, 0);
 });
 
-test('input.js: kliknięcie poza #stage (np. w kalkulatorze) nie wywołuje showMenu ani hideMenu', async () => {
+test('input.js: przy schowanym menu kliknięcia poza #stage go nie otwierają', async () => {
   const { initInput } = await import('../input.js');
   let showCalled = false, hideCalled = false;
   const stageEl = { id: 'stage' };
