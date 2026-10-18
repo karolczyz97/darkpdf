@@ -129,13 +129,12 @@ export function initInput(ctx) {
   window.addEventListener('pointercancel', () => { selectionPress = null; }, { passive: true });
 
   window.addEventListener('click', (e) => {
-    const dragged = e.detail > 0 && selectionPress?.dragged;
+    const dragged = selectionPress?.dragged;
     selectionPress = null;
     if (!ctx.isPdfLoaded()) return;
     if (dragged) return;
-    // Szybkie kliknięcia w puste miejsce mogą zaznaczyć najbliższe słowo.
-    // Menu pomijamy tylko przy celowym zaznaczaniu tekstu lub kliknięciu z klawiatury.
-    if (String(window.getSelection()) && (!e.detail || e.target?.closest?.('.textLayer span'))) return;
+    // Klikanie w puste miejsce przełącza menu; zaznaczanie tekstu go nie zmienia.
+    if (String(window.getSelection()) && e.target?.closest?.('.textLayer span')) return;
     const stage = ctx.stage || (typeof document !== 'undefined' ? document.getElementById('stage') : null);
     if (!stage) return;
     const isStageClick = e.target?.closest?.('#stage') ||

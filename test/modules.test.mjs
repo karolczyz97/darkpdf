@@ -254,8 +254,7 @@ test('input.js: kliknięcie poza #stage (np. w kalkulatorze) nie wywołuje showM
   };
   clickFn({
     target: calcBtn,
-    composedPath: () => [calcBtn],
-    detail: 1
+    composedPath: () => [calcBtn]
   });
   assert.equal(showCalled, false, 'Kliknięcie poza #stage nie powinno otworzyć menu');
   assert.equal(hideCalled, false, 'Kliknięcie poza #stage nie powinno zamknąć menu');
@@ -263,8 +262,7 @@ test('input.js: kliknięcie poza #stage (np. w kalkulatorze) nie wywołuje showM
   // Kliknięcie wewnątrz #stage
   clickFn({
     target: stageEl,
-    composedPath: () => [stageEl],
-    detail: 1
+    composedPath: () => [stageEl]
   });
   assert.equal(showCalled, true, 'Kliknięcie wewnątrz #stage powinno wywołać showMenu');
 
