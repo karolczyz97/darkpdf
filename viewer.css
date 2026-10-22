@@ -5,7 +5,7 @@
   --ui-bg-solid: #1b1c1e;                      /* bezpieczny fallback tła */
   --ui-stage-bg: #0b0c0d;
   --page-ink: #e6e6e6;                         /* czarny druk strony po odwróceniu w trybie ciemnym */
-  --ui-resizer-bg: #2c2c2c;                    /* bezpieczny fallback separatora */
+  --ui-resizer-bg: #2c2c2c;                    /* przerwa między kalkulatorem a PDF: kolor ramki przeglądarki, nie Canvas (ten jest ciemniejszy) */
   --ui-text: #e6e6e6;                          /* bezpieczny fallback tekstu */
   --ui-text-strong: #ffffff;
   --ui-text-dim: #8a8a8a;                      /* bezpieczny fallback wygaszonego tekstu */
@@ -25,7 +25,6 @@
 @supports (color: CanvasText) {
   :root {
     --ui-bg-solid: Canvas;
-    --ui-resizer-bg: Canvas;
     --ui-text: CanvasText;
     --ui-text-dim: GrayText;
     --ui-accent: AccentColor;
