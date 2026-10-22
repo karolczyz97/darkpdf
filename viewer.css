@@ -38,7 +38,6 @@ html.gemini {
   --ui-bg-solid: var(--gem-menu);
   --ui-stage-bg: var(--gem-bg);
   --page-ink: var(--gem-text);
-  --ui-resizer-bg: var(--gem-line);
   --ui-text: var(--gem-text);
   --ui-text-strong: var(--gem-text);
   --ui-text-dim: var(--gem-text-dim);
