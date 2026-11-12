@@ -61,6 +61,12 @@ function openFailed(msg) {
   ctx.flash(msg, 4000);
 }
 
+// pdf.js opisuje błędy po angielsku; ten najczęstszy (zły albo uszkodzony plik) mówimy po polsku
+function openErrorText(error) {
+  if (error?.name === 'InvalidPDFException') return 'to nie jest plik PDF albo plik jest uszkodzony';
+  return error?.message || String(error);
+}
+
 function askPassword(wrong) {
   document.getElementById('pw-msg').textContent = wrong ? 'Nieprawidłowe hasło – spróbuj jeszcze raz.' : 'Ten plik jest chroniony hasłem.';
   pwInput.value = '';
@@ -207,7 +213,7 @@ export async function openDocument(src, { name, key, page = null, blob = null, l
       setEmpty(!ctx.isPdfLoaded());
     } else {
       if (activating) ctx.closeDocument();
-      openFailed('Nie udało się otworzyć pliku: ' + (error?.message || error));
+      openFailed('Nie udało się otworzyć pliku: ' + openErrorText(error));
     }
   } finally {
     if (loadingTask === task) loadingTask = null;
@@ -273,11 +279,12 @@ export async function openLocal(f) {
   try {
     const data = new Uint8Array(await f.arrayBuffer());
     if (req !== openSeq) return;
+    if (!data.byteLength) throw new Error('plik jest pusty');
     const identity = await identifyLocalFile(f.name, data);
     if (req !== openSeq) return;
     await openDocument({ data }, { name: f.name, ...identity, blob: f, req });
   } catch (e) {
-    if (req === openSeq) openFailed('Nie udało się otworzyć pliku: ' + (e?.message || e));
+    if (req === openSeq) openFailed('Nie udało się otworzyć pliku: ' + openErrorText(e));
   } finally { finishLoad(req); }
 }
 
@@ -302,6 +309,9 @@ export async function pickFile() {
   picker.click();
 }
 
+const LIST_PREVIEW = 8;              // tyle wierszy listy widać od razu; resztę odsłania „Pokaż wszystkie”
+const expandedLists = new Set();     // identyfikatory list rozwiniętych w tej sesji
+
 // Wiersze na ekranie startowym: ostatnie pliki i zakładki z możliwością usunięcia wpisu.
 function renderList(id, items, onPick, onDelete = null) {
   const box = document.getElementById(id);
@@ -314,7 +324,8 @@ function renderList(id, items, onPick, onDelete = null) {
     title.textContent = box.dataset.title;
     box.append(title);
   }
-  for (const it of items.slice(0, 6)) {
+  const expanded = expandedLists.has(id);
+  for (const it of expanded ? items : items.slice(0, LIST_PREVIEW)) {
     const row = document.createElement('div');
     row.className = 'recent-row';
 
@@ -343,6 +354,21 @@ function renderList(id, items, onPick, onDelete = null) {
     }
 
     box.append(row);
+  }
+
+  if (items.length > LIST_PREVIEW) {
+    const more = document.createElement('button');
+    more.type = 'button';
+    more.className = 'list-more';
+    more.textContent = expanded ? 'Pokaż mniej' : `Pokaż wszystkie (${items.length})`;
+    more.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (expanded) expandedLists.delete(id);
+      else expandedLists.add(id);
+      renderList(id, items, onPick, onDelete);
+      box.querySelector('.list-more')?.focus();
+    });
+    box.append(more);
   }
 }
 
@@ -376,7 +402,7 @@ export async function openStored(rec, page = null, load = beginLoad()) {
     if (req !== openSeq) return;
     await openDocument({ data }, { name: rec.name, ...identity, page, blob: rec.blob, req });
   } catch (e) {
-    if (req === openSeq) openFailed('Nie udało się otworzyć pliku: ' + (e?.message || e));
+    if (req === openSeq) openFailed('Nie udało się otworzyć pliku: ' + openErrorText(e));
   } finally { finishLoad(req); }
 }
 

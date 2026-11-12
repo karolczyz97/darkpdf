@@ -89,22 +89,24 @@ export function updateMenu() {
   const colorMode = ctx.getColorMode();
   const palette = ctx.getPalette();
 
-  // [przycisk, etykieta, czy podświetlony]; skrót klawiszowy (.k) jest na stałe w index.html
+  // Etykieta zawsze nazywa stan bieżący (jak „Tryb: Ciemny”), a przełączniki włączone są podświetlone.
+  // Skrót klawiszowy (.k) i stałe etykiety przełączników są w index.html.
   const labels = [
-    ['calc', ctx.isCalcOpen() ? 'Ukryj kalkulator' : 'Kalkulator', ctx.isCalcOpen()],
-    ['fit-w', fitMode === 'width' ? 'Szerokość [100%]' : 'Szerokość 100%', fitMode === 'width'],
-    ['fit-h', fitMode === 'height' ? 'Wysokość [100%]' : 'Wysokość 100%', fitMode === 'height'],
-    ['pages', ctx.getTwo() ? 'Jedna strona' : 'Dwie strony'],
+    ['pages', ctx.getTwo() ? 'Dwie strony' : 'Jedna strona'],
     ['pairing', ctx.getPairing() === 'odd' ? 'Pary 1–2' : 'Pary 1, 2–3'],
     ['dark', ctx.getColorLabel(colorMode)],
     ['theme', ctx.getPaletteLabel(palette)]
   ];
-  for (const [k, text, active] of labels) {
-    const item = buttonMap?.get(k);
-    if (item) {
-      if (item.labelText) item.labelText.textContent = text;
-      if (active !== undefined) item.el.classList.toggle('active', active);
-    }
+  for (const [k, text] of labels) {
+    const label = buttonMap?.get(k)?.labelText;
+    if (label) label.textContent = text;
+  }
+  const toggles = [['calc', ctx.isCalcOpen()], ['fit-w', fitMode === 'width'], ['fit-h', fitMode === 'height']];
+  for (const [k, active] of toggles) {
+    const el = buttonMap?.get(k)?.el;
+    if (!el) continue;
+    el.classList.toggle('active', active);
+    el.ariaPressed = String(active);
   }
   const pairingBtn = buttonMap?.get('pairing')?.el;
   if (pairingBtn) pairingBtn.hidden = !ctx.showTwo();              // parowanie nic nie zmienia przy jednej stronie
@@ -122,9 +124,11 @@ export function updateMenu() {
   if (themeBtn?.use) themeBtn.use.setAttribute('href', `#i-pal-${palette}`);
 
   pinBtn.classList.toggle('pinned', pinned);
+  pinBtn.ariaPressed = String(pinned);
   pinBtn.dataset.tip = pinned ? 'Odblokuj pasek (auto-ukrywanie)' : 'Zablokuj pasek na stałe';
   toggleBtn.classList.toggle('open', popoverOpen);
-  toggleBtn.dataset.tip = popoverOpen ? 'Zamknij menu opcji (M)' : 'Otwórz menu opcji (M)';
+  toggleBtn.ariaExpanded = String(popoverOpen);
+  toggleBtn.dataset.tip = popoverOpen ? 'Zamknij menu opcji' : 'Otwórz menu opcji';   // skrót (M) dokleja data-key
 }
 
 function schedulePageJump() {

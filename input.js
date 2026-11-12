@@ -11,7 +11,7 @@ const KEY_ACTIONS = {
 };
 
 const HELP = 'Esc  strona główna\n→ ↓ Spacja PgDn  następne\n← ↑ PgUp  poprzednie\nHome / End  początek / koniec\n' +
-  'numer (lub Enter)  skok do strony\nShift + strzałka / scroll  skok o 10\nB  zakładka na tej stronie\n' +
+  'numer, Enter  skok do strony\nShift + strzałka / scroll  skok o 10\nB  zakładka na tej stronie\n' +
   'M  menu opcji\nK  kalkulator z boku\nW  zablokuj szerokość 100%\nH  zablokuj wysokość 100%\n' +
   'R  obrót o 90°\n' +
   'P  jedna / dwie strony\nD  tryb: ciemny / jasny / auto\nT  motyw: Gemini / systemowy\nO  pary nieparzyste / parzyste\n' +

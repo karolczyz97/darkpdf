@@ -128,3 +128,23 @@ test('zamknięcie w trakcie parsowania niszczy zadanie i nie otwiera starego PDF
   assert.ok(destroyed > 0);
   assert.equal(ready, 0);
 });
+
+test('pusty plik i plik, który nie jest PDF-em, dostają komunikat po polsku', async (t) => {
+  const { initDocLoader, openLocal } = await import('../doc-loader.js');
+  const old = { document: globalThis.document, window: globalThis.window };
+  const element = { addEventListener() {}, querySelector() { return element; }, classList: { toggle() {}, remove() {} }, append() {} };
+  globalThis.document = { getElementById: () => element, createElement: () => element, documentElement: element, body: element };
+  globalThis.window = { addEventListener() {} };
+  t.after(() => { for (const [key, value] of Object.entries(old)) { if (value === undefined) delete globalThis[key]; else globalThis[key] = value; } });
+  const messages = [];
+  const invalid = Object.assign(new Error('Invalid PDF structure.'), { name: 'InvalidPDFException' });
+  initDocLoader({
+    PDFJS: '', flash: (text) => messages.push(text), hideHint() {}, isPdfLoaded: () => true,
+    pdfjsLib: { getDocument: () => ({ promise: Promise.reject(invalid), destroy: async () => {} }) },
+    onDocumentReady: async () => {}
+  });
+  await openLocal({ name: 'pusty.pdf', arrayBuffer: async () => new ArrayBuffer(0) });
+  assert.equal(messages.at(-1), 'Nie udało się otworzyć pliku: plik jest pusty');
+  await openLocal({ name: 'notatka.txt', arrayBuffer: async () => data('to nie PDF').buffer });
+  assert.equal(messages.at(-1), 'Nie udało się otworzyć pliku: to nie jest plik PDF albo plik jest uszkodzony');
+});

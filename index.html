@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="pl">
+<html lang="pl" class="dark gemini">   <!-- domyślny wygląd od pierwszej klatki; theme.js poprawia go według ustawień -->
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -68,7 +68,7 @@
       <p class="lead"><span class="desktop-only">Przeciągnij plik PDF tutaj albo kliknij przycisk poniżej.</span><span class="mobile-only">Wybierz plik PDF z urządzenia.</span></p>
       <button class="pick" type="button"><span class="pick-ic"><svg class="ic"><use href="#i-open"/></svg></span><span>Wybierz plik PDF</span></button>
       <div id="recent" data-title="Ostatnie" hidden></div>
-      <p class="foot" id="recentHint" hidden>Enter otwiera ostatni plik.</p>
+      <p class="foot desktop-only" id="recentHint" hidden>Enter otwiera ostatni plik.</p>
       <div id="marks" data-title="Zakładki" hidden></div>
       <div class="keys-sections desktop-only">
         <div class="keys-col">
@@ -83,8 +83,8 @@
           <div class="keys-group">
             <div class="keys-title">Narzędzia i wygląd</div>
             <div class="k-row"><svg class="ic"><use href="#i-calc"/></svg><span>Kalkulator z boku</span><span class="k-keys"><kbd>K</kbd></span></div>
-            <div class="k-row"><svg class="ic"><use href="#i-mode-dark"/></svg><span>Tryb ciemny / jasny / systemowy</span><span class="k-keys"><kbd>D</kbd></span></div>
-            <div class="k-row"><svg class="ic"><use href="#i-pal-gemini"/></svg><span>Kolory standardowe / Gemini</span><span class="k-keys"><kbd>T</kbd></span></div>
+            <div class="k-row"><svg class="ic"><use href="#i-mode-dark"/></svg><span>Tryb ciemny / jasny / auto</span><span class="k-keys"><kbd>D</kbd></span></div>
+            <div class="k-row"><svg class="ic"><use href="#i-pal-gemini"/></svg><span>Motyw Gemini / systemowy</span><span class="k-keys"><kbd>T</kbd></span></div>
             <div class="k-row"><svg class="ic"><use href="#i-full"/></svg><span>Pełny ekran</span><span class="k-keys"><kbd>F</kbd></span></div>
             <div class="k-row"><svg class="ic"><use href="#i-open"/></svg><span>Otwórz plik</span><span class="k-keys"><kbd>Ctrl</kbd><kbd>O</kbd></span></div>
           </div>
@@ -205,14 +205,14 @@
     </div>
 
     <div class="menu-nav">
-      <button data-k="home" data-tip="Strona główna (Esc)" aria-label="Strona główna"><svg class="ic"><use href="#i-back"/></svg></button>
+      <button data-k="home" data-tip="Strona główna" data-key="Esc" aria-label="Strona główna"><svg class="ic"><use href="#i-back"/></svg></button>
       <button data-k="prev" data-tip="Poprzednia strona" data-key="←" aria-label="Poprzednia strona"><svg class="ic"><use href="#i-prev"/></svg></button>
-      <div class="page-select" data-tip="Wpisz numer strony (skok po 1s lub Enter)">
+      <div class="page-select" data-tip="Wpisz numer strony (skok po 1 s lub Enter)">
         <input type="text" class="page-input" inputmode="numeric" pattern="[0-9]*" aria-label="Numer strony">
         <span class="total"></span>
       </div>
       <button data-k="next" data-tip="Następna strona" data-key="→" aria-label="Następna strona"><svg class="ic"><use href="#i-next"/></svg></button>
-      <button class="menu-pin" data-k="pin" data-tip="Zablokuj dymek strony na stałe" aria-label="Zablokuj dymek strony">
+      <button class="menu-pin" data-k="pin" data-tip="Zablokuj pasek na stałe" aria-label="Zablokuj pasek" aria-pressed="false">
         <svg class="icon-unlocked" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
           <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
           <path d="M7 11V7a5 5 0 0 1 9.9-1"/>
@@ -222,7 +222,7 @@
           <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
         </svg>
       </button>
-      <button class="menu-toggle" data-k="toggle-menu" data-tip="Menu opcji (M)" aria-label="Menu opcji">
+      <button class="menu-toggle" data-k="toggle-menu" data-tip="Menu opcji" data-key="M" aria-label="Menu opcji" aria-controls="menu-popover" aria-expanded="false">
         <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
           <line x1="3" y1="6" x2="21" y2="6"/>
           <line x1="3" y1="12" x2="21" y2="12"/>
