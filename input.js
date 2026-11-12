@@ -4,6 +4,14 @@ const NOTCH_MIN_PX = 40;      // zdarzenie kółka >= tyle px = ząbek myszy (ka
 const TOUCHPAD_PX = 100;      // tyle px ruchu touchpada = jedna rozkładówka
 const SWIPE_PX = 50;          // tyle px ruchu palca to już przesunięcie, a nie stuknięcie
 const SWIPE_MS = 700;         // dłuższy ruch to przewijanie albo zaznaczanie, nie przewracanie
+const LINE_SCROLL = 0.15;     // ↑ ↓ przewijają wystającą stronę o tyle wysokości okna
+const SCREEN_SCROLL = 0.9;    // Spacja, PgUp, PgDn – prawie o cały ekran (kawałek zostaje dla orientacji)
+
+// Klawisze, które w „Szerokość 100%” najpierw przewijają stronę, jak kółko myszy: [kierunek, ile ekranu]
+const SCROLL_KEYS = {
+  ArrowDown: [1, LINE_SCROLL], ArrowUp: [-1, LINE_SCROLL],
+  PageDown: [1, SCREEN_SCROLL], PageUp: [-1, SCREEN_SCROLL], ' ': [1, SCREEN_SCROLL]
+};
 
 const KEY_ACTIONS = {
   d: 'dark', t: 'theme', p: 'pages', o: 'pairing', f: 'full', r: 'rotate',
@@ -33,6 +41,13 @@ export function resetCursor() {
 }
 
 export function initInput(ctx) {
+  // Szerokość 100%: strona wystaje w pionie i nie doszła jeszcze do brzegu w kierunku dir (1 w dół, -1 w górę)
+  function canScrollPage(dir) {
+    const stage = ctx.stage;
+    if (ctx.getFitMode() !== 'width' || stage.scrollHeight <= stage.clientHeight + 10) return false;
+    return dir > 0 ? stage.scrollTop + stage.clientHeight < stage.scrollHeight - 2 : stage.scrollTop > 2;
+  }
+
   function wakeCursor() {
     resetCursor();
     if (ctx.isPdfLoaded()) {
@@ -102,6 +117,15 @@ export function initInput(ctx) {
     if (action) { ctx.act(action); e.preventDefault(); return; }
 
     if (!ctx.isPdfLoaded() && k !== '?') return;       // bez pliku strzałki i spacja przewijają ekran startowy
+    const scroll = SCROLL_KEYS[k];
+    if (scroll && (k === ' ' || !e.shiftKey)) {            // Shift + strzałka zawsze skacze o 10
+      const dir = k === ' ' && e.shiftKey ? -1 : scroll[0];
+      if (canScrollPage(dir)) {
+        ctx.stage.scrollBy({ top: dir * scroll[1] * ctx.stage.clientHeight });
+        e.preventDefault();
+        return;
+      }
+    }
     const jump = e.shiftKey ? 10 : 1;   // Shift = skok o 10 rozkładówek
     if (['ArrowRight', 'ArrowDown', 'PageDown'].includes(k)) { ctx.flip(jump); e.preventDefault(); return; }
     if (['ArrowLeft', 'ArrowUp', 'PageUp'].includes(k)) { ctx.flip(-jump); e.preventDefault(); return; }
@@ -173,12 +197,8 @@ export function initInput(ctx) {
     if (!ctx.isPdfLoaded()) return;
 
     const stage = ctx.stage;
-    // W trybie blokady szerokości pozwól na naturalne przewijanie, jeśli strona wystaje pionowo
-    if (ctx.getFitMode() === 'width' && stage.scrollHeight > stage.clientHeight + 10) {
-      const atTop = stage.scrollTop <= 2;
-      const atBottom = stage.scrollTop + stage.clientHeight >= stage.scrollHeight - 2;
-      if ((e.deltaY > 0 && !atBottom) || (e.deltaY < 0 && !atTop)) return;   // naturalne przewijanie strony
-    }
+    // W trybie blokady szerokości wystająca strona przewija się naturalnie, a na brzegu kółko przewraca strony
+    if (e.deltaY && canScrollPage(Math.sign(e.deltaY))) return;
     // Tryb wysokości: jeśli strony wystają w bok, ruch poziomy (touchpad, kółko przechylane) przewija je w bok,
     // a kółko w pionie dalej przerzuca strony
     if (ctx.getFitMode() === 'height' && stage.scrollWidth > stage.clientWidth + 2 && Math.abs(e.deltaX) > Math.abs(e.deltaY)) {

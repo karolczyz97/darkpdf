@@ -37,13 +37,14 @@ Chromium/Chrome również na Linux/macOS; inną lokalizację wskaż przez `CHROM
 | `calc-panel.js` | panel kalkulatora i rozdzielacz |
 | `util.js` | ustawienia w localStorage, pamięć LRU |
 | `sw.js` | pamięć podręczna do pracy offline |
+| `manifest.webmanifest`, `icon*` | instalacja jako aplikacja i ikona; zainstalowany czytnik otwiera PDF-y z systemu |
 | `lib/pdfjs` | pdf.js 4.10.38 (bez zmian) |
 
 Po wdrożeniu nie trzeba podbijać numerów `?v=` – `sw.js` zawsze sprawdza na serwerze, czy plik się zmienił.
 Przy wolnej sieci po dwóch sekundach korzysta z cache, jeśli zapisano daną odpowiedź.
 Workery czytnika i kalkulatora usuwają tylko własne stare cache.
 
-Motyw Gemini używa wspólnych kolorów i promieni z `theme.css` oraz lokalnego Google Sans Flex
+Motyw Gemini ma wersję ciemną i jasną, obie używają wspólnych kolorów i promieni z `theme.css` oraz lokalnego Google Sans Flex
 (polskie znaki, licencja SIL OFL w `fonts/OFL.txt`). Font jest zapisywany także do pracy offline.
 Tło paneli, ich zewnętrzne zaokrąglenia i dopasowanie odwróconego PDF-a do tła są niezależne od stylu kontrolek.
 

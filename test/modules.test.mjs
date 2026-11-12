@@ -434,3 +434,33 @@ test('doc-loader.js: openDocument niszczy dokument doc.destroy() gdy numer żąd
   if (origDoc) globalThis.document = origDoc; else delete globalThis.document;
   if (origWin) globalThis.window = origWin; else delete globalThis.window;
 });
+
+test('Szerokość 100%: ↓ i Spacja najpierw przewijają wystającą stronę, na brzegu przewracają', async (t) => {
+  const { initInput } = await import('../input.js');
+  const oldWindow = globalThis.window;
+  const listeners = {};
+  globalThis.window = { addEventListener: (name, fn) => listeners[name] = fn };
+  t.after(() => { if (oldWindow === undefined) delete globalThis.window; else globalThis.window = oldWindow; });
+  const scrolled = [];
+  const stage = { scrollTop: 0, clientHeight: 800, scrollHeight: 2000, scrollBy: ({ top }) => scrolled.push(top) };
+  let flips = 0;
+  initInput({
+    isPdfLoaded: () => true, isPageInputFocused: () => false, isPopoverOpen: () => false, isMenuHidden: () => true,
+    isPinned: () => false, getFitMode: () => 'width', stage, flip: (n) => { flips += n; }, next: () => flips++, prev: () => flips--
+  });
+  const press = (key, shiftKey = false) => listeners.keydown({ key, shiftKey, target: { tagName: 'DIV', closest: () => null }, preventDefault() {} });
+
+  press('ArrowDown');
+  press(' ');
+  press('ArrowUp');                 // na samej górze: przewraca wstecz
+  assert.deepEqual(scrolled, [120, 720]);
+  assert.equal(flips, -1);
+
+  stage.scrollTop = 1200;           // na samym dole: przewraca dalej
+  press('PageDown');
+  press('ArrowDown', true);         // Shift + strzałka zawsze skacze o 10
+  assert.equal(flips, 10);
+  press('ArrowRight');              // strzałki w bok zawsze przewracają
+  assert.equal(flips, 11);
+  assert.equal(scrolled.length, 2);
+});

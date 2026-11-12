@@ -42,3 +42,25 @@
   --gem-radius-field: 24px;
   --gem-menu-shadow: 0 0 20px rgba(0, 0, 0, .28);
 }
+
+/* Jasna wersja tej samej palety (gemini.google.com w trybie jasnym). Zmienne mają te same nazwy, więc reguły
+   obu aplikacji działają bez zmian: DarkPDF włącza ją klasą .gemini bez .dark, kalkulator atrybutami na <html>. */
+html.gemini:not(.dark),
+html[data-mode="light"][data-palette="gemini"] {
+  --gem-bg: #ffffff;
+  --gem-surface: #ffffff;
+  --gem-fill: #f0f4f9;
+  --gem-fill-2: #f0f4f9;
+  --gem-menu: #f0f4f9;
+  --gem-hover: #e1e6ec;
+  --gem-hover-2: #d3dbe5;
+  --gem-line: #e1e3e1;
+  --gem-text: #1f1f1f;
+  --gem-text-muted: #444746;
+  --gem-text-dim: #5f6368;
+  --gem-accent: #0b57d0;
+  --gem-accent-bg: #d3e3fd;
+  --gem-accent-line: #a8c7fa;
+  --gem-err: #b3261e;
+  --gem-menu-shadow: 0 1px 3px rgba(60, 64, 67, .3), 0 4px 8px 3px rgba(60, 64, 67, .15);
+}

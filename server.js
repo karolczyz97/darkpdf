@@ -23,7 +23,8 @@ const MIME = {
   '.png': 'image/png',
   '.pdf': 'application/pdf',
   '.ttf': 'font/ttf',
-  '.woff2': 'font/woff2'
+  '.woff2': 'font/woff2',
+  '.webmanifest': 'application/manifest+json'
 };
 
 function send(res, code, text, headers = {}) {

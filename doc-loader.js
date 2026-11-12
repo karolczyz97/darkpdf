@@ -506,4 +506,9 @@ export function initDocLoader(context) {
   });
 
   window.addEventListener('hashchange', openFromHash);
+
+  // Zainstalowany czytnik jest w systemie programem do PDF-ów (manifest: file_handlers) – plik przychodzi tutaj
+  window.launchQueue?.setConsumer(async ({ files }) => {
+    if (files?.[0]) openLocal(await files[0].getFile());
+  });
 }

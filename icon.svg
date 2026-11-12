@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- Ikona DarkPDF: kartka z zagiętym rogiem i księżyc trybu ciemnego w gradiencie z ekranu startowego -->
+  <defs>
+    <linearGradient id="g" x1="0" y1="1" x2="1" y2="0">
+      <stop offset="0" stop-color="#4285f4"/>
+      <stop offset=".45" stop-color="#9b72cb"/>
+      <stop offset="1" stop-color="#d96570"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="112" fill="#131314"/>
+  <path d="M152 96h148l96 96v208a28 28 0 0 1-28 28H152a28 28 0 0 1-28-28V124a28 28 0 0 1 28-28z" fill="#1f1f1f" stroke="#e3e3e3" stroke-width="20" stroke-linejoin="round"/>
+  <path d="M300 96v68a28 28 0 0 0 28 28h68" fill="none" stroke="#e3e3e3" stroke-width="20" stroke-linejoin="round"/>
+  <path transform="translate(170 214) scale(7.2)" d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" fill="url(#g)"/>
+</svg>

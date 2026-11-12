@@ -80,7 +80,7 @@ export function applyTheme() {
   const isDark = isDarkNow();
   if (typeof document !== 'undefined') {
     document.documentElement.classList.toggle('dark', isDark);
-    document.documentElement.classList.toggle('gemini', isDark && palette === 'gemini');
+    document.documentElement.classList.toggle('gemini', palette === 'gemini');   // theme.css ma paletę ciemną i jasną
     syncPageColors();
     document.querySelector('meta[name="theme-color"]')?.setAttribute('content', isDark ? '#131314' : '#ffffff');
   }
