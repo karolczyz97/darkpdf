@@ -422,6 +422,36 @@ test('rzeczywista przeglądarka: ładowanie viewer.js bez błędów, obsługa kl
     });
     assert.deepEqual(rResultClick.result.value, { inserted: '20', copied: '20' });
 
+    // Klawiatura ekranowa, ⌫, Esc w wyszukiwarce stałych i ans po wyczyszczeniu historii
+    const rCalcUi = await send('Runtime.evaluate', {
+      expression: `(async () => {
+        const expr = document.getElementById('calc-expr');
+        const keys = document.getElementById('calc-keys');
+        const type = (value) => { expr.value = value; expr.focus(); expr.setSelectionRange(value.length, value.length); };
+        const out = {};
+        type('20 m/s'); keys.querySelector('[data-i="^2"]').click(); out.unitPower = expr.value;
+        type('−5'); keys.querySelector('[data-i="^"]').click(); out.negPower = expr.value;
+        type('3*4'); keys.querySelector('[data-i="^2"]').click(); out.plainPower = expr.value;
+        type('log10('); keys.querySelector('[data-a="back"]').click(); out.backFn = expr.value;
+        type('x1('); keys.querySelector('[data-a="back"]').click(); out.backVar = expr.value;
+        const search = document.getElementById('calc-search');
+        search.value = 'masa'; search.dispatchEvent(new Event('input', { bubbles: true }));
+        search.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+        out.search = search.value;
+        out.stillOpen = document.documentElement.classList.contains('calc-open');
+        expr.value = '7*6'; expr.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+        document.getElementById('calc-clear-hist').click();
+        expr.value = 'ans'; expr.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+        out.ans = document.getElementById('calc-result').textContent;
+        expr.value = '';
+        return out;
+      })()`, awaitPromise: true, returnByValue: true
+    });
+    assert.deepEqual(rCalcUi.result.value, {
+      unitPower: '(20 m/s)^2', negPower: '(−5)^', plainPower: '3*4^2', backFn: '', backVar: 'x1',
+      search: '', stillOpen: true, ans: '0'
+    });
+
     // Fokus w polu kalkulatora nie jest potrzebny do dalszych skrótów czytnika.
     await send('Runtime.evaluate', { expression: 'document.activeElement?.blur()' });
 
