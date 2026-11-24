@@ -6,7 +6,9 @@ export function fileRoute(hash) {
     try { value = decodeURIComponent(value); } catch {}
   }
   const page = /#page=(\d+)/.exec(value);
-  return { url: value.split('#')[0], page: page ? Number(page[1]) : null };
+  const url = value.split('#')[0].trim();
+  if (!url) return null;                       // „#file=” bez adresu nie jest trasą
+  return { url, page: page ? Number(page[1]) : null };
 }
 
 export const fileHash = (url, page = null) => '#file=' + encodeURIComponent(url) + (page ? '#page=' + page : '');

@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { indexedDB, IDBObjectStore } from 'fake-indexeddb';
 import { fileRoute, fileHash } from '../doc-url.js';
-import { localFileKey, identifyLocalFile, rememberFile, recentFiles, storedFile, forgetFile, bookmarks } from '../library.js';
+import { localFileKey, identifyLocalFile, rememberFile, recentFiles, storedFile, forgetFile, bookmarks, toggleBookmark, removeFromRecent } from '../library.js';
 import { pref } from '../util.js';
 import { initDocHistory, updateDocHistory } from '../doc-history.js';
 
@@ -18,6 +18,9 @@ test('adresy PDF zachowują spacje, procenty, zapytania i numer strony', () => {
   assert.deepEqual(fileRoute('#file=https://files/a%20b.pdf#page=3'), { url: 'https://files/a%20b.pdf', page: 3 });
   assert.deepEqual(fileRoute('#file=https%3A%2F%2Ffiles%2Fa%2520b.pdf'), { url: 'https://files/a%20b.pdf', page: null });
   assert.equal(fileRoute('#doc'), null);
+  assert.equal(fileRoute('#file='), null);              // pusty adres nie jest trasą
+  assert.equal(fileRoute('#file=#page=3'), null);
+  assert.equal(fileRoute('#file=   '), null);
 });
 
 test('zakodowany adres startowy nie dopisuje drugiego wpisu historii', (t) => {
@@ -147,4 +150,64 @@ test('pusty plik i plik, który nie jest PDF-em, dostają komunikat po polsku', 
   assert.equal(messages.at(-1), 'Nie udało się otworzyć pliku: plik jest pusty');
   await openLocal({ name: 'notatka.txt', arrayBuffer: async () => data('to nie PDF').buffer });
   assert.equal(messages.at(-1), 'Nie udało się otworzyć pliku: to nie jest plik PDF albo plik jest uszkodzony');
+});
+
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+async function until(check, tries = 50) {
+  for (let i = 0; i < tries; i++) { if (await check()) return true; await sleep(5); }
+  return false;
+}
+async function clearLibrary() {
+  for (const key of ['local:marked', 'local:plain', ...Array.from({ length: 12 }, (_, i) => 'local:n' + i)]) await forgetFile(key);
+  for (const rec of await recentFiles()) await forgetFile(rec.key);
+  pref.setJson('bookmarks', []);
+}
+
+test('plik z zakładką zostaje w bazie po otwarciu ponad ośmiu nowszych PDF-ów', async () => {
+  await clearLibrary();
+  await rememberFile('local:marked', 'marked.pdf', new Blob(['MARK']));
+  pref.setJson('bookmarks', [{ key: 'local:marked', name: 'marked.pdf', page: 5 }]);
+  for (let i = 0; i < 9; i++) { await sleep(3); await rememberFile('local:n' + i, `n${i}.pdf`, new Blob(['PDF'])); }
+  const visible = await recentFiles();
+  assert.equal(visible.length, 8, 'lista „Ostatnie” ma osiem wpisów');
+  assert.ok(!visible.some((r) => r.key === 'local:marked'), 'plik z zakładką nie jest już na liście');
+  assert.equal(await storedFile('local:n0'), undefined, 'najstarszy plik bez zakładki wypada');
+  const kept = await storedFile('local:marked');
+  assert.equal(kept.hiddenFromRecent, true);
+  assert.equal(await kept.blob.text(), 'MARK', 'zakładka nadal ma plik do otwarcia');
+});
+
+test('usunięcie ostatniej zakładki sprząta ukryty plik, a zakładki innej strony go zostawiają', async () => {
+  await clearLibrary();
+  await rememberFile('local:marked', 'marked.pdf', new Blob(['MARK']));
+  pref.setJson('bookmarks', [{ key: 'local:marked', name: 'marked.pdf', page: 1 }, { key: 'local:marked', name: 'marked.pdf', page: 2 }]);
+  assert.equal(await removeFromRecent('local:marked'), true);
+  assert.equal((await storedFile('local:marked')).hiddenFromRecent, true);
+  assert.equal((await recentFiles()).length, 0);
+  assert.equal(toggleBookmark('local:marked', 'marked.pdf', 1), false);          // zostaje zakładka na stronie 2
+  await sleep(30);
+  assert.ok(await storedFile('local:marked'), 'jeszcze jedna zakładka – plik zostaje');
+  assert.equal(toggleBookmark('local:marked', 'marked.pdf', 2), false);          // ostatnia
+  assert.ok(await until(async () => (await storedFile('local:marked')) === undefined), 'plik bez zakładek znika z bazy');
+});
+
+test('usunięcie z listy „Ostatnie” bez zakładki kasuje plik i jego ustawienia', async () => {
+  await clearLibrary();
+  await rememberFile('local:plain', 'plain.pdf', new Blob(['PLAIN']));
+  pref.set('pos:local:plain', 7);
+  assert.equal(await removeFromRecent('local:plain'), false);
+  assert.equal(await storedFile('local:plain'), undefined);
+  assert.equal(pref.get('pos:local:plain'), undefined);
+});
+
+test('ukryty plik bez zakładek (np. po przekroczeniu limitu zakładek) znika przy następnym zapisie', async () => {
+  await clearLibrary();
+  await rememberFile('local:marked', 'marked.pdf', new Blob(['MARK']));
+  pref.setJson('bookmarks', [{ key: 'local:marked', name: 'marked.pdf', page: 1 }]);
+  await removeFromRecent('local:marked');
+  pref.setJson('bookmarks', []);
+  await rememberFile('local:plain', 'plain.pdf', new Blob(['PLAIN']));
+  assert.equal(await storedFile('local:marked'), undefined);
+  assert.ok(await storedFile('local:plain'));
+  await clearLibrary();
 });

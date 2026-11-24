@@ -1,7 +1,7 @@
 // DarkPDF – pamięć podręczna aplikacji, dzięki której czytnik działa bez internetu.
 // Pliki aplikacji: najpierw z sieci (zawsze świeże, bez ręcznych ?v=), bez sieci – ostatnia zapisana wersja.
-// pdf.js w lib/pdfjs się nie zmienia, więc bierzemy go od razu z pamięci.
-const CACHE = 'darkpdf-v25';
+// pdf.js w lib/pdfjs i KaTeX w ../calc/lib/katex się nie zmieniają, więc bierzemy je od razu z pamięci.
+const CACHE = 'darkpdf-v26';
 const CORE = [
   './',
   'index.html',
@@ -27,6 +27,12 @@ const CORE = [
   '../calc/calc.css',
   '../calc/calc-app.js',
   '../calc/calc-engine.js',
+  '../calc/lib/katex/katex.min.js',
+  '../calc/lib/katex/katex.min.css',
+  '../calc/lib/katex/fonts/KaTeX_Main-Regular.woff2',
+  '../calc/lib/katex/fonts/KaTeX_Math-Italic.woff2',
+  '../calc/lib/katex/fonts/KaTeX_Size1-Regular.woff2',
+  '../calc/lib/katex/fonts/KaTeX_Size2-Regular.woff2',
   'lib/pdfjs/build/pdf.min.mjs',
   'lib/pdfjs/build/pdf.worker.min.mjs'
 ];
@@ -48,19 +54,11 @@ self.addEventListener('fetch', (e) => {
   const req = e.request;
   if (req.method !== 'GET') return;
   const url = new URL(req.url);
-  const katex = url.hostname === 'cdn.jsdelivr.net' && url.pathname.startsWith('/npm/katex@');
-  if (url.origin !== location.origin && !katex) return;
+  if (url.origin !== location.origin) return;
 
   e.respondWith((async () => {
     const cache = await caches.open(CACHE);
-    if (katex) {
-      const hit = await cache.match(req);
-      if (hit) return hit;
-      const res = await fetch(req);
-      if (res.ok || res.type === 'opaque') cache.put(req, res.clone());
-      return res;
-    }
-    if (url.pathname.includes('/lib/pdfjs/')) {
+    if (url.pathname.includes('/lib/pdfjs/') || url.pathname.includes('/lib/katex/')) {
       const hit = await cache.match(req);
       if (hit) return hit;
       const res = await fetch(req);
@@ -76,7 +74,8 @@ self.addEventListener('fetch', (e) => {
       // więc po wdrożeniu od razu widać nową wersję wszystkich plików naraz.
       // Limit 2 s tylko dla samej strony: przy wolnej sieci cała aplikacja startuje z cache.
       const res = await fetch(req, { cache: 'no-cache', signal: hit && navigate ? AbortSignal.timeout(2000) : undefined });
-      if (res.ok) await cache.put(req, res.clone()).catch(() => {});
+      // bez ?query: ten sam plik z innym adresem nie dokłada osobnej kopii (odczyt i tak ignoreSearch)
+      if (res.ok) await cache.put(url.origin + url.pathname, res.clone()).catch(() => {});
       return res;
     } catch (err) {
       if (!hit) throw err;

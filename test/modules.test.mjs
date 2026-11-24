@@ -12,7 +12,9 @@ import {
   cycleColorMode,
   togglePalette,
   isDarkNow,
-  clearPaperCache
+  clearPaperCache,
+  parseRgb,
+  toHex
 } from '../theme.js';
 
 import {
@@ -51,6 +53,17 @@ test('theme.js: stałe i cykle motywu', () => {
   assert.equal(isDarkNow(), true);
   while (getColorMode() !== 'light') cycleColorMode();
   assert.equal(isDarkNow(), false);
+});
+
+test('theme.js: kolor z przeglądarki w rgb() i color(srgb) daje ten sam hex (pasek przeglądarki)', () => {
+  assert.deepEqual(parseRgb('rgb(15, 15, 15)'), [15, 15, 15]);
+  assert.deepEqual(parseRgb('rgba(11, 12, 13, 0.5)'), [11, 12, 13]);
+  assert.deepEqual(parseRgb('color(srgb 0.0588235 0.0588235 0.0588235)'), [15, 15, 15]);   // color-mix w Chrome
+  assert.deepEqual(parseRgb('color(srgb 1 1 1 / 0.5)'), [255, 255, 255]);
+  assert.deepEqual(parseRgb('color(srgb 1.2 -0.1 0.5)'), [255, 0, 128]);                  // poza gamutem: obcięte do 0–255
+  assert.deepEqual(parseRgb('nie-kolor'), [0, 0, 0]);
+  assert.equal(toHex([15, 15, 15]), '#0f0f0f');
+  assert.equal(toHex(parseRgb('rgb(241, 243, 244)')), '#f1f3f4');
 });
 
 test('menu-bar.js: stan popovera, widoczności i wymuszonego ukrywania', () => {

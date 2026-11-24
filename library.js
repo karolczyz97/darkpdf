@@ -3,7 +3,7 @@
 // Dla plików z sieci pamiętamy sam adres i pobieramy je ponownie przez wtyczkę.
 import { pref } from './util.js';
 
-const RECENT_MAX = 8;     // tyle plików trzymamy w pamięci przeglądarki
+const RECENT_MAX = 8;     // tyle plików pokazuje lista „Ostatnie”
 const MARKS_MAX = 30;     // tyle zakładek pamiętamy
 
 // Klucz pliku z sieci to jego adres; lokalny plik identyfikuje skrót jego zawartości.
@@ -63,20 +63,28 @@ async function transaction(mode, fn) {
   });
 }
 
-// Zapamiętuje plik (blob z dysku albo sam adres z sieci); najstarsze ponad RECENT_MAX wypadają
+// Zapamiętuje plik (blob z dysku albo sam adres z sieci). Lista „Ostatnie” ma najwyżej RECENT_MAX wpisów;
+// starszy plik, który ma zakładkę, nie jest kasowany – zostaje w bazie z hiddenFromRecent (otwiera go zakładka),
+// a bez zakładki wypada. Ukryty plik, który stracił zakładki, też wypada.
 export async function rememberFile(key, name, blob, legacyKey = null) {
   try {
     const rec = { key, name, ts: Date.now() };
     if (isRemoteKey(key)) rec.url = key;
     else if (blob?.size) rec.blob = blob;
     else return false;
+    const marked = new Set(bookmarks().map((b) => b.key));
     await transaction('readwrite', (st) => {
       const put = st.put(rec);
       if (legacyKey) st.delete(legacyKey);
       const all = st.getAll();
       all.onsuccess = () => {
-        const others = all.result.filter((r) => r.key !== key).sort((a, b) => b.ts - a.ts);
-        for (const old of others.slice(RECENT_MAX - 1)) st.delete(old.key);
+        const others = all.result.filter((r) => r.key !== key);
+        for (const hidden of others.filter((r) => r.hiddenFromRecent && !marked.has(r.key))) st.delete(hidden.key);
+        const visible = others.filter((r) => !r.hiddenFromRecent).sort((a, b) => b.ts - a.ts);
+        for (const old of visible.slice(RECENT_MAX - 1)) {
+          if (old.blob && marked.has(old.key)) st.put({ ...old, hiddenFromRecent: true });
+          else st.delete(old.key);
+        }
       };
       return put;
     });
@@ -85,14 +93,39 @@ export async function rememberFile(key, name, blob, legacyKey = null) {
   } catch { return false; }
 }
 
-// Zapamiętane pliki, najnowsze pierwsze
+// Pliki z listy „Ostatnie”, najnowsze pierwsze (bez tych, które trzyma tylko zakładka)
 export async function recentFiles() {
   const all = await transaction('readonly', (st) => st.getAll());
-  return (all || []).sort((a, b) => b.ts - a.ts);
+  return (all || []).filter((r) => !r.hiddenFromRecent).sort((a, b) => b.ts - a.ts);
 }
 
 export const storedFile = (key) => transaction('readonly', (st) => st.get(key));
 export const forgetFile = (key) => transaction('readwrite', (st) => st.delete(key));
+
+// Usuwa plik z listy „Ostatnie”: z zakładką zostaje w bazie (ukryty), bez niej znika razem z ustawieniami strony.
+// Zwraca true, gdy plik został w bazie dla zakładki.
+export async function removeFromRecent(key) {
+  const rec = await storedFile(key);
+  if (rec?.blob && bookmarks().some((m) => m.key === key)) {
+    await transaction('readwrite', (st) => st.put({ ...rec, hiddenFromRecent: true }));
+    return true;
+  }
+  await forgetDocument(key);
+  return false;
+}
+
+export async function forgetDocument(key) {
+  await forgetFile(key);
+  for (const prefix of ['pos:', 'rot:', 'two:', 'pairing:']) pref.remove(prefix + key);
+}
+
+// Ukryty plik, który stracił ostatnią zakładkę, nie ma już po co zajmować miejsca w bazie
+export async function forgetIfOrphaned(key) {
+  try {
+    const rec = await storedFile(key);
+    if (rec?.hiddenFromRecent && !bookmarks().some((m) => m.key === key)) await forgetDocument(key);
+  } catch {}               // brak dostępu do bazy nie blokuje zakładek; osieroconego pliku pozbędzie się rememberFile()
+}
 
 // ---------- zakładki ----------
 // [{ key, name, page, ts }], najnowsze pierwsze
@@ -108,5 +141,6 @@ export function toggleBookmark(key, name, page) {
   const rest = all.filter((m) => m.key !== key || m.page !== page);
   if (!had) rest.unshift({ key, name, page, ts: Date.now() });
   pref.setJson('bookmarks', rest.slice(0, MARKS_MAX));
+  if (had) void forgetIfOrphaned(key);
   return !had;
 }

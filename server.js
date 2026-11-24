@@ -1,16 +1,16 @@
 // Serwer do pracy lokalnej – układ jak na GitHub Pages: czytnik pod /darkpdf/, kalkulator pod /calc/.
 // Aplikacje sięgają do siebie ścieżką ../, więc drugie repo musi leżeć obok (…/darkpdf i …/calc).
 // Start: npm start → http://localhost:8080/  (inny port: PORT=9000 npm start)
-// Ten sam plik jest w obu repo – różni się tylko stałą SELF.
+// Ten plik jest w obu repo identyczny: SELF wynika z nazwy katalogu, w którym leży.
 import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const SELF = 'darkpdf';                              // które to repo; drugie leży w katalogu obok
+const HERE = path.dirname(fileURLToPath(import.meta.url));
+const SELF = path.basename(HERE) === 'calc' ? 'calc' : 'darkpdf';   // które to repo; drugie leży w katalogu obok
 const OTHER = SELF === 'darkpdf' ? 'calc' : 'darkpdf';
 const PORT = Number(process.env.PORT) || (SELF === 'darkpdf' ? 8080 : 3333);
-const HERE = path.dirname(fileURLToPath(import.meta.url));
 const APPS = new Map([[SELF, HERE], [OTHER, path.resolve(HERE, '..', OTHER)]]);
 
 const MIME = {

@@ -32,11 +32,16 @@ Chromium/Chrome również na Linux/macOS; inną lokalizację wskaż przez `CHROM
 | `layout.js` | czysta geometria: rozkładówki i skala strony (testowana) |
 | `library.js` | ostatnio otwierane pliki (IndexedDB) i zakładki |
 | `doc-loader.js` | otwieranie i anulowanie dokumentów, hasła, ekran startowy |
+| `doc-history.js` | historia przeglądarki: adres dokumentu, powrót na ekran główny |
 | `doc-url.js` | wspólny zapis i odczyt adresów PDF |
 | `extension-loader.js` | pobieranie przez wtyczkę, identyfikatory i timeouty |
+| `input.js` | klawiatura, mysz, dotyk i przeciąganie plików |
+| `menu-bar.js` | dolny pasek menu i wyskakujące menu |
+| `theme.js` | tryb ciemny/jasny/auto, paleta Gemini/systemowa, kolor paska przeglądarki, filtry kartki PDF |
+| `theme.css` | wspólna paleta Gemini (ciemna i jasna) i lokalny font |
 | `calc-panel.js` | panel kalkulatora i rozdzielacz |
 | `util.js` | ustawienia w localStorage, pamięć LRU |
-| `sw.js` | pamięć podręczna do pracy offline |
+| `sw.js` | pamięć podręczna do pracy offline (czytnik, kalkulator, pdf.js i KaTeX) |
 | `manifest.webmanifest`, `icon*` | instalacja jako aplikacja i ikona; zainstalowany czytnik otwiera PDF-y z systemu |
 | `lib/pdfjs` | pdf.js 4.10.38 (bez zmian) |
 
@@ -44,6 +49,8 @@ Po wdrożeniu nie trzeba podbijać numerów `?v=` – `sw.js` zawsze sprawdza na
 Przy wolnej sieci po dwóch sekundach korzysta z cache, jeśli zapisano daną odpowiedź.
 Workery czytnika i kalkulatora usuwają tylko własne stare cache.
 
+Tryb i paleta to atrybuty `data-mode` (`dark`/`light`) i `data-palette` (`gemini`/`system`) na `<html>` –
+ten sam kontrakt w czytniku i w kalkulatorze, więc `theme.css`, `viewer.css` i `calc.css` mają jedne selektory.
 Motyw Gemini ma wersję ciemną i jasną, obie używają wspólnych kolorów i promieni z `theme.css` oraz lokalnego Google Sans Flex
 (polskie znaki, licencja SIL OFL w `fonts/OFL.txt`). Font jest zapisywany także do pracy offline.
 Tło paneli, ich zewnętrzne zaokrąglenia i dopasowanie odwróconego PDF-a do tła są niezależne od stylu kontrolek.
@@ -51,6 +58,9 @@ Tło paneli, ich zewnętrzne zaokrąglenia i dopasowanie odwróconego PDF-a do t
 Lokalne PDF-y są identyfikowane przez SHA-256 zawartości. Dawne wpisy oparte na nazwie i rozmiarze
 są migrowane wraz z ustawieniami i zakładkami tylko po potwierdzeniu zgodności zawartości.
 Zapis i usuwanie nadmiarowych wpisów historii odbywają się w jednej transakcji.
+Lista „Ostatnie” ma najwyżej osiem plików, ale plik z zakładką nie jest kasowany z bazy, gdy z niej wypada
+(rekord dostaje `hiddenFromRecent`, a zakładka go otwiera); ostatnia usunięta zakładka sprząta taki plik.
+Wzory jednostek w kalkulatorze rysuje KaTeX z `../calc/lib/katex` – lokalnie, więc także offline.
 Powrót na ekran główny natychmiast anuluje otwieranie i zastępuje bieżący adres adresem startowym.
 Escape działa także podczas otwierania pierwszego dokumentu. Odczyty z historii i zakładek
 należą do tego samego żądania otwarcia, więc spóźniony wynik nie przywraca opuszczonego dokumentu.

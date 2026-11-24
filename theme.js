@@ -26,6 +26,17 @@ let flashMsg = null;
 
 let probeEl = null;
 
+// Kolor z getComputedStyle → [r, g, b] 0–255. rgb(r, g, b) ma kanały 0–255, color(srgb r g b) (tak Chrome
+// zwraca color-mix) – 0–1.
+export function parseRgb(computed) {
+  const m = computed.match(/[-+]?[\d.]+/g);
+  if (!m) return [0, 0, 0];
+  const scale = computed.startsWith('color(') ? 255 : 1;
+  return m.slice(0, 3).map((x) => Math.min(255, Math.max(0, Math.round(Number(x) * scale))));
+}
+
+export const toHex = ([r, g, b]) => '#' + [r, g, b].map((x) => x.toString(16).padStart(2, '0')).join('');
+
 function cssRgb(name) {
   if (typeof document === 'undefined') return [0, 0, 0];
   if (!probeEl) {
@@ -36,8 +47,7 @@ function cssRgb(name) {
     (document.body || document.documentElement)?.append(probeEl);
   }
   probeEl.style.color = `var(${name})`;
-  const m = getComputedStyle(probeEl).color.match(/[\d.]+/g);
-  return m ? m.slice(0, 3).map(Number) : [0, 0, 0];
+  return parseRgb(getComputedStyle(probeEl).color);
 }
 
 // Odwrócona kartka ma dokładnie kolor tła, a czarny druk kolor tekstu motywu. Kolory bierzemy z CSS
@@ -79,10 +89,10 @@ export const getPalette = () => palette;
 export function applyTheme() {
   const isDark = isDarkNow();
   if (typeof document !== 'undefined') {
-    document.documentElement.classList.toggle('dark', isDark);
-    document.documentElement.classList.toggle('gemini', palette === 'gemini');   // theme.css ma paletę ciemną i jasną
+    document.documentElement.dataset.mode = isDark ? 'dark' : 'light';
+    document.documentElement.dataset.palette = palette;   // theme.css ma paletę Gemini ciemną i jasną
     syncPageColors();
-    document.querySelector('meta[name="theme-color"]')?.setAttribute('content', isDark ? '#131314' : '#ffffff');
+    document.querySelector('meta[name="theme-color"]')?.setAttribute('content', toHex(cssRgb('--ui-stage-bg')));
   }
   if (notifyChange) notifyChange();
 }

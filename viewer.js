@@ -408,7 +408,10 @@ function pageText(n) {
 async function textLayerFor(n, scale) {
   const k = cacheKey(n, scale);
   const hit = tlCache.get(k);
-  if (hit) return hit;
+  if (hit) {
+    hit.style.setProperty('--scale-factor', String(scale));   // warstwa z cache zawsze ma skalę, dla której ją pokazujemy
+    return hit;
+  }
   const page = await pdf.getPage(n);
   const div = document.createElement('div');
   div.className = 'textLayer';

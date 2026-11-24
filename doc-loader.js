@@ -9,6 +9,7 @@ import {
   rememberFile,
   identifyLocalFile,
   recentFiles,
+  removeFromRecent,
   storedFile,
   forgetFile,
   bookmarks,
@@ -116,6 +117,7 @@ async function detectDocumentLayout(doc) {
   if (!doc) return { pairing: 'odd', two: true };
   if (doc.numPages <= 1) return { pairing: 'odd', two: false };
 
+  let p1 = null, p2 = null;     // strony 1–2 zwalniamy na końcu: podręcznik otwierany od razu na str. 278 nie trzyma ich obrazów
   try {
     let pageLayout = null;
     try { pageLayout = await doc.getPageLayout(); } catch {}
@@ -131,13 +133,13 @@ async function detectDocumentLayout(doc) {
       }
     } catch {}
 
-    const p1 = await doc.getPage(1);
+    p1 = await doc.getPage(1);
     const vp1 = p1.getViewport({ scale: 1 });
     const tc1 = await p1.getTextContent().catch(() => null);
 
     let p2Info = null;
     if (doc.numPages >= 2) {
-      const p2 = await doc.getPage(2);
+      p2 = await doc.getPage(2);
       const vp2 = p2.getViewport({ scale: 1 });
       const tc2 = await p2.getTextContent().catch(() => null);
       p2Info = extractPageStats(vp2, tc2);
@@ -164,6 +166,8 @@ async function detectDocumentLayout(doc) {
   } catch (err) {
     console.warn('Błąd detekcji układu dokumentu:', err);
     return { pairing: 'odd', two: true };
+  } finally {
+    for (const page of [p1, p2]) { try { page?.cleanup(); } catch {} }   // zwolnienie pamięci nie może zepsuć otwierania pliku
   }
 }
 
@@ -411,12 +415,9 @@ export function openRecent(rec) {
   if (rec?.blob) return openStored(rec);
 }
 
+// Plik z zakładką znika tylko z listy „Ostatnie”, a zostaje w bazie – zakładka dalej go otwiera
 async function deleteRecent(rec) {
-  try { await forgetFile(rec.key); } catch (e) { console.warn('Nie udało się usunąć pliku:', e); }
-  pref.remove('pos:' + rec.key);
-  pref.remove('rot:' + rec.key);
-  pref.remove('two:' + rec.key);
-  pref.remove('pairing:' + rec.key);
+  try { await removeFromRecent(rec.key); } catch (e) { console.warn('Nie udało się usunąć pliku:', e); }
   await renderRecent();
   ctx.flash('Usunięto z listy', 1200);
 }

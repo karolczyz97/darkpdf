@@ -136,12 +136,14 @@ test('rzeczywista przeglądarka: ładowanie viewer.js bez błędów, obsługa kl
     });
     assert.ok(r2.result.value.includes('Esc'), 'Podpowiedź pomocy powinna zawierać skróty');
 
-    // 3. Cykl trybu ciemnego (klawisz 'd')
+    // 3. Cykl trybu ciemnego (klawisz 'd'): tryb i paleta to atrybuty data-mode / data-palette na <html>
     const r3 = await send('Runtime.evaluate', {
-      expression: '(() => { const was = document.documentElement.classList.contains("dark"); window.dispatchEvent(new KeyboardEvent("keydown", { key: "d" })); return { was, now: document.documentElement.classList.contains("dark") }; })()',
+      expression: '(() => { const was = document.documentElement.dataset.mode; window.dispatchEvent(new KeyboardEvent("keydown", { key: "d" })); return { was, now: document.documentElement.dataset.mode, palette: document.documentElement.dataset.palette, theme: document.querySelector("meta[name=theme-color]").content }; })()',
       returnByValue: true
     });
     assert.notEqual(r3.result.value.was, r3.result.value.now, 'Klawisz d powinien zmienić tryb kolorów');
+    assert.ok(['dark', 'light'].includes(r3.result.value.now) && ['gemini', 'system'].includes(r3.result.value.palette));
+    assert.match(r3.result.value.theme, /^#[0-9a-f]{6}$/, 'Kolor paska przeglądarki jest zapisem #rrggbb z tła motywu');
 
     // 4. Załadowanie przykładowego pliku PDF przez import doc-loader
     const loadPdfExpr = `(async () => {
@@ -402,6 +404,24 @@ test('rzeczywista przeglądarka: ładowanie viewer.js bez błędów, obsługa kl
     });
     assert.equal(rCopyKey.result.value, '5', 'Ctrl+C na wyniku powinno użyć jego wartości');
 
+    // Klik w wynik wstawia go od razu (bez opóźnienia na dwuklik), a osobny przycisk kopiuje
+    const rResultClick = await send('Runtime.evaluate', {
+      expression: `(async () => {
+        let copied = null;
+        Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: async text => { copied = text; } } });
+        const expr = document.getElementById('calc-expr');
+        expr.value = '4*5';
+        expr.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+        document.getElementById('calc-result').click();
+        const inserted = expr.value;
+        document.getElementById('calc-copy').click();
+        await Promise.resolve();
+        expr.value = '';
+        return { inserted, copied };
+      })()`, awaitPromise: true, returnByValue: true
+    });
+    assert.deepEqual(rResultClick.result.value, { inserted: '20', copied: '20' });
+
     // Fokus w polu kalkulatora nie jest potrzebny do dalszych skrótów czytnika.
     await send('Runtime.evaluate', { expression: 'document.activeElement?.blur()' });
 
@@ -567,6 +587,27 @@ test('rzeczywista przeglądarka: ładowanie viewer.js bez błędów, obsługa kl
       })()`, returnByValue: true
     });
     assert.equal(rOfflineCalc.result.value, '8');
+
+    // Wzór jednostek rysuje lokalny KaTeX (calc/lib/katex z cache), a nie CDN – także bez internetu
+    const rOfflineKatex = await send('Runtime.evaluate', {
+      expression: `(async () => {
+        const expr = document.getElementById('calc-expr');
+        expr.value = '100 km/2h';
+        expr.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+        for (let i = 0; i < 60; i++) {
+          if (document.querySelector('#calc-unit-track .katex .mfrac')) break;
+          await new Promise((resolve) => setTimeout(resolve, 50));
+        }
+        const track = document.getElementById('calc-unit-track');
+        return {
+          fraction: Boolean(track.querySelector('.katex .mfrac')),
+          local: [...document.querySelectorAll('link[data-katex], script[src*="katex"]')].every((el) => new URL(el.href || el.src).origin === location.origin),
+          text: track.textContent
+        };
+      })()`, awaitPromise: true, returnByValue: true
+    });
+    assert.equal(rOfflineKatex.result.value.fraction, true, `KaTeX powinien narysować ułamek jednostek offline: ${rOfflineKatex.result.value.text}`);
+    assert.equal(rOfflineKatex.result.value.local, true, 'KaTeX musi pochodzić z tego samego źródła co aplikacja');
 
     // Brak jakichkolwiek wyjątków w trakcie całego cyklu
     assert.equal(exceptions.length, 0, `Nie powinno być żadnych wyjątków JS w przeglądarce: ${JSON.stringify(exceptions)}`);

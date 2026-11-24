@@ -32,7 +32,7 @@
 }
 
 /* TRYB JASNY: te same kontrolki w jasnych kolorach systemu (bez tego menu i ekran startowy zostawały ciemne) */
-html:not(.dark) {
+html[data-mode="light"] {
   color-scheme: light;
   --ui-bg: Canvas;
   --ui-stage-bg: #f1f3f4;                      /* panel PDF obok kalkulatora */
@@ -45,8 +45,9 @@ html:not(.dark) {
 }
 
 /* MOTYW GEMINI: Oficjalne tokeny projektowe Google Gemini (gemini.google.com i panel boczny Chrome).
-   Kolory --gem-* z theme.css mają wersję ciemną i jasną, więc te same reguły działają w obu trybach. */
-html.gemini {
+   Kolory --gem-* z theme.css mają wersję ciemną i jasną, więc te same reguły działają w obu trybach.
+   Tryb i paleta to atrybuty data-mode (dark | light) i data-palette (gemini | system) na <html> – ten sam kontrakt co w kalkulatorze. */
+html[data-palette="gemini"] {
   --ui-bg: var(--gem-menu);
   --ui-bg-solid: var(--gem-menu);
   --ui-stage-bg: var(--gem-bg);
@@ -60,6 +61,11 @@ html.gemini {
   --ui-accent: var(--gem-accent);
   --ui-accent-soft: color-mix(in srgb, var(--gem-accent) 14%, transparent);   /* --gem-sys-color--primary */
   --ui-font: var(--gem-font);
+  --ui-resizer-bg: var(--gem-fill);            /* #1e1f20 w trybie ciemnym – jak prawy pasek Chrome'a */
+  --panel-r: 10px;                             /* zaokrąglenie paneli jak w Chrome GM3 */
+}
+html[data-palette="gemini"][data-mode="light"] {
+  --ui-resizer-bg: #dde3ea;                    /* jasna ramka Chrome'a wokół kart i panelu Gemini */
 }
 html, body {
   margin: 0;
@@ -69,7 +75,7 @@ html, body {
   user-select: none;
   overscroll-behavior: none;   /* przesunięcie w dół przy górze nie odświeża strony, w bok nie cofa historii */
 }
-html.dark, html.dark body, html.gemini, html.gemini body { background: var(--ui-stage-bg); }   /* Gemini jasny: białe tło, kartka zlewa się z nim jak w ciemnym */
+html[data-mode="dark"], html[data-mode="dark"] body, html[data-palette="gemini"], html[data-palette="gemini"] body { background: var(--ui-stage-bg); }   /* Gemini jasny: białe tło, kartka zlewa się z nim jak w ciemnym */
 
 #stage {
   position: fixed;
@@ -83,7 +89,7 @@ html.dark, html.dark body, html.gemini, html.gemini body { background: var(--ui-
   gap: 0;
   overflow: hidden;
 }
-html.dark #stage, html.gemini #stage {
+html[data-mode="dark"] #stage, html[data-palette="gemini"] #stage {
   background: var(--ui-stage-bg);
 }
 html.calc-animating #stage {
@@ -95,11 +101,11 @@ html.calc-animating #menu {
 html.calc-animating #hint {
   transition: left .22s cubic-bezier(0.16, 1, 0.3, 1);
 }
-html.calc-open,
-html.calc-open body {
+html.calc-open:not(.mobile):not(.empty),
+html.calc-open:not(.mobile):not(.empty) body {
   background: var(--ui-resizer-bg) !important;
 }
-html.calc-open #stage {
+html.calc-open:not(.mobile):not(.empty) #stage {
   left: calc(var(--calc-w) + var(--resizer-w));
   border-top-left-radius: var(--panel-r);
   border-bottom-left-radius: var(--panel-r);
@@ -117,12 +123,12 @@ html.calc-open:not(.mobile):not(.empty) body::after {
   z-index: 1;
   pointer-events: none;
 }
-html.calc-open { --corner-bg: var(--ui-resizer-bg); }   /* kolor rozdzielacza – ten sam co tło za panelami */
-html.calc-open body::before {
+html.calc-open:not(.mobile):not(.empty) { --corner-bg: var(--ui-resizer-bg); }   /* kolor rozdzielacza – ten sam co tło za panelami */
+html.calc-open:not(.mobile):not(.empty) body::before {
   top: 0;
   background: radial-gradient(circle at 100% 100%, transparent calc(var(--panel-r) - .5px), var(--corner-bg) var(--panel-r));
 }
-html.calc-open body::after {
+html.calc-open:not(.mobile):not(.empty) body::after {
   bottom: 0;
   background: radial-gradient(circle at 100% 0, transparent calc(var(--panel-r) - .5px), var(--corner-bg) var(--panel-r));
 }
@@ -130,10 +136,10 @@ html.calc-animating body::before,
 html.calc-animating body::after {
   transition: left .22s cubic-bezier(0.16, 1, 0.3, 1);
 }
-html.calc-open #menu {
+html.calc-open:not(.mobile):not(.empty) #menu {
   left: calc((100vw + var(--calc-w) + var(--resizer-w)) / 2);
 }
-html.calc-open #hint {
+html.calc-open:not(.mobile):not(.empty) #hint {
   left: calc((100vw + var(--calc-w) + var(--resizer-w)) / 2);
 }
 
@@ -167,7 +173,7 @@ html.fit-height #stage::-webkit-scrollbar {
 /* Tryb ciemny: odwrócenie kolorów strony, odcienie zachowane. Kartka wychodzi dokładnie w kolorze tła,
    czarny druk w kolorze --page-ink (#page-colors wypełnia viewer.js z tych zmiennych). --paper to wyrównanie
    kartki, która nie jest biała (skan, szare tło) – bez niego po odwróceniu byłaby jaśniejsza od tła. */
-html.dark #stage canvas {
+html[data-mode="dark"] #stage canvas {
   filter: var(--paper,) invert(1) hue-rotate(180deg) url(#page-colors);
   box-shadow: none;
 }
@@ -224,13 +230,13 @@ html.dark #stage canvas {
 .textLayer > :not(.markedContent), .textLayer .markedContent span:not(.markedContent) { z-index: 1; }
 .textLayer span.markedContent { top: 0; height: 0; }
 .textLayer ::selection { background: rgba(0, 110, 255, .35); }
-html.dark .textLayer ::selection { background: rgba(90, 160, 255, .45); }
+html[data-mode="dark"] .textLayer ::selection { background: rgba(90, 160, 255, .45); }
 
 /* Motyw Gemini: kolory ze wspólnej palety theme.css */
-html.gemini.dark .textLayer ::selection { background: rgba(168, 199, 250, .38); }
+html[data-palette="gemini"][data-mode="dark"] .textLayer ::selection { background: rgba(168, 199, 250, .38); }
 /* W jasnym trybie dymek zostaje ciemny (jak snackbar w Material), w ciemnym ma kolor menu */
-html.gemini.dark #hint { background: var(--ui-bg); color: var(--ui-text); box-shadow: var(--gem-menu-shadow); }
-html.gemini #hint { font-family: var(--ui-font); }
+html[data-palette="gemini"][data-mode="dark"] #hint { background: var(--ui-bg); color: var(--ui-text); box-shadow: var(--gem-menu-shadow); }
+html[data-palette="gemini"] #hint { font-family: var(--ui-font); }
 .textLayer br {
   display: inline-block;
   width: 0;
@@ -238,8 +244,8 @@ html.gemini #hint { font-family: var(--ui-font); }
   pointer-events: none;
 }
 .textLayer br::selection,
-html.dark .textLayer br::selection,
-html.gemini .textLayer br::selection {
+html[data-mode="dark"] .textLayer br::selection,
+html[data-palette="gemini"] .textLayer br::selection {
   background: transparent !important;
 }
 .textLayer .endOfContent {
@@ -289,7 +295,7 @@ html.gemini .textLayer br::selection {
 .menu-popover:not(:popover-open) { opacity: 0; transform: translateY(6px); }
 @starting-style { .menu-popover:popover-open { opacity: 0; transform: translateY(6px); } }
 
-@supports not ((position-area: top) or (inset-area: top)) {
+@supports not (position-area: top) {
   .menu-popover {
     bottom: calc(64px + env(safe-area-inset-bottom, 0px));
     left: 50%;
@@ -299,14 +305,11 @@ html.gemini .textLayer br::selection {
   .menu-popover:not(:popover-open) { opacity: 0; transform: translate(-50%, 6px); }
   @starting-style { .menu-popover:popover-open { opacity: 0; transform: translate(-50%, 6px); } }
 
-  html.calc-open .menu-popover {
+  html.calc-open:not(.mobile):not(.empty) .menu-popover {
     left: calc((100vw + var(--calc-w) + var(--resizer-w)) / 2);
   }
   html.mobile .menu-popover {
     bottom: calc(74px + env(safe-area-inset-bottom, 0px));
-  }
-  html.mobile.calc-open .menu-popover {
-    left: 50%;
   }
 }
 
@@ -491,7 +494,7 @@ html.gemini .textLayer br::selection {
 #welcome { position: fixed; inset: 0; z-index: 4; display: none; align-items: center; align-items: safe center; justify-content: center; padding: 24px; overflow-y: auto; }
 #welcome, .menu-popover { scrollbar-width: thin; scrollbar-color: var(--ui-hover) transparent; }
 html.empty #welcome { display: flex; }
-html:not(.dark):not(.gemini) #welcome { background: var(--ui-bg-solid); }   /* tryb jasny: biała strona startowa zamiast szarego tła czytnika */
+html[data-mode="light"][data-palette="system"] #welcome { background: var(--ui-bg-solid); }   /* tryb jasny: biała strona startowa zamiast szarego tła czytnika */
 #welcome .card {
   width: 100%; max-width: 720px; padding: 32px 28px 22px; text-align: center;
   border-radius: var(--gem-radius-menu, 20px);
@@ -501,7 +504,7 @@ html:not(.dark):not(.gemini) #welcome { background: var(--ui-bg-solid); }   /* t
 body.dragging-file #stage { outline: 2px dashed var(--ui-accent); outline-offset: -6px; }
 #welcome .logo { font-size: 40px; line-height: 1.2; font-weight: 500; letter-spacing: -.5px; }
 /* Gradient powitania Gemini – tylko na nazwie aplikacji */
-html.gemini #welcome .logo {
+html[data-palette="gemini"] #welcome .logo {
   background: linear-gradient(74deg, #4285f4 0%, #9b72cb 45%, #d96570 100%);
   -webkit-background-clip: text;
   background-clip: text;
@@ -621,8 +624,8 @@ html.gemini #welcome .logo {
   position: absolute; left: 0; width: 100%; border-radius: 2px;
   background: rgba(255, 255, 255, .28);
 }
-html:not(.dark) #prog span { background: rgba(0, 0, 0, .35); }   /* widać go i na białej stronie */
-html.gemini #prog span { background: color-mix(in srgb, var(--gem-accent) 45%, transparent); }
+html[data-mode="light"] #prog span { background: rgba(0, 0, 0, .35); }   /* widać go i na białej stronie */
+html[data-palette="gemini"] #prog span { background: color-mix(in srgb, var(--gem-accent) 45%, transparent); }
 
 html.nocursor, html.nocursor body { cursor: none; }
 html.nocursor .textLayer :is(span, br) { cursor: none; }
@@ -702,7 +705,7 @@ html.calc-animating #calc-resizer {
 #calc-resizer.dragging::after {
   opacity: 1;
 }
-html:not(.dark) #calc-resizer::after {
+html[data-mode="light"] #calc-resizer::after {
   background: rgba(0, 0, 0, .45);
 }
 html.empty #calc-resizer {
@@ -721,8 +724,6 @@ html.mobile #welcome { align-items: flex-start; }
 html.mobile #welcome .card { padding: 26px 18px 20px; }
 
 /* Pasek na dole ekranu i większe cele do dotyku */
-html.mobile #menu, html.mobile.calc-open #menu,
-html.mobile #hint, html.mobile.calc-open #hint { left: 50%; }
 html.mobile .menu-nav { padding: 4px 6px; gap: 4px; }
 html.mobile .menu-nav button { min-width: 40px; min-height: 40px; }
 html.mobile .page-input { min-height: 34px; font-size: 16px; }   /* 16 px: iOS nie przybliża pola */
@@ -734,7 +735,6 @@ html.mobile .menu-nav [data-tip]::after { display: none; }   /* na telefonie dym
 /* Kalkulator na telefonie zasłania PDF na całą szerokość; wraca się przyciskiem */
 html.mobile #calc-resizer { display: none; }
 html.mobile #calc-sidebar { width: 100vw; max-width: none; min-width: 0; border-radius: 0; }
-html.mobile.calc-open #stage { left: 0; border-radius: 0; }
 /* Popover jest w top layer: na telefonie nie może zasłaniać pełnoekranowego kalkulatora. */
 html.mobile.calc-open #menu,
 html.mobile.calc-open .menu-popover { visibility: hidden; pointer-events: none; }

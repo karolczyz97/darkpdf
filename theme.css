@@ -44,8 +44,7 @@
 }
 
 /* Jasna wersja tej samej palety (gemini.google.com w trybie jasnym). Zmienne mają te same nazwy, więc reguły
-   obu aplikacji działają bez zmian: DarkPDF włącza ją klasą .gemini bez .dark, kalkulator atrybutami na <html>. */
-html.gemini:not(.dark),
+   obu aplikacji działają bez zmian: obie włączają ją atrybutami data-mode i data-palette na <html>. */
 html[data-mode="light"][data-palette="gemini"] {
   --gem-bg: #ffffff;
   --gem-surface: #ffffff;
